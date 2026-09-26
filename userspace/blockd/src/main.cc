@@ -210,7 +210,7 @@ pmos::async::task<pmos::Right> read_disk(Disk &disk, uint64_t sector_start, uint
     auto span = std::span<const uint8_t>(reinterpret_cast<const uint8_t *>(&read), sizeof(read));
     auto result = send_message_right(disk.disk_right, span, std::pair{&dispatcher.get_port(), RightType::SendOnce}, false);
     if (!result)
-        throw std::system_error(result.error(), std::system_category());
+        throw std::system_error(result.error().first, std::system_category());
 
     auto msg = co_await dispatcher.get_message(result.value());
     if (!msg)

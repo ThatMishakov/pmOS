@@ -72,7 +72,7 @@ void sigaction_reply(pmos::Right reply_right, int result, uint32_t sa_flags = 0,
 
     auto r = pmos::send_message_right_one(reply_right, reply, {}, true);
     if (!r)
-        kernelLogger() << "processd: Error " << r.error() << " sending message for sigaction_reply\n" << frg::endlog;
+        kernelLogger() << "processd: Error " << r.error().first << " sending message for sigaction_reply\n" << frg::endlog;
 }
 
 void sigaction_handle(std::shared_ptr<Process> process, pmos::Right reply_right, IPC_Sigaction *msg)
@@ -174,7 +174,7 @@ void register_process(IPC_Register_Process *msg, pmos::Right reply_right)
 
     auto r = pmos::send_message_right_one(reply_right, reply, {}, true, std::move(send_right));
     if (!r)
-        kernelLogger() << "processd: Error " << r.error() << " sending message to right " << reply_right.get() << " for register_process\n" << frg::endlog;
+        kernelLogger() << "processd: Error " << r.error().first << " sending message to right " << reply_right.get() << " for register_process\n" << frg::endlog;
 }
 
 pmos::async::detached_task get_messages_bootstrapd(pmos::ReceiveRight rr)
@@ -273,7 +273,7 @@ void parse_args(int argc, char *argv[])
 
     auto r = send_message_right_one(pr.value(), reply, {}, true, std::move(send_right));
     if (!r) {
-        kernelLogger() << "processd: Error " << r.error() << " sending message to right " << pr.value().get() << " for bootstrapd\n" << frg::endlog;
+        kernelLogger() << "processd: Error " << r.error().first << " sending message to right " << pr.value().get() << " for bootstrapd\n" << frg::endlog;
         return;
     }
 }

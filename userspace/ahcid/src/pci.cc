@@ -23,9 +23,9 @@ pmos::ReceiveRight send_devicesd(auto &request, pmos::Port *reply_port)
         send_message_right_one(device_right, request, {reply_port, pmos::RightType::SendOnce});
     if (!r) {
         // TODO: Eventually don't throw
-        printf("Failed to send message to devicesd: %i (%s)\n", (int)r.error(),
-               strerror(r.error()));
-        throw std::system_error(r.error(), std::generic_category(),
+        printf("Failed to send message to devicesd: %i (%s)\n", (int)r.error().first,
+               strerror(r.error().first));
+        throw std::system_error(r.error().first, std::generic_category(),
                                 "Failed to send message to devicesd");
     }
     return std::move(*r);

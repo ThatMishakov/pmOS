@@ -33,7 +33,7 @@ void mount_filesystem_reply(pmos::Right &reply_right, int result)
 
     auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
     if (!result_send)
-        kernelLogger() << "vfsd: Error " << result_send.error() << " sending mount filesystem reply to port " << reply_right.get() << "\n" << frg::endlog;
+        kernelLogger() << "vfsd: Error " << result_send.error().first << " sending mount filesystem reply to port " << reply_right.get() << "\n" << frg::endlog;
 }
 
 struct RootNodeWaiter {
@@ -165,8 +165,8 @@ pmos::async::task<std::expected<pmos::Right, int>> open_file_on_fs(std::shared_p
 
     auto reply_right = pmos::send_message_right_one(vnode->parent_fs->fs_right, req, {&main_port, pmos::RightType::SendOnce});
     if (!reply_right) {
-        kernelLogger() << "posixd: Error " << reply_right.error() << " sending open file message to filesystem\n" << frg::endlog;
-        co_return std::unexpected(reply_right.error());
+        kernelLogger() << "posixd: Error " << reply_right.error().first << " sending open file message to filesystem\n" << frg::endlog;
+        co_return std::unexpected(reply_right.error().first);
     }
 
     auto msg = co_await dispatcher.get_message(reply_right.value());
@@ -212,7 +212,7 @@ void open_file_error_reply(pmos::Right &reply_right, int result)
 
     auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
     if (!result_send)
-        kernelLogger() << "posixd: Error " << result_send.error() << " sending open file reply to port " << reply_right.get() << "\n" << frg::endlog;
+        kernelLogger() << "posixd: Error " << result_send.error().first << " sending open file reply to port " << reply_right.get() << "\n" << frg::endlog;
 }
 
 pmos::async::detached_task attend_open_file(std::shared_ptr<VNode> vnode, pmos::ReceiveRight right)
@@ -287,7 +287,7 @@ pmos::async::detached_task open_file(pmos::Right reply_right, std::string path)
 
     auto send_result = pmos::send_message_right_one(reply_right, reply, {}, true, std::move(file_right), std::move(fs_right).value());
     if (!send_result)
-        kernelLogger() << "posixd: Error " << send_result.error() << " sending open file reply to port " << reply_right.get() << "\n" << frg::endlog;
+        kernelLogger() << "posixd: Error " << send_result.error().first << " sending open file reply to port " << reply_right.get() << "\n" << frg::endlog;
 }
 
 struct StatData {
@@ -312,8 +312,8 @@ pmos::async::task<std::expected<StatData, int>> get_file_stat_dynamic(std::share
 
     auto reply_right = pmos::send_message_right_one(vnode->parent_fs->fs_right, req, {&main_port, pmos::RightType::SendOnce});
     if (!reply_right) {
-        kernelLogger() << "posixd: Error " << reply_right.error() << " sending stat dynamic message to filesystem\n" << frg::endlog;
-        co_return std::unexpected(reply_right.error());
+        kernelLogger() << "posixd: Error " << reply_right.error().first << " sending stat dynamic message to filesystem\n" << frg::endlog;
+        co_return std::unexpected(reply_right.error().first);
     }
 
     auto msg = co_await dispatcher.get_message(reply_right.value());
@@ -376,7 +376,7 @@ void stat_handle_error_reply(pmos::Right &reply_right, int result)
 
     auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
     if (!result_send)
-        kernelLogger() << "posixd: Error " << result_send.error() << " sending stat reply to port " << reply_right.get() << "\n" << frg::endlog;
+        kernelLogger() << "posixd: Error " << result_send.error().first << " sending stat reply to port " << reply_right.get() << "\n" << frg::endlog;
 }
 
 pmos::async::detached_task stat_handle(std::shared_ptr<VNode> vnode, pmos::Right reply_right, unsigned flags, std::string path)
@@ -426,7 +426,7 @@ pmos::async::detached_task stat_handle(std::shared_ptr<VNode> vnode, pmos::Right
 
     auto send_result = pmos::send_message_right_one(reply_right, reply, {}, true);
     if (!send_result)
-        kernelLogger() << "posixd: Error " << send_result.error() << " sending stat reply to port " << reply_right.get() << "\n" << frg::endlog;
+        kernelLogger() << "posixd: Error " << send_result.error().first << " sending stat reply to port " << reply_right.get() << "\n" << frg::endlog;
 }
 
 pmos::async::detached_task vfs_handle_messages()
@@ -628,8 +628,8 @@ pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> VNode::resolve_chi
 
     auto send_result = pmos::send_message_right(parent_fs->fs_right, span, {&main_port, pmos::RightType::SendOnce}, false);
     if (!send_result) {
-        kernelLogger() << "posixd: Error " << send_result.error() << " sending resolve child message to filesystem\n" << frg::endlog;
-        co_return std::unexpected(send_result.error());
+        kernelLogger() << "posixd: Error " << send_result.error().first << " sending resolve child message to filesystem\n" << frg::endlog;
+        co_return std::unexpected(send_result.error().first);
     }
 
     children_cache[name] = VNodeAwaitersList{};

@@ -183,7 +183,7 @@ void set_up_interrupt()
                                                     {&reply_port, pmos::RightType::SendOnce});
     if (!send_result) {
         printf("Failed to send message to set up interrupt: %i (%s)\n", send_result.error(),
-                strerror(send_result.error()));
+                strerror(send_result.error().first));
         return;
     }
 

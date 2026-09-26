@@ -51,7 +51,7 @@ static void write_reply(pmos::Right &reply_right, int result_code, size_t bytes_
 
     auto send_result = pmos::send_message_right_one(reply_right, reply, {}, true);
     if (!send_result) {
-        kernelLogger() << "posix: Error " << send_result.error() << " sending message to port " << reply_right.get() << " for pipe_write\n" << frg::endlog;
+        kernelLogger() << "posix: Error " << send_result.error().first << " sending message to port " << reply_right.get() << " for pipe_write\n" << frg::endlog;
     }
 }
 
@@ -86,7 +86,7 @@ static void wakeup_readers(PipeData &pipe_data)
 
         auto send_result = pmos::send_message_right(pending_read.reply_right, std::span(data), {}, true);
         if (!send_result) {
-            kernelLogger() << "posix: Error " << send_result.error() << " sending message to port " << pending_read.reply_right.get() << " for pipe_read\n" << frg::endlog;
+            kernelLogger() << "posix: Error " << send_result.error().first << " sending message to port " << pending_read.reply_right.get() << " for pipe_read\n" << frg::endlog;
         } else {
             pipe_data.buffer.pop_bytes(size);
         }
@@ -103,7 +103,7 @@ static void wakeup_readers(PipeData &pipe_data)
             };
             auto send_result = pmos::send_message_right_one(pending_read.reply_right, reply, {}, true);
             if (!send_result) {
-                kernelLogger() << "posix: Error " << send_result.error() << " sending message to port " << pending_read.reply_right.get() << " for pipe_read\n" << frg::endlog;
+                kernelLogger() << "posix: Error " << send_result.error().first << " sending message to port " << pending_read.reply_right.get() << " for pipe_read\n" << frg::endlog;
             }
         }
     }
@@ -146,7 +146,7 @@ static void wakeup_polls(PipeData &pipe_data)
 
             auto send_result = pmos::send_message_right_one(pending_poll.reply_right, reply, {}, true);
             if (!send_result) {
-                kernelLogger() << "posix: Error " << send_result.error() << " sending message to port " << pending_poll.reply_right.get() << " for pipe_poll\n" << frg::endlog;
+                kernelLogger() << "posix: Error " << send_result.error().first << " sending message to port " << pending_poll.reply_right.get() << " for pipe_poll\n" << frg::endlog;
             }
 
             it = pipe_data.pending_polls.erase(it);
@@ -275,7 +275,7 @@ static void handle_read(PipeData &pipe_data, Message_Descriptor msg, std::vector
         };
         auto send_result = pmos::send_message_right_one(reply_right, reply, {}, true);
         if (!send_result) {
-            kernelLogger() << "posix: Error " << send_result.error() << " sending message to port " << reply_right.get() << " for pipe_read\n" << frg::endlog;
+            kernelLogger() << "posix: Error " << send_result.error().first << " sending message to port " << reply_right.get() << " for pipe_read\n" << frg::endlog;
         }
         return;
     }
@@ -289,7 +289,7 @@ static void handle_read(PipeData &pipe_data, Message_Descriptor msg, std::vector
 
         auto send_result = pmos::send_message_right_one(reply_right, reply, {}, true);
         if (!send_result) {
-            kernelLogger() << "posix: Error " << send_result.error() << " sending message to port " << reply_right.get() << " for pipe_read\n" << frg::endlog;
+            kernelLogger() << "posix: Error " << send_result.error().first << " sending message to port " << reply_right.get() << " for pipe_read\n" << frg::endlog;
         }
         return;
     }
@@ -306,7 +306,7 @@ static void handle_read(PipeData &pipe_data, Message_Descriptor msg, std::vector
 
             auto send_result = pmos::send_message_right_one(reply_right, reply, {}, true);
             if (!send_result) {
-                kernelLogger() << "posix: Error " << send_result.error() << " sending message to port " << reply_right.get() << " for pipe_read\n" << frg::endlog;
+                kernelLogger() << "posix: Error " << send_result.error().first << " sending message to port " << reply_right.get() << " for pipe_read\n" << frg::endlog;
             }
             return;
         } else {
@@ -332,7 +332,7 @@ static void handle_read(PipeData &pipe_data, Message_Descriptor msg, std::vector
 
     auto send_result = pmos::send_message_right(reply_right, std::span(data), {}, true);
     if (!send_result) {
-        kernelLogger() << "posix: Error " << send_result.error() << " sending message to port " << reply_right.get() << " for pipe_read\n" << frg::endlog;
+        kernelLogger() << "posix: Error " << send_result.error().first << " sending message to port " << reply_right.get() << " for pipe_read\n" << frg::endlog;
     } else {
         pipe_data.buffer.pop_bytes(size);
         wakeup_writers(pipe_data);
@@ -372,7 +372,7 @@ static void handle_poll(PipeData &pipe_data, Message_Descriptor msg, std::vector
 
         auto send_result = pmos::send_message_right_one(reply_right, reply, {}, true);
         if (!send_result) {
-            kernelLogger() << "posix: Error " << send_result.error() << " sending message to port " << reply_right.get() << " for pipe_poll\n" << frg::endlog;
+            kernelLogger() << "posix: Error " << send_result.error().first << " sending message to port " << reply_right.get() << " for pipe_poll\n" << frg::endlog;
         }
     } else {
         PendingPoll pending_poll = {
@@ -471,7 +471,7 @@ void pipe_thread(IPC_Pipe_Open msg, pmos::Right reply_right)
 
     auto send_result = pmos::send_message_right_one(reply_right, reply, {}, true, std::move(r), std::move(r2));
     if (!send_result) {
-        kernelLogger() << "posix: Error " << send_result.error() << " sending message to port " << reply_right.get() << " for pipe_open\n" << frg::endlog;
+        kernelLogger() << "posix: Error " << send_result.error().first << " sending message to port " << reply_right.get() << " for pipe_open\n" << frg::endlog;
         return;
     }
 

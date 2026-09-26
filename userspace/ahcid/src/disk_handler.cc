@@ -43,7 +43,7 @@ void handle_disk_read(pmos::Right memory_object, int result, pmos::Right &reply_
     // printf("Sending reply to disk read status %i\n", result);
     auto r = send_message_right_one(reply_right, reply, {}, true, std::move(memory_object));
     if (!r) {
-        printf("Failed to send disk read reply: %i (%s)\n", (int)r.error(), strerror(r.error()));
+        printf("Failed to send disk read reply: %i (%s)\n", (int)r.error().first, strerror(r.error().first));
     }
 }
 
@@ -57,7 +57,7 @@ bool handle_create_right(pmos::Right disk_right, int result, pmos::Right &reply_
 
     auto r = send_message_right_one(reply_right, reply, {}, true, std::move(disk_right));
     if (!r) {
-        printf("Failed to send disk create right reply: %i (%s)\n", (int)r.error(), strerror(r.error()));
+        printf("Failed to send disk create right reply: %i (%s)\n", (int)r.error().first, strerror(r.error().first));
         return false;
     }
     return true;
@@ -290,7 +290,7 @@ void handle_disk_describe(AHCIPort &, DiskGeometry geometry, DiskConstraint cons
 
     auto r = send_message_right_one(reply_right, reply, {}, true);
     if (!r) {
-        printf("Failed to send disk describe reply: %i (%s)\n", (int)r.error(), strerror(r.error()));
+        printf("Failed to send disk describe reply: %i (%s)\n", (int)r.error().first, strerror(r.error().first));
     }
 }
 
