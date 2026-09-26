@@ -57,7 +57,7 @@ static void set_tlbrentry()
 
 extern "C" void bootstrap_isr();
 
-constinit const void *bootstrap_isr_virt = (void *)bootstrap_isr;
+constinit void (*bootstrap_isr_virt)() = bootstrap_isr;
 
 void set_early_exceptions()
 {
