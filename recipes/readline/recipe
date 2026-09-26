@@ -1,0 +1,26 @@
+
+version=8.3
+revision=2
+source_method=tarball
+tarball_url="https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz"
+tarball_sha256="fe5383204467828cd495ee8d1d3c037a7eba1389c22bc6a041f627976f9061cc"
+
+imagedeps="build-essential"
+deps="ncurses mlibc $CXX_DEPS"
+hostdeps="$TOOLCHAIN_DEPS"
+
+configure() {
+	CC="clang --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot}" \
+	CXX="clang++ --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot}" \
+	CPP="clang --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot} -E" \
+	CPPFLAGS="-D_GNU_SOURCE" \
+	${source_dir}/configure --build=$(uname -m)-pc-linux-gnu --host=$JINX_ARCH-pmos --prefix=${prefix} --with-curses
+}
+
+build() {
+	make -j${parallelism}
+}
+
+package() {
+	make install DESTDIR="${dest_dir}"
+}

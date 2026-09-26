@@ -1,0 +1,35 @@
+
+version=5.3
+revision=1
+source_method=tarball
+tarball_url="https://ftp.gnu.org/gnu/bash/bash-5.3.tar.gz"
+tarball_sha256="0d5cd86965f869a26cf64f4b71be7b96f90a3ba8b3d74e27e8e9d9d5550f31ba"
+
+imagedeps="build-essential"
+deps="readline mlibc $CXX_DEPS"
+hostdeps="$TOOLCHAIN_DEPS"
+
+configure() {
+	CC="clang --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot}" \
+	CXX="clang++ --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot}" \
+	CPP="clang --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot} -E" \
+	CPPFLAGS="-D_GNU_SOURCE" \
+	CC_FOR_BUILD=gcc \
+	CFLAGS_FOR_BUILD="-std=gnu17 -g" \
+	bash_cv_getcwd_malloc=yes \
+	${source_dir}/configure --build=$(uname -m)-pc-linux-gnu --host=$JINX_ARCH-pmos --prefix=${prefix} --without-bash-malloc --with-installed-readline
+}
+
+build() {
+	make -j ${parallelism}
+}
+
+package() {
+	make install DESTDIR=${dest_dir}
+	
+	mkdir -p ${dest_dir}/bin
+	pushd ${dest_dir}/bin
+	ln -sv ${prefix}/bin/bash sh
+	ln -sv ${prefix}/bin/bash bash
+	popd
+}

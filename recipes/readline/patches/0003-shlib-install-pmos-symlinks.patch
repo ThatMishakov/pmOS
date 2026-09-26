@@ -1,0 +1,11 @@
+--- a/support/shlib-install
++++ b/support/shlib-install
+@@ -118,7 +118,7 @@
+ # Create symlinks to the installed library.  This section is incomplete.
+ #
+ case "$host_os-$host_vendor" in
+-*linux*|freebsd*|dragonfly*)
++*linux*|pmos*|freebsd*|dragonfly*)
+ 	# libname.so.M -> libname.so.M.N
+ 	${echo} ${RM} ${INSTALLDIR}/$LINK2
+ 	if [ -z "$uninstall" ]; then
