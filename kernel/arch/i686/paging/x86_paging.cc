@@ -1195,9 +1195,9 @@ kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size,
     return map_pages(kernel::x86::paging::idle_cr3, phys_addr, virt_addr, size, arg);
 }
 
-kresult_t unmap_kernel_page(kernel::paging::TLBShootdownContext &ctx, void *virt_addr)
+kresult_t unmap_kernel_page(kernel::paging::TLBShootdownContext &ctx, void *virt_addr, bool free)
 {
-    ia32::paging::x86_invalidate_page(ctx, virt_addr, false, kernel::x86::paging::idle_cr3);
+    ia32::paging::x86_invalidate_page(ctx, virt_addr, free, kernel::x86::paging::idle_cr3);
     return 0;
 }
 
