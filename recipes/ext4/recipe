@@ -1,12 +1,11 @@
 #!/bin/sh
 
-name=ext4
 version=1.0.0
 revision=1
 
 source_dir=userspace/ext4
-deps="mlibc mlibc-headers libcxx pmoscxx pmos-rust-lib"
-hostdeps="cargo rust clang compiler-rt"
+deps="mlibc mlibc-headers pmos-rust-lib $CXX_DEPS"
+hostdeps="$TOOLCHAIN_DEPS cargo rust"
 source_hostdeps="cargo"
 allow_network=yes
 

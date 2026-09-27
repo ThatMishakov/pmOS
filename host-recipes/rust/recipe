@@ -1,11 +1,10 @@
 #!/bin/sh
 
-name=rust
 revision=1
 from_source=rust
 allow_network=yes
-hostdeps="clang compiler-rt"
 deps="mlibc"
+hostdeps="$TOOLCHAIN_DEPS"
 
 configure() {
     cat <<EOF > bootstrap.toml

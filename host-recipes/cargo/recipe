@@ -4,8 +4,7 @@
 
 _cargo_home="${build_dir}/host-builds/cargo-cbuild/cargo-home"
 
-name=cargo
-from_source=cargo-src
+from_source=cargo
 revision=1
 imagedeps="build-essential gcc libssl-dev pkg-config cargo"
 hostdeps="rust"
