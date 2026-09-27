@@ -194,7 +194,7 @@ void set_up_interrupt()
     }
 
     if (msg->descriptor.sent_with_right != send_result->get()) {
-        printf("Received message with unexpected right: %lx, expected: %lx\n",
+        printf("Received message with unexpected right: %" PRIx64 ", expected: %" PRIx64 "\n",
                 msg->descriptor.sent_with_right, send_result->get());
         return;
     }
@@ -283,7 +283,7 @@ void ns16550_init()
     gsi_num             = reply->gsi_number;
     pc_irq              = reply->pc_int_number;
 
-    printf("Initialized ns16550 with base address 0x%lx, access type %i, interface type %i, baud "
+    printf("Initialized ns16550 with base address 0x%" PRIx64 ", access type %i, interface type %i, baud "
            "rate %u, parity %i, stop bits %i, flow control %i, terminal type %i, interrupt type "
            "mask %i, gsi num %i, pc irq %i\n",
            terminal_base, access_type, interface_type, baud_rate, parity, stop_bits, flow_control,

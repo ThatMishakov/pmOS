@@ -50,7 +50,7 @@ std::vector<uint8_t> BUSObject::serialize_properties()
             buffer.insert(buffer.end(), alignment, 0);
 
             result.insert(result.end(), buffer.begin(), buffer.end());
-        } else {
+        } else if (auto val = std::get_if<uint64_t>(&p.second); val) {
             const uint64_t i = std::get<uint64_t>(p.second);
 
             auto name_length = p.first.size() + 1;
@@ -73,6 +73,35 @@ std::vector<uint8_t> BUSObject::serialize_properties()
             auto val_ptr = reinterpret_cast<const uint8_t *>(&i);
             buffer.insert(buffer.end(), val_ptr, val_ptr + sizeof(uint64_t));
 
+            result.insert(result.end(), buffer.begin(), buffer.end());
+        } else if (auto val = std::get_if<std::vector<std::string>>(&p.second); val) {
+            auto &vec = std::get<std::vector<std::string>>(p.second);
+
+            auto name_length = p.first.size() + 1;
+            auto entries_length = 0;
+            for (const auto &s: vec) {
+                entries_length += s.size() + 1;
+            }
+            auto total_size = struct_size + name_length + entries_length;
+            auto alignment = (8 - (total_size % 8)) % 8;
+        
+            std::vector<uint8_t> buffer;
+            buffer.reserve(total_size + alignment);
+
+            IPC_Object_Property prop = {
+                .length = static_cast<uint16_t>(total_size + alignment),
+                .type = PROPERTY_TYPE_LIST,
+                .data_start = static_cast<uint8_t>(struct_size + name_length),
+            };
+            auto ptr = reinterpret_cast<const uint8_t *>(&prop);
+            buffer.insert(buffer.end(), ptr, ptr + sizeof(prop));
+            auto name_ptr = reinterpret_cast<const uint8_t *>(p.first.c_str());
+            buffer.insert(buffer.end(), name_ptr, name_ptr + name_length);
+            for (const auto &s: vec) {
+                auto str_ptr = reinterpret_cast<const uint8_t *>(s.c_str());
+                buffer.insert(buffer.end(), str_ptr, str_ptr + s.size() + 1);
+            }
+            buffer.resize(buffer.size() + alignment, 0);
             result.insert(result.end(), buffer.begin(), buffer.end());
         }
     }
