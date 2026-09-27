@@ -29,7 +29,7 @@ set_target_properties(kernel PROPERTIES LINK_FLAGS
 if (${TARGET_ARCH} STREQUAL "i686")
   set(ENABLE_ACPI TRUE)
   set_property(TARGET kernel APPEND_STRING PROPERTY LINK_FLAGS " -static")
-  # target_link_libraries(kernel PUBLIC atomic gcc)
+  target_link_libraries(kernel PUBLIC clang_rt.builtins)
 elseif (${TARGET_ARCH} STREQUAL "m68k")
   target_link_libraries(kernel PUBLIC gcc)
 elseif (NOT ${TARGET_ARCH} STREQUAL "x86_64")
