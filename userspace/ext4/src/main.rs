@@ -567,8 +567,10 @@ async fn ipc_mount(executor: Executor, reader: ReaderWrapper, mount_point: Optio
     }
 
     if mount.is_err() {
+        eprintln!("ext4: mount failed");
         std::process::exit(1);
     }
+    eprintln!("ext4: mount completed successfully");
 }    
 
 async fn handle_ipc(executor: Executor, run_type: RunType, disk_right: pmos::ipc::SendManyRight, reply_right: Option<pmos::ipc::SendRight>, mount_point: Option<String>) {

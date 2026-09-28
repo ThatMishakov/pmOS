@@ -3,7 +3,7 @@
 version=1.0.0
 revision=1
 git_url=https://gitlab.com/mishakov/rust-pmos.git
-commit="e3594e6e4f6245fb4a95284665ed4b2051eda746"
+commit="47e3153daf7cb3947fb019ade3b3562acc6adce0"
 
 early_prepare() {
     git submodule update --init --recursive --depth=1

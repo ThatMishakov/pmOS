@@ -100,6 +100,6 @@ unsigned call_flags(TaskDescriptor *task) { return task->regs.eax; }
 
 void syscall_ret_low(TaskDescriptor *task, i64 value) { ::syscall_ret_low(task, value); }
 void syscall_ret_high(TaskDescriptor *task, u64 value) { ::syscall_ret_high(task, value); }
-i64 syscall_ret_low(TaskDescriptor *task) { return (i64(task->regs.esi) << 32) | task->regs.ebx; }
+i64 syscall_ret_low(TaskDescriptor *task) { return (i64(task->regs.ebx) << 32) | task->regs.eax; }
 
 } // namespace kernel::syscalls

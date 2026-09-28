@@ -58,7 +58,6 @@ struct MapMemObjectParamT {
     addr_start_uint: u64,
     size_uint: u64,
     offset_object: u64,
-    offset_start: u64,
     object_size: u64,
     access_flags: u64,
 }
@@ -579,14 +578,14 @@ impl Drop for ObjectMmap {
 impl Drop for ReceiveOnceRight {
     fn drop(&mut self) {
         let ReceiveOnceRight(right, port) = *self;
-        _ = unsafe { delete_receive_right(right, port)}
+        _ = unsafe { delete_receive_right(port, right)}
     }
 }
 
 impl Drop for ReceiveManyRight {
     fn drop(&mut self) {
         let ReceiveManyRight(right, port) = *self;
-        _ = unsafe { delete_receive_right(right, port)}
+        _ = unsafe { delete_receive_right(port, right)}
     }
 }
 
@@ -601,13 +600,11 @@ impl MemoryObjectRight {
             addr_start_uint: 0, // nullptr
             size_uint: size,
             offset_object: offset,
-            offset_start: 0,
             object_size: size,
             access_flags: MAP_PROT_READ | MAP_MEM_OBJECT_IS_RIGHT,
         };
 
         let result = unsafe { map_mem_object(&params) };
-        
         result.result.result().map(|()| {
             ObjectMmap {
                 ptr: NonNull::new(result.value as *mut u8).expect("mapping memory object failed with null pointer"),
