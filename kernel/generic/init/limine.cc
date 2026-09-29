@@ -499,7 +499,7 @@ void init_task1()
     serial_logger.printf("Task 1 found: %s\n", task1->path.c_str());
 
     // Create new task and load ELF into it
-    auto task = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
+    auto task = TaskDescriptor::create(nullptr, TaskDescriptor::PrivilegeLevel::User);
     if (!task)
         panic("Failed to create task");
     task->name = "bootstrap";

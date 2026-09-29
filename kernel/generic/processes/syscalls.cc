@@ -287,9 +287,35 @@ void syscall_get_task_id(TaskDescriptor *task)
     syscall_return(task) = task->task_id;
 }
 
+static ReturnStr<std::pair<Process *, u32 /* permission mask */>> process_for_right(TaskDescriptor *current_task, u64 id)
+{
+    if (id == 0) {
+        // Inherit
+        assert(current_task->process);
+        return std::make_pair(current_task->process, (u32)-1);
+    } else if (id == (u64)-1)
+        // Create new
+        return std::make_pair<Process *, u32>(nullptr, (u32)-1);
+    else
+        // TODO: Process rights and so on...
+        return Error(-ENOSYS);
+}
+
 void syscall_create_process(TaskDescriptor *task)
 {
-    auto result = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
+    u64 right_id = syscall_arg64(task, 0);
+    auto process = process_for_right(task, right_id);
+    if (!process) {
+        syscall_error(task) = process.result;
+        return;
+    }
+
+    if (!(process.val.second & RIGHT_PERMISSION_MANAGE)) {
+        syscall_error(task) = -EPERM;
+        return;
+    }
+
+    auto result = TaskDescriptor::create(process.val.first, TaskDescriptor::PrivilegeLevel::User);
     if (result) {
         syscall_return(task) = result->task_id;
     } else {
@@ -605,20 +631,17 @@ void syscall_exit(TaskDescriptor *task)
     ulong arg1 = syscall_arg(task, 0, 0);
     ulong arg2 = syscall_arg(task, 1, 0);
 
-    if (arg1 || arg1) {
+    if (arg1) {
         serial_logger.printf("Kernel: syscall exit task %li (%s) arg %li %li\n", task->task_id, task->name.c_str(), arg1, arg2);
     }
 
     // serial_logger.printf("syscall exit task %li (%s) arg %x\n", task->task_id,
     // task->name.c_str(), arg1);
-
-    // Record exit code
-    task->ret_hi = arg2;
     task->ret_lo = arg1;
 
     syscall_success(task);
     // Kill the process
-    task->atomic_kill();
+    task->atomic_kill(arg2);
 }
 
 void syscall_kill_task(TaskDescriptor *task)

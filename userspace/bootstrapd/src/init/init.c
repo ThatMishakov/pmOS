@@ -386,7 +386,7 @@ int start_service(struct Service *service, uint64_t object_right, uint64_t optio
         return result;
 
     uint64_t group_id = {};
-    syscall_r r       = syscall_new_process();
+    syscall_r r       = syscall_new_task(PROCESS_RIGHT_NEW);
     if (r.result != SUCCESS) {
         print_str("Loader: Could not create process for ");
         print_str(service->name);
@@ -655,7 +655,7 @@ int start_service_request(struct Service *service, const char *cmdline, size_t c
 
     uint64_t group_id = {};
 
-    syscall_r r       = syscall_new_process();
+    syscall_r r       = syscall_new_task(PROCESS_RIGHT_NEW);
     if (r.result != SUCCESS) {
         print_str("Loader: Could not create process for ");
         print_str(service->name);

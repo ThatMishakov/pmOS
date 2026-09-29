@@ -477,7 +477,7 @@ void init_task1(ultra_boot_context *ctx)
 
     serial_logger.printf("Task 1 found: %s\n", task1->path.c_str());
 
-    auto task = proc::TaskDescriptor::create_process(proc::TaskDescriptor::PrivilegeLevel::User);
+    auto task = proc::TaskDescriptor::create(nullptr, proc::TaskDescriptor::PrivilegeLevel::User);
     if (!task)
         panic("Failed to create task");
     task->name = "bootstrap";

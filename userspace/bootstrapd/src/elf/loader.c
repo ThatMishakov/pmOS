@@ -893,7 +893,7 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
     } else {
         actual_entry = program_entry + program_rel_offset;
     }
-    auto start_result = syscall_start_process(task_id, actual_entry, 0, 0, 0);
+    auto start_result = syscall_start_task(task_id, actual_entry, 0, 0, 0);
     if (start_result) {
         result = start_result;
         goto error;

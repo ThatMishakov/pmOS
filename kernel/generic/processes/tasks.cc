@@ -42,6 +42,7 @@
 #include <sched/sched.hh>
 #include "elf.hh"
 #include <elf.h>
+#include "process.hh"
 
 namespace kernel::paging
 {
@@ -58,7 +59,7 @@ namespace kernel::proc
 Spinlock tasks_map_lock;
 sched_map tasks_map;
 
-TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel level) noexcept
+TaskDescriptor *TaskDescriptor::create(Process *parent, TaskDescriptor::PrivilegeLevel level) noexcept
 {
     // Create the structure
     klib::unique_ptr<TaskDescriptor> n = new TaskDescriptor();
@@ -111,6 +112,25 @@ TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel le
 
     // Assign a pid
     n->task_id = get_new_task_id();
+
+
+    Process *p = parent;
+    if (!p)
+        p = Process::create();
+    
+    if (!p)
+        return nullptr;
+
+    {
+        Auto_Lock_Scope l(p->lock);
+        if (!p->alive) {
+            assert(parent);
+            return nullptr;
+        }
+
+        p->child_tasks.insert(n.get());
+    }
+    n->process = p;
 
     // Add to the map of processes and to uninit list
     Auto_Lock_Scope l(tasks_map_lock);
@@ -169,13 +189,19 @@ ReturnStr<std::tuple<size_t, load_tag_stack_descriptor>>
                            });
 }
 
+Process *kernel_process = nullptr;
+
 kresult_t init_idle(sched::CPU_Info *cpu_str)
 {
     // This would not work outside of kernel initialization
     klib::unique_ptr<TaskDescriptor> i =
-        TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::Kernel);
+        TaskDescriptor::create(kernel_process, TaskDescriptor::PrivilegeLevel::Kernel);
     if (!i) [[unlikely]]
         return -ENOMEM;
+
+    if (!kernel_process)
+        kernel_process = i->process;
+    assert(kernel_process);
 
     assert(paging::idle_page_table);
     auto result = i->atomic_register_page_table(paging::idle_page_table);
@@ -242,8 +268,15 @@ void TaskDescriptor::init()
     }
 }
 
-void TaskDescriptor::atomic_kill()
+void TaskDescriptor::atomic_kill(bool kill_process)
 {
+    if (kill_process) {
+        assert(process);
+        process->atomic_terminate();
+        return;
+    }
+
+
     bool reschedule = false;
 
     {
@@ -840,6 +873,24 @@ void TaskDescriptor::cleanup()
 
     cleaned_up = true;
 
+    auto cpu_struct = sched::get_cpu_struct();
+    bool last_task_in_process = false;
+
+    {
+        assert(process);
+
+        Auto_Lock_Scope l(process->lock);
+        process->child_tasks.erase(this);
+
+        if (process->child_tasks.empty()) {
+            process->alive = false;
+            last_task_in_process = true;
+        }
+    }
+
+    if (last_task_in_process)
+        process->atomic_destroy_cleanup();
+
     futex_try_remove();
 
     {
@@ -873,7 +924,7 @@ void TaskDescriptor::cleanup()
                                                                offsetof(TaskDescriptor, rcu_head));
         delete t;
     };
-    sched::get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
+    cpu_struct->heap_rcu_cpu.push(&rcu_head);
 
     sched::find_new_process();
 }

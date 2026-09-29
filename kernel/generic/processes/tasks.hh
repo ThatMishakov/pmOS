@@ -82,6 +82,7 @@ namespace interrupts
 namespace proc
 {
     class TaskGroup;
+    struct Process;
 
     struct TaskPermissions {
     };
@@ -144,6 +145,9 @@ namespace proc
             memory::RCU_Head rcu_head;
             pmos::containers::RBTreeNode<TaskDescriptor> task_tree_head = {};
         };
+
+        pmos::containers::RBTreeNode<TaskDescriptor> process_tree_head;
+        Process *process = nullptr;
 
         bool is_terminating() const;
 
@@ -242,7 +246,7 @@ namespace proc
         void atomic_erase_from_queue(sched::sched_queue *queue) noexcept;
 
         // Kills the task
-        void atomic_kill();
+        void atomic_kill(bool destoy_process = true);
 
         // Returns 0 if there are no unblocking events pending. Otherwise returns 0.
         u64 check_unblock_immediately(u64 reason, u64 extra);
@@ -314,8 +318,10 @@ namespace proc
 
         ~TaskDescriptor() noexcept;
 
-        /// Creates a process structure and returns its pid
-        static TaskDescriptor *create_process(PrivilegeLevel level = PrivilegeLevel::User) noexcept;
+        /// Creates the task
+        /// nullptr process -> create a new one for the task
+        /// TODO: Not all the the errors are ENOMEM now...
+        static TaskDescriptor *create(Process *parent, PrivilegeLevel level = PrivilegeLevel::User) noexcept;
 
         /// Loads ELF into the task from the given memory object
         /// Returns true if the ELF was loaded successfully, false if the memory object data is not
