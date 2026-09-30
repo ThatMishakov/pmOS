@@ -2,6 +2,7 @@
 #include <pmos/memory.h>
 #include <pmos/ports.h>
 #include <pmos/interrupts.h>
+#include <pmos/ipc.h>
 
 namespace pmos
 {
@@ -213,6 +214,43 @@ std::expected<void, int> name_right(Right right, std::string_view name)
 
     right.release();
     return {};
+}
+
+pmos::async::task<std::expected<void, int>> name_right(PortDispatcher &dispatcher_, Right right, std::string_view name)
+{
+    ReceiveRight rright;
+    Right name_right = {}; // "lol"
+
+    {
+        auto length = name.length();
+        auto struct_length = sizeof(IPC_Name_Right) + length;
+        std::vector<uint8_t> buffer(struct_length);
+        auto n = reinterpret_cast<IPC_Name_Right *>(buffer.data());
+        n->type = IPC_Name_Right_NUM;
+        n->flags = 0;
+        std::memcpy(n->name, name.data(), name.length());
+
+        auto result = send_message_right(name_right, std::span(buffer), std::pair{&dispatcher_.get_port(), RightType::SendOnce}, false, std::move(right));
+        if (!result)
+            co_return std::unexpected(result.error().first);
+        rright = std::move(result.value());
+    }
+
+    auto msg = co_await dispatcher_.get_message(rright);
+    if (!msg)
+        co_return std::unexpected(msg.error());
+
+    if (msg->descriptor.size < sizeof(IPC_Name_Right_Reply))
+        co_return std::unexpected(EIO);
+
+    auto reply = reinterpret_cast<IPC_Name_Right_Reply *>(msg->data.data());
+    if (reply->type != IPC_Name_Right_Reply_NUM)
+        co_return std::unexpected(EIO);
+
+    if (reply->result)
+        co_return std::unexpected(-reply->result);
+    
+    co_return {};
 }
 
 std::expected<ReceiveRight, int> request_named_port(std::string_view name, Port &port)

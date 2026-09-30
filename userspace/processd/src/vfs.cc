@@ -433,7 +433,8 @@ pmos::async::detached_task vfs_handle_messages()
 {
     auto right = main_port.create_right(pmos::RightType::SendMany);
     auto [r, receive_right] = std::move(right.value());
-    auto result = pmos::name_right(std::move(r), "/pmos/vfsd");
+    auto result = co_await pmos::name_right(dispatcher, std::move(r), "/pmos/vfsd");
+    result.value();
 
     while (1) {
         auto [msg, message, reply_right, rights] = (co_await dispatcher.get_message_default()).value();

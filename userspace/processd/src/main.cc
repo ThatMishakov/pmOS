@@ -284,7 +284,7 @@ int main(int argc, char *argv[])
     parse_args(argc, argv);
 
     // get_messages();
-    // vfs_handle_messages();
+    vfs_handle_messages();
     (void)dispatcher.dispatch();
     return 0;
 }

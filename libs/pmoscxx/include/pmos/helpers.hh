@@ -2,6 +2,7 @@
 #include <pmos/ports.h>
 #include <pmos/system.h>
 #include <pmos/containers/intrusive_bst.hh>
+#include <pmos/async/coroutines.hh>
 
 #include <array>
 #include <cerrno>
@@ -270,6 +271,8 @@ public:
 
 std::expected<Right, int> get_right_by_name(std::string_view name, bool noblock = false);
 std::expected<void, int> name_right(Right right, std::string_view name);
+
+pmos::async::task<std::expected<void, int>> name_right(PortDispatcher &port, Right right, std::string_view name);
 
 constexpr Port::Port(pmos_port_t p) noexcept: id(p) {}
 
