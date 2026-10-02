@@ -129,7 +129,6 @@ pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right
 
     auto fs = std::make_shared<Filesystem>();
     fs->fs_right = std::move(fs_right);
-    fs->mountpoint = nullptr;
 
     auto vnode = std::make_shared<VNode>();
     vnode->parent_fs = fs;
@@ -156,10 +155,14 @@ pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right
             co_return;
         }
 
-        root_vnode->parent = new_root;
-        assert(root_vnode->parent_fs);
-        root_vnode->parent_fs->mountpoint = new_root;
-        root_vnode = new_root;
+        auto mount_parent = new_root->parent.lock();
+        assert(mount_parent);
+
+        root_vnode->parent = mount_parent;
+        root_vnode->name = new_root->name;
+        mount_parent->children_cache[new_root->name] = root_vnode;
+        new_root = std::move(root_vnode);
+        root_vnode = vnode;
     } else {
         root_vnode = vnode;
     }
@@ -173,17 +176,9 @@ pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right
         it = root_waiters.begin();
     }
 
-    auto resolve_mountpoint = [&](Filesystem* fs) -> std::string {
-        if (fs->mountpoint) {
-            return fs->mountpoint->path();
-        } else {
-            return "/";
-        }
-    };
-
-    kernelLogger() << "vfsd: Mounted filesystem at " << resolve_mountpoint(fs.get()) << " with root inode " << root_inode << "\n" << frg::endlog;
+    kernelLogger() << "vfsd: Mounted filesystem at " << fs->root->path() << " with root inode " << root_inode << "\n" << frg::endlog;
     if (new_root)
-        kernelLogger() << "vfsd: Pivoted old root to " << resolve_mountpoint(fs.get()) << "\n" << frg::endlog;
+        kernelLogger() << "vfsd: Pivoted old root to " << new_root->path() << "\n" << frg::endlog;
 
     mount_filesystem_reply(reply_right, 0);
 }
@@ -551,19 +546,18 @@ void unblock_vnode_waiters(std::shared_ptr<VNode> vnode, const std::string &name
 
     assert(std::holds_alternative<VNodeAwaitersList>(it->second));
 
-    auto &waiters = std::get<VNodeAwaitersList>(it->second);
-    auto waiter_it = waiters.begin();
-    while (waiter_it != waiters.end()) {
-        waiters.remove(waiter_it);
-        waiter_it->result_ = result;
-        waiter_it->h_.resume();
-        waiter_it = waiters.begin();
-    }
-
+    auto waiters = std::move(std::get<VNodeAwaitersList>(it->second));
     if (result)
         it->second = result.value();
     else
         vnode->children_cache.erase(it);
+
+    while (!waiters.empty()) {
+        auto waiter = &waiters.front();
+        waiters.remove(waiter);
+        waiter->result_ = result;
+        waiter->h_.resume();
+    }
 }
 
 bool VNodeAwaiter::await_ready() noexcept
@@ -624,6 +618,7 @@ pmos::async::detached_task vnode_wait(std::shared_ptr<VNode> vnode, std::string 
     auto child_vnode = std::make_shared<VNode>();
     child_vnode->parent_fs = vnode->parent_fs;
     child_vnode->parent = vnode;
+    child_vnode->name = name;
     child_vnode->inode = reply->file_id;
     child_vnode->type = file_type_from_ipc(reply->file_type);
 
@@ -696,19 +691,22 @@ FileType file_type_from_ipc(uint32_t ipc_file_type)
 
 std::string VNode::path() const
 {
-    std::string result = name;
-    auto parent_vnode = parent.lock();
+    std::string result;
+    const VNode *current = this;
 
     size_t max_iterations = 1000; // Prevent infinite loops in case of cycles
 
-    while (parent_vnode) {
-        result = parent_vnode->name + "/" + result;
-        parent_vnode = parent_vnode->parent.lock();
+    while (current) {
+        if (!current->name.empty())
+            result = "/" + current->name + result;
+
+        auto parent_vnode = current->parent.lock();
+        current = parent_vnode.get();
 
         if (--max_iterations == 0) {
             kernelLogger() << "vfsd: Warning: Detected potential cycle in VNode parent chain while computing path\n" << frg::endlog;
             break;
         }
     }
-    return "/" + result;
+    return result.empty() ? "/" : result;
 }

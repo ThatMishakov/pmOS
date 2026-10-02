@@ -66,7 +66,12 @@ done
 
 # Create an ext4 filesystem for the root partition
 dd if=/dev/zero of="$EXT4_PARTITION" bs=1M count=64
-mke2fs -d "$SYSROOT" -t ext4 "$EXT4_PARTITION" -L "pmos-root"
+ROOTFS_STAGE=$(mktemp -d)
+cp -a "$SYSROOT"/. "$ROOTFS_STAGE"/
+mkdir -p "$ROOTFS_STAGE/run/initramfs"
+touch "$ROOTFS_STAGE/run/initramfs/.keep"
+mke2fs -d "$ROOTFS_STAGE" -t ext4 "$EXT4_PARTITION" -L "pmos-root"
+rm -rf "$ROOTFS_STAGE"
 
 # Combine the partitions into the final disk image
 dd conv=notrunc if="$BOOT_PARTITION" of="$DISK_IMAGE" bs=512 seek=2048

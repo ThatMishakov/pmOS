@@ -11,7 +11,6 @@ struct VNode;
 
 struct Filesystem {
     pmos::Right fs_right;
-    std::shared_ptr<VNode> mountpoint; // nullptr means root
     uint64_t device_id = 0;
 
     std::shared_ptr<VNode> root;
