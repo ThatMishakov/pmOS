@@ -429,16 +429,26 @@ pub struct IPCFSResolvePathReply {
     pub result: i32,
     pub file_type: u32,
     pub inode: u64,
+    pub st_mode: u64,
+    pub st_uid: u32,
+    pub st_gid: u32,
+    pub st_rdev: u64,
+    pub st_blksize: u64,
 }
 
 impl IPCFSResolvePathReply {
-    pub fn new(result: i32, file_type: u32, inode: u64) -> Self {
+    pub fn new(result: i32, file_type: u32, inode: u64, st_mode: u64, st_uid: u32, st_gid: u32, st_rdev: u64, st_blksize: u64) -> Self {
         IPCFSResolvePathReply {
             msg_type: IPC_FS_RESOLVE_PATH_REPLY,
             flags: 0,
             result,
             file_type,
             inode,
+            st_mode,
+            st_uid,
+            st_gid,
+            st_rdev,
+            st_blksize,
         }
     }
 }

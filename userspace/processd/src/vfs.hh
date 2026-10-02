@@ -11,7 +11,7 @@ struct VNode;
 
 struct Filesystem {
     pmos::Right fs_right;
-    std::string mountpoint;
+    std::shared_ptr<VNode> mountpoint; // nullptr means root
     uint64_t device_id = 0;
 
     std::shared_ptr<VNode> root;
@@ -72,6 +72,8 @@ struct VNode: public std::enable_shared_from_this<VNode> {
     }
 
     pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> resolve_child(const std::string &name);
+
+    std::string path() const;
 };
 
 extern std::vector<std::shared_ptr<Filesystem>> filesystems;

@@ -64,64 +64,26 @@ void RootNodeWaiter::await_suspend(std::coroutine_handle<> h) noexcept
     root_waiters.push_back(this);
 }
 
-pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right fs_right, const std::string &mountpoint, int64_t root_inode)
-{
-    if (mountpoint != "/") {
-        mount_filesystem_reply(reply_right, -ENOSYS);
-        co_return;
-    }
-
-    if (!fs_right) {
-        mount_filesystem_reply(reply_right, -EINVAL);
-        co_return;
-    }
-
-    if (root_vnode) {
-        mount_filesystem_reply(reply_right, -EEXIST);
-        co_return;
-    }
-
-    auto fs = std::make_shared<Filesystem>();
-    fs->fs_right = std::move(fs_right);
-    fs->mountpoint = std::move(mountpoint);
-
-    auto vnode = std::make_shared<VNode>();
-    vnode->parent_fs = fs;
-    vnode->inode = root_inode;
-    vnode->type = FileType::Directory;
-
-    fs->root = vnode;
-    filesystems.push_back(fs);
-    root_vnode = vnode;
-
-    auto it = root_waiters.begin();
-    while (it != root_waiters.end()) {
-        root_waiters.remove(it);
-        it->h_.resume();
-        it = root_waiters.begin();
-    }
-
-    kernelLogger() << "vfsd: Mounted filesystem at " << fs->mountpoint << " with root inode " << root_inode << "\n" << frg::endlog;
-
-    mount_filesystem_reply(reply_right, 0);
-}
-
 pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> get_root_vnode()
 {
     co_return co_await RootNodeWaiter{};
 }
 
-pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> resolve_path(std::string path, std::shared_ptr<VNode> current_vnode = nullptr)
+pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> resolve_path(std::string path, std::shared_ptr<VNode> current_vnode = nullptr, std::shared_ptr<VNode> root_vnode = nullptr)
 {
     auto p = Path::parse(path);
 
     // Start at root, since getcwd is not implemented
-    auto root = co_await get_root_vnode();
-    if (!root)
-        co_return root;
+    if (!root_vnode) {
+        auto root = co_await get_root_vnode();
+        if (!root)
+            co_return root;
+        root_vnode = std::move(root.value());
+    }
+
 
     if (!current_vnode || !p.relative()) {
-        current_vnode = root.value();
+        current_vnode = root_vnode;
     }
 
     for (auto i : p.components()) {
@@ -132,7 +94,7 @@ pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> resolve_path(std::
         if (i == ".") {
             continue;
         } else if (i == "..") {
-            if (current_vnode == root.value())
+            if (current_vnode == root_vnode)
                 continue;
 
             current_vnode = current_vnode->parent.lock();
@@ -151,6 +113,79 @@ pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> resolve_path(std::
         co_return std::unexpected(-ENOTDIR);
 
     co_return current_vnode;
+}
+
+pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right fs_right, const std::string &mountpoint, int64_t root_inode)
+{
+    if (mountpoint != "/") {
+        mount_filesystem_reply(reply_right, -ENOSYS);
+        co_return;
+    }
+
+    if (!fs_right) {
+        mount_filesystem_reply(reply_right, -EINVAL);
+        co_return;
+    }
+
+    auto fs = std::make_shared<Filesystem>();
+    fs->fs_right = std::move(fs_right);
+    fs->mountpoint = nullptr;
+
+    auto vnode = std::make_shared<VNode>();
+    vnode->parent_fs = fs;
+    vnode->inode = root_inode;
+    vnode->type = FileType::Directory;
+
+    fs->root = vnode;
+
+    std::shared_ptr<VNode> new_root = nullptr;
+    if (root_vnode) {
+        // Only pivot root for now
+        // TODO: This should be extended to mounting at arbitrary mountpoints and should be trivial
+
+        auto name = "/run/initramfs";
+        auto n = co_await resolve_path(name, nullptr, vnode);
+        if (!n) {
+            mount_filesystem_reply(reply_right, n.error());
+            co_return;
+        }
+        new_root = std::move(n.value());
+
+        if (new_root->type != FileType::Directory) {
+            mount_filesystem_reply(reply_right, -ENOTDIR);
+            co_return;
+        }
+
+        root_vnode->parent = new_root;
+        assert(root_vnode->parent_fs);
+        root_vnode->parent_fs->mountpoint = new_root;
+        root_vnode = new_root;
+    } else {
+        root_vnode = vnode;
+    }
+
+    filesystems.push_back(fs);
+
+    auto it = root_waiters.begin();
+    while (it != root_waiters.end()) {
+        root_waiters.remove(it);
+        it->h_.resume();
+        it = root_waiters.begin();
+    }
+
+    auto resolve_mountpoint = [&](Filesystem* fs) -> std::string {
+        if (fs->mountpoint) {
+            return fs->mountpoint->path();
+        } else {
+            return "/";
+        }
+    };
+
+    kernelLogger() << "vfsd: Mounted filesystem at " << resolve_mountpoint(fs.get()) << " with root inode " << root_inode << "\n" << frg::endlog;
+    if (new_root)
+        kernelLogger() << "vfsd: Pivoted old root to " << resolve_mountpoint(fs.get()) << "\n" << frg::endlog;
+
+    mount_filesystem_reply(reply_right, 0);
 }
 
 pmos::async::task<std::expected<pmos::Right, int>> open_file_on_fs(std::shared_ptr<VNode> vnode)
@@ -657,4 +692,23 @@ FileType file_type_from_ipc(uint32_t ipc_file_type)
     }
 
     return result;
+}
+
+std::string VNode::path() const
+{
+    std::string result = name;
+    auto parent_vnode = parent.lock();
+
+    size_t max_iterations = 1000; // Prevent infinite loops in case of cycles
+
+    while (parent_vnode) {
+        result = parent_vnode->name + "/" + result;
+        parent_vnode = parent_vnode->parent.lock();
+
+        if (--max_iterations == 0) {
+            kernelLogger() << "vfsd: Warning: Detected potential cycle in VNode parent chain while computing path\n" << frg::endlog;
+            break;
+        }
+    }
+    return "/" + result;
 }

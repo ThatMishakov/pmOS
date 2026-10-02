@@ -369,8 +369,31 @@ fn ext4filetype_to_int(file_type: FileType) -> u32 {
     }
 }
 
-fn ipc_resolve_path_reply(mut reply_right: Option<SendRight>, result: i32, inode: u64, file_type: u32) {
-    let msg = pmos::ipc_msgs::IPCFSResolvePathReply::new(result, file_type, inode);
+fn ipc_resolve_path_reply(mut reply_right: Option<SendRight>, result: i32, _fs: Ext4, inode: Option<Inode>) {
+    let (file_type, inode, st_mode, st_uid, st_gid, st_rdev, st_blksize) = match inode {
+        Some(inode) => (
+            ext4filetype_to_int(inode.file_type()),
+            inode.index.get().into(),
+            inode.mode().bits().into(),
+            inode.uid(),
+            inode.gid(),
+            0,
+            // TODO: block size is private in ext4plus
+            4096,
+        ),
+        None => (0, 0, 0, 0, 0, 0, 4096),
+    };
+
+    let msg = pmos::ipc_msgs::IPCFSResolvePathReply::new(
+        result,
+        file_type,
+        inode,
+        st_mode,
+        st_uid,
+        st_gid,
+        st_rdev,
+        st_blksize,
+    );
     let result = send_message_right(&msg, &mut reply_right, &mut [None, None, None, None]);
     if let Err(e) = result {
         eprintln!("ext4: Failed to send IPCFSResolvePathReply message: {}", e.0);
@@ -380,42 +403,46 @@ fn ipc_resolve_path_reply(mut reply_right: Option<SendRight>, result: i32, inode
 async fn ipc_handle_resolve_path(executor: Executor, reply_right: Option<SendRight>, fs: Ext4, path_component: String, inode: u64) {
     let current_inode = u32::try_from(inode).ok().and_then(NonZeroU32::new);
     if current_inode.is_none() {
-        ipc_resolve_path_reply(reply_right, -ENOENT as i32, 0, 0);
+        ipc_resolve_path_reply(reply_right, -ENOENT as i32, fs, None);
         return;
     }
     let current_inode = current_inode.unwrap();
 
     let entry_name = path_component.as_str().try_into();
     if let Err(e) = entry_name {
-        ipc_resolve_path_reply(reply_right, ext4direntry_error_to_int(e), 0, 0);
+        ipc_resolve_path_reply(reply_right, ext4direntry_error_to_int(e), fs, None);
         return;
     }
     let entry_name = entry_name.unwrap();
 
     let inode = Inode::read(&fs, current_inode).await;
     if let Err(e) = inode {
-        ipc_resolve_path_reply(reply_right, ext4error_to_int(e), 0, 0);
+        ipc_resolve_path_reply(reply_right, ext4error_to_int(e), fs, None);
         return;
     }
     let inode = inode.unwrap();
 
     let dir = Dir::open_inode(&fs, inode);
     if let Err(e) = dir {
-        ipc_resolve_path_reply(reply_right, ext4error_to_int(e), 0, 0);
+        ipc_resolve_path_reply(reply_right, ext4error_to_int(e), fs, None);
         return;
     }
     let dir = dir.unwrap();
 
     let entry = dir.get_entry(entry_name).await;
     if let Err(e) = entry {
-        ipc_resolve_path_reply(reply_right, ext4error_to_int(e), 0, 0);
+        ipc_resolve_path_reply(reply_right, ext4error_to_int(e), fs, None);
         return;
     }
     let entry = entry.unwrap();
 
-    let file_type = entry.file_type();
-    let inode = entry.index.get().into();
-    ipc_resolve_path_reply(reply_right, 0, inode, ext4filetype_to_int(file_type));
+    let inode = Inode::read(&fs, entry.index).await;
+    if let Err(e) = inode {
+        ipc_resolve_path_reply(reply_right, ext4error_to_int(e), fs, None);
+        return;
+    }
+
+    ipc_resolve_path_reply(reply_right, 0, fs, Some(inode.unwrap()));
 }
 
 fn ipc_fs_open_reply(reply_right: Option<SendRight>, result: i16, flags: u16, fs_right: Option<SendRight>) -> Result<(), i32> {
