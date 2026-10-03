@@ -9,11 +9,35 @@
 
 struct VNode;
 
+struct StatData {
+    uint64_t st_size;
+    uint64_t st_nlink;
+    uint64_t st_atim_tv_nsec;
+    uint64_t st_mtim_tv_nsec;
+    uint64_t st_ctim_tv_nsec;
+    uint64_t st_btim_tv_nsec;
+    uint64_t st_blocks;
+};
+
 struct Filesystem {
-    pmos::Right fs_right;
     uint64_t device_id = 0;
 
     std::shared_ptr<VNode> root;
+
+    // nullptr -> block
+    virtual std::expected<std::shared_ptr<VNode>, int> resolve_child(std::shared_ptr<VNode> parent, const std::string &name) = 0;
+    virtual pmos::async::task<std::expected<pmos::Right, int>> open_file(std::shared_ptr<VNode> vnode) = 0;
+    virtual pmos::async::task<std::expected<StatData, int>> get_file_stat_dynamic(std::shared_ptr<VNode> vnode) = 0;
+
+    virtual ~Filesystem() = default;
+};
+
+struct ExternalFilesystem: public Filesystem {
+    pmos::Right fs_right;
+
+    std::expected<std::shared_ptr<VNode>, int> resolve_child(std::shared_ptr<VNode> parent, const std::string &name) override;
+    pmos::async::task<std::expected<pmos::Right, int>> open_file(std::shared_ptr<VNode> vnode) override;
+    pmos::async::task<std::expected<StatData, int>> get_file_stat_dynamic(std::shared_ptr<VNode> vnode) override;
 };
 
 enum class FileType {

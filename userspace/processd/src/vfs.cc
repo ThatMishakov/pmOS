@@ -127,7 +127,7 @@ pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right
         co_return;
     }
 
-    auto fs = std::make_shared<Filesystem>();
+    auto fs = std::make_shared<ExternalFilesystem>();
     fs->fs_right = std::move(fs_right);
 
     auto vnode = std::make_shared<VNode>();
@@ -183,9 +183,10 @@ pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right
     mount_filesystem_reply(reply_right, 0);
 }
 
-pmos::async::task<std::expected<pmos::Right, int>> open_file_on_fs(std::shared_ptr<VNode> vnode)
+pmos::async::task<std::expected<pmos::Right, int>> ExternalFilesystem::open_file(std::shared_ptr<VNode> vnode)
 {
     assert(vnode);
+    assert(vnode->parent_fs.get() == this);
 
     IPC_FS_Open req = {
         .type  = IPC_FS_Open_NUM,
@@ -193,7 +194,7 @@ pmos::async::task<std::expected<pmos::Right, int>> open_file_on_fs(std::shared_p
         .inode = vnode->inode,
     };
 
-    auto reply_right = pmos::send_message_right_one(vnode->parent_fs->fs_right, req, {&main_port, pmos::RightType::SendOnce});
+    auto reply_right = pmos::send_message_right_one(fs_right, req, {&main_port, pmos::RightType::SendOnce});
     if (!reply_right) {
         kernelLogger() << "posixd: Error " << reply_right.error().first << " sending open file message to filesystem\n" << frg::endlog;
         co_return std::unexpected(reply_right.error().first);
@@ -301,7 +302,7 @@ pmos::async::detached_task open_file(pmos::Right reply_right, std::string path)
         co_return;
     }
 
-    auto fs_right = co_await open_file_on_fs(vnode);
+    auto fs_right = co_await vnode->parent_fs->open_file(vnode);
     if (!fs_right) {
         open_file_error_reply(reply_right, fs_right.error());
         co_return;
@@ -320,19 +321,10 @@ pmos::async::detached_task open_file(pmos::Right reply_right, std::string path)
         kernelLogger() << "posixd: Error " << send_result.error().first << " sending open file reply to port " << reply_right.get() << "\n" << frg::endlog;
 }
 
-struct StatData {
-    uint64_t st_size;
-    uint64_t st_nlink;
-    uint64_t st_atim_tv_nsec;
-    uint64_t st_mtim_tv_nsec;
-    uint64_t st_ctim_tv_nsec;
-    uint64_t st_btim_tv_nsec;
-    uint64_t st_blocks;
-};
-
-pmos::async::task<std::expected<StatData, int>> get_file_stat_dynamic(std::shared_ptr<VNode> vnode)
+pmos::async::task<std::expected<StatData, int>> ExternalFilesystem::get_file_stat_dynamic(std::shared_ptr<VNode> vnode)
 {
     assert(vnode);
+    assert(vnode->parent_fs.get() == this);
     
     IPC_FS_Stat_Dynamic req = {
         .type  = IPC_FS_Stat_Dynamic_NUM,
@@ -340,7 +332,7 @@ pmos::async::task<std::expected<StatData, int>> get_file_stat_dynamic(std::share
         .inode = vnode->inode,
     };
 
-    auto reply_right = pmos::send_message_right_one(vnode->parent_fs->fs_right, req, {&main_port, pmos::RightType::SendOnce});
+    auto reply_right = pmos::send_message_right_one(fs_right, req, {&main_port, pmos::RightType::SendOnce});
     if (!reply_right) {
         kernelLogger() << "posixd: Error " << reply_right.error().first << " sending stat dynamic message to filesystem\n" << frg::endlog;
         co_return std::unexpected(reply_right.error().first);
@@ -427,7 +419,7 @@ pmos::async::detached_task stat_handle(std::shared_ptr<VNode> vnode, pmos::Right
 
     auto vnode_resolved = result.value();
 
-    auto stat_result = co_await get_file_stat_dynamic(vnode_resolved);
+    auto stat_result = co_await vnode_resolved->parent_fs->get_file_stat_dynamic(vnode_resolved);
     if (!stat_result) {
         stat_handle_error_reply(reply_right, stat_result.error());
         co_return;
@@ -631,6 +623,30 @@ pmos::async::detached_task vnode_wait(std::shared_ptr<VNode> vnode, std::string 
     unblock_vnode_waiters(vnode, name, child_vnode);
 }
 
+std::expected<std::shared_ptr<VNode>, int> ExternalFilesystem::resolve_child(std::shared_ptr<VNode> parent, const std::string &name)
+{
+    std::vector<uint8_t> buffer(sizeof(IPC_FS_Resolve_Path) + name.size());
+    auto req = reinterpret_cast<IPC_FS_Resolve_Path *>(buffer.data());
+    req->type = IPC_FS_Resolve_Path_NUM;
+    req->flags = 0;
+    req->inode = parent->inode;
+    memcpy(req->path_name, name.data(), name.size());
+
+    auto span = std::span<const uint8_t>(buffer.data(), sizeof(IPC_FS_Resolve_Path) + name.size());
+
+    auto send_result = pmos::send_message_right(fs_right, span, {&main_port, pmos::RightType::SendOnce}, false);
+    if (!send_result) {
+        kernelLogger() << "posixd: Error " << send_result.error().first << " sending resolve child message to filesystem\n" << frg::endlog;
+        return std::unexpected(send_result.error().first);
+    }
+
+    parent->children_cache[name] = VNodeAwaitersList{};
+
+    vnode_wait(parent, name, std::move(send_result.value()));
+
+    return {};
+}
+
 pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> VNode::resolve_child(const std::string &name)
 {
     assert(!name.empty());
@@ -648,26 +664,18 @@ pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> VNode::resolve_chi
         co_return co_await VNodeAwaiter(shared_from_this(), name);
     }
 
-    std::vector<uint8_t> buffer(sizeof(IPC_FS_Resolve_Path) + name.size());
-    auto req = reinterpret_cast<IPC_FS_Resolve_Path *>(buffer.data());
-    req->type = IPC_FS_Resolve_Path_NUM;
-    req->flags = 0;
-    req->inode = inode;
-    memcpy(req->path_name, name.data(), name.size());
+    assert(parent_fs);
+    auto val = parent_fs->resolve_child(shared_from_this(), name);
 
-    auto span = std::span<const uint8_t>(buffer.data(), sizeof(IPC_FS_Resolve_Path) + name.size());
-
-    auto send_result = pmos::send_message_right(parent_fs->fs_right, span, {&main_port, pmos::RightType::SendOnce}, false);
-    if (!send_result) {
-        kernelLogger() << "posixd: Error " << send_result.error().first << " sending resolve child message to filesystem\n" << frg::endlog;
-        co_return std::unexpected(send_result.error().first);
+    if (val) {
+        auto value = std::move(val.value());
+        if (value)
+            co_return value;
+        else
+            co_return co_await VNodeAwaiter(shared_from_this(), name);
+    } else {
+        co_return std::unexpected(val.error());
     }
-
-    children_cache[name] = VNodeAwaitersList{};
-
-    vnode_wait(shared_from_this(), name, std::move(send_result.value()));
-
-    co_return co_await VNodeAwaiter(shared_from_this(), name);
 }
 
 FileType file_type_from_ipc(uint32_t ipc_file_type)
