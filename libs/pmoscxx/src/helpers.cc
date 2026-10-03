@@ -350,7 +350,10 @@ void set_deadline(const ReceiveRight &timer_right, uint64_t deadline_ns, bool re
     if (timer_right.type() != RightType::Timer)
         throw std::invalid_argument("Right must be of type Timer");
 
-    auto result = ::pmos_set_timer(timer_right.port(), timer_right.get(), deadline_ns, PMOS_SET_TIMER_RELATIVE);
+    unsigned flags = 0;
+    if (relative)
+        flags |= PMOS_SET_TIMER_RELATIVE;
+    auto result = ::pmos_set_timer(timer_right.port(), timer_right.get(), deadline_ns, flags);
     if (result)
         throw std::system_error(-static_cast<int>(result), std::system_category(),
                                 "Failed to set timer deadline");

@@ -188,7 +188,7 @@ void set_up_interrupt()
     auto send_result = pmos::send_message_right_one(devicesd_right, r,
                                                     {&reply_port, pmos::RightType::SendOnce});
     if (!send_result) {
-        printf("Failed to send message to set up interrupt: %i (%s)\n", send_result.error(),
+        printf("Failed to send message to set up interrupt: %i (%s)\n", send_result.error().first,
                 strerror(send_result.error().first));
         return;
     }
@@ -363,7 +363,7 @@ void ns16550_init()
 
     if (have_interrupts) {
         // Enable interrupts
-        set_register(IER, IER_RLS | IER_RX_DATA | IER_TX_EMPTY);
+        set_register(IER, IER_RLS | IER_RX_DATA);
     } else {
         timer_right = create_timer_right(serial_port);
         poll();
@@ -408,12 +408,21 @@ void write_blind(const char *str, size_t size)
 
 void check_tx()
 {
-    if ((io_rw->read_register(LSR) & LSR_TX_EMPTY) == 0)
-        return;
+    auto move_data = []{
+        if (active_buffer.data.empty() and not write_queue.empty()) {
+            active_buffer = std::move(write_queue.front());
+            write_queue.pop();
+        }
+    };
 
-    if (active_buffer.data.empty() and not write_queue.empty()) {
-        active_buffer = std::move(write_queue.front());
-        write_queue.pop();
+    move_data();
+
+    if ((io_rw->read_register(LSR) & LSR_TX_EMPTY) == 0) {
+        if (have_interrupts && !writing && !active_buffer.data.empty()) {
+            writing = true;
+            set_register(IER, IER_RX_DATA | IER_RLS | IER_TX_EMPTY);
+        }
+        return;
     }
 
     if (not active_buffer.data.empty()) {
@@ -425,6 +434,18 @@ void check_tx()
         active_buffer.pos += i;
         if (active_buffer.pos == active_buffer.length)
             active_buffer = {};
+
+        move_data();
+
+        if (!active_buffer.data.empty() && !writing) {
+            writing = true;
+            if (have_interrupts)
+                set_register(IER, IER_RX_DATA | IER_RLS | IER_TX_EMPTY);
+        } else if (active_buffer.data.empty() && writing) {
+            writing = false;
+            if (have_interrupts)
+                set_register(IER, IER_RX_DATA | IER_RLS);
+        }
     }
 }
 
@@ -440,14 +461,13 @@ void write_interrupt()
         if (i > 16)
             i = 16;
 
-        writing = true;
-
         write_blind(reinterpret_cast<const char *>(active_buffer.data.data()) + active_buffer.pos, i);
         active_buffer.pos += i;
         if (active_buffer.pos == active_buffer.length)
             active_buffer = {};
     } else {
         writing = false;
+        set_register(IER, IER_RX_DATA | IER_RLS);
         io_rw->read_register(ISR);
     }
 }
