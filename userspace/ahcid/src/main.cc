@@ -25,7 +25,6 @@
 #include <pmos/async/coroutines.hh>
 #include <sys/mman.h>
 #include <cstdlib>
-#include <pty.h>
 
 pmos::Right device_right;
 

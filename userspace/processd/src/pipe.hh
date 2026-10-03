@@ -1,3 +1,4 @@
+#pragma once
 #include <pmos/ipc.h>
 #include <pmos/helpers.hh>
 

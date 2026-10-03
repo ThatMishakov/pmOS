@@ -47,6 +47,7 @@
 #include "pipe.hh"
 #include "vfs.hh"
 #include "process.hh"
+#include "pty.hh"
 
 void KernelSink::operator()(const char *message)
 {
@@ -133,6 +134,17 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
             std::string stat_msg_path(stat_msg->path, message.size() - sizeof(IPC_Stat));
 
             stat_handle(nullptr, std::move(reply_right), stat_msg->flags, std::move(stat_msg_path));
+        }
+            break;
+        
+        case IPC_Openpt_NUM: {
+            if (message.size() < sizeof(IPC_Openpt)) {
+                kernelLogger() << "posixd: Received IPC_Openpt that is too small while attending file\n" << frg::endlog;
+                break;
+            }
+            auto *openpt_msg = reinterpret_cast<IPC_Openpt *>(message.data());
+
+            openpt_handle(std::move(reply_right), openpt_msg->flags);
         }
             break;
 
