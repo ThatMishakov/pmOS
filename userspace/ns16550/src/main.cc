@@ -5,6 +5,8 @@
 #include <inttypes.h>
 #include <memory>
 #include <pmos/helpers.hh>
+#include <pmos/pmbus_helper.hh>
+#include <pmos/async/coroutines.hh>
 #include <pmos/interrupts.h>
 #include <pmos/ipc.h>
 #include <pmos/memory.h>
@@ -16,6 +18,7 @@
 #include <string>
 #include <sys/mman.h>
 #include <sys/user.h>
+#include <pty.h>
 
 // Either physcial memory base or I/O port base
 uint64_t terminal_base = 0x0;
@@ -46,6 +49,9 @@ auto new_port()
 
 auto serial_port = pmos::Port::create().value();
 auto reply_port  = pmos::Port::create().value();
+
+auto dispatcher = pmos::PortDispatcher(serial_port);
+auto pmbus_helper = pmos::PMBUSHelper(dispatcher);
 
 constexpr auto devicesd_port_name = "/pmos/devicesd";
 auto devicesd_right               = pmos::get_right_by_name(devicesd_port_name).value();
@@ -534,18 +540,29 @@ void react_interrupt()
     pmos::complete_interrupt(interrupt_right);
 }
 
-int main()
+pmos::async::detached_task start_shell()
 {
-    printf("Hello from ns16550! My task id: %li\n", get_task_id());
+    pmos::ipc::EqualsFilter filter("real_root_mounted", "1");
 
-    ns16550_init();
+    auto shell_right = co_await pmbus_helper.get_object(filter);
+    write_str("Found real root object\n");
 
-    write_str("!! ns16550 task id: " + std::to_string(get_task_id()) + " !!\n");
+    int amaster;
+    pid_t pid = forkpty(&amaster, NULL, NULL, NULL);
+    if (pid < 0) {
+        write_str("Failed to fork pty\n");
+        co_return;
+    }
+    write_str("Forked pty with pid " + std::to_string(pid) + "\n");
 
-    request_logger_port();
+    // TODO
+}
 
+pmos::async::detached_task get_messages()
+{
     while (1) {
-        auto [msg, msg_buff, reply_right, array] = serial_port.get_first_message().value();
+        auto msg_w = co_await dispatcher.get_message_default();
+        auto [msg, msg_buff, reply_right, array] = std::move(msg_w.value());
 
         if (msg.size < sizeof(IPC_Generic_Msg)) {
             write_str("Warning: received very small message\n");
@@ -587,4 +604,19 @@ int main()
             break;
         }
     }
+}
+
+int main()
+{
+    printf("Hello from ns16550! My task id: %li\n", get_task_id());
+
+    ns16550_init();
+
+    write_str("!! ns16550 task id: " + std::to_string(get_task_id()) + " !!\n");
+
+    request_logger_port();
+    get_messages();
+    start_shell();
+
+    dispatcher.dispatch().value();
 }
