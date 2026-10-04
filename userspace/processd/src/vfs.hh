@@ -6,6 +6,8 @@
 #include <map>
 #include <cassert>
 #include <variant>
+#include <expected>
+#include <pmos/helpers.hh>
 
 struct VNode;
 
@@ -44,6 +46,7 @@ enum class FileType {
     None,
     File,
     Directory,
+    CharacterDevice,
     // TODO
 };
 

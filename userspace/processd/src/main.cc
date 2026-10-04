@@ -48,6 +48,7 @@
 #include "vfs.hh"
 #include "process.hh"
 #include "pty.hh"
+#include "devfs.hh"
 
 void KernelSink::operator()(const char *message)
 {
@@ -295,7 +296,8 @@ int main(int argc, char *argv[])
     kernelLogger() << "processd started\n" << frg::endlog;
     parse_args(argc, argv);
 
-    // get_messages();
+    init_devfs();
+    init_pty_filesystem();
     vfs_handle_messages();
     (void)dispatcher.dispatch();
     return 0;

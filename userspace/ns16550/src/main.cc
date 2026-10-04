@@ -570,7 +570,7 @@ pmos::async::detached_task start_shell()
     int amaster;
     pid_t pid = forkpty(&amaster, NULL, NULL, NULL);
     if (pid < 0) {
-        write_str("Failed to fork pty\n");
+        write_str("Failed to fork pty " + std::to_string(errno) + " (" + std::string(strerror(errno)) + ")\n");
         co_return;
     }
     write_str("Forked pty with pid " + std::to_string(pid) + "\n");

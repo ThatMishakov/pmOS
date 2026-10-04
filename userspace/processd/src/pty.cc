@@ -4,6 +4,48 @@
 #include <pmos/ipc.h>
 #include "log.hh"
 #include <fcntl.h>
+#include "vfs.hh"
+#include "devfs.hh"
+
+struct PtyVfs final: public Filesystem {
+    std::expected<std::shared_ptr<VNode>, int> resolve_child(std::shared_ptr<VNode> parent, const std::string &name) override
+    {
+        (void)parent;
+        (void)name;
+
+        return std::unexpected(-ENOENT);
+    }
+
+    pmos::async::task<std::expected<pmos::Right, int>> open_file(std::shared_ptr<VNode> vnode) override
+    {
+        kernelLogger() << "posixd: Attempted to open a file on the pty filesystem\n" << frg::endlog;
+        co_return std::unexpected(-ENOSYS); // TODO
+    }
+
+    pmos::async::task<std::expected<StatData, int>> get_file_stat_dynamic(std::shared_ptr<VNode> vnode)
+    {
+        kernelLogger() << "posixd: Attempted to get file stat on the pty filesystem\n" << frg::endlog;
+        co_return std::unexpected(-ENOSYS); // TODO
+    }
+};
+
+std::shared_ptr<PtyVfs> pty_fs;
+std::shared_ptr<VNode> pty_root_vnode;
+
+void init_pty_filesystem()
+{
+    pty_fs = std::make_shared<PtyVfs>();
+
+    pty_root_vnode = std::make_shared<VNode>();
+    pty_root_vnode->type = FileType::Directory;
+    pty_root_vnode->parent_fs = pty_fs;
+    pty_fs->root = pty_root_vnode;
+    pty_root_vnode->name = "pts";
+
+    assert(devfs_root_vnode);
+    devfs_root_vnode->children_cache[pty_root_vnode->name] = pty_root_vnode;
+    pty_root_vnode->parent = devfs_root_vnode;
+}
 
 extern pmos::Port main_port;
 extern pmos::PortDispatcher dispatcher;
@@ -14,16 +56,49 @@ struct PtyData {
 
     unsigned idx = 0;
 
-    std::string name() {
-        return "/dev/pts/" + std::to_string(idx);
+    std::string name() const {
+        return std::to_string(idx);
+    }
+
+    std::string path() {
+        // TODO
+        return "/dev/pts/" + name();
+    }
+
+    std::shared_ptr<VNode> vnode = nullptr;
+
+    ~PtyData() {
+        if (vnode) {
+            auto parent = vnode->parent.lock();
+            if (parent) {
+                parent->children_cache.erase(vnode->name);
+            }
+        }
     }
 };
+
+std::shared_ptr<VNode> create_pty_vnode(std::shared_ptr<PtyData> pty)
+{
+    auto vnode = std::make_shared<VNode>();
+    vnode->parent_fs = pty_fs;
+    vnode->type = FileType::CharacterDevice;
+    vnode->st_mode = 0666;
+    vnode->st_uid = 0;
+    vnode->st_gid = 0;
+    vnode->name = pty->name();
+    vnode->inode = pty->idx;
+    pty->vnode = vnode;
+
+    pty_root_vnode->children_cache[vnode->name] = vnode;
+    return vnode;
+}
 
 std::expected<std::shared_ptr<PtyData>, int> new_pty()
 {
     static unsigned next_idx = 0;
     auto pty = std::make_shared<PtyData>();
     pty->idx = next_idx++;
+    pty->vnode = create_pty_vnode(pty);
     return pty;
 }
 

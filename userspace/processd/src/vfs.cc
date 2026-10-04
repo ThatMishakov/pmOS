@@ -14,6 +14,7 @@
 #include "vfs.hh"
 #include "log.hh"
 #include <fcntl.h>
+#include "devfs.hh"
 
 extern pmos::Port main_port;
 extern pmos::PortDispatcher dispatcher;
@@ -169,6 +170,17 @@ pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right
 
     filesystems.push_back(fs);
 
+    assert(devfs_root_vnode);
+    auto devfs_parent = devfs_root_vnode->parent.lock();
+    if (devfs_parent) {
+        devfs_parent->children_cache.erase(devfs_root_vnode->name);
+    }
+
+    devfs_root_vnode->parent = root_vnode;
+    root_vnode->children_cache[devfs_root_vnode->name] = devfs_root_vnode;
+
+
+
     auto it = root_waiters.begin();
     while (it != root_waiters.end()) {
         root_waiters.remove(it);
@@ -297,7 +309,7 @@ pmos::async::detached_task open_file(pmos::Right reply_right, std::string path)
     }
 
     auto vnode = result.value();
-    if (vnode->type != FileType::File) {
+    if (vnode->type == FileType::Directory) {
         open_file_error_reply(reply_right, -EISDIR);
         co_return;
     }
@@ -688,6 +700,9 @@ FileType file_type_from_ipc(uint32_t ipc_file_type)
         break;
     case IPC_FILE_TYPE_DIRECTORY:
         result = FileType::Directory;
+        break;
+    case IPC_FILE_TYPE_CHAR:
+        result = FileType::CharacterDevice;
         break;
     default:
         // TODO!
