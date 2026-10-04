@@ -2,6 +2,10 @@
 #include <array>
 #include <cinttypes>
 #include <cstdint>
+#include <map>
+#include <memory>
+#include <unistd.h>
+#include <pmos/helpers.hh>
 
 struct Sigaction {
     uint64_t sa_handler_ = 0; // SIG_DFL
@@ -10,8 +14,31 @@ struct Sigaction {
     uint32_t sa_flags = 0;
 };
 
-struct Process {
-    std::array<Sigaction, 64> sigactions = {};
+int32_t allocate_pid();
 
-    int32_t pid = 2;
+struct ProcessGroup;
+struct Session;
+
+struct Process {
+    int32_t pid;
+    std::shared_ptr<Process> parent;
+    std::shared_ptr<ProcessGroup> process_group;
 };
+
+struct ProcessGroup {
+    int32_t pgid = 0;
+    std::map<int32_t, std::shared_ptr<Process>> processes;
+
+    std::shared_ptr<Session> session;
+};
+
+struct Session {
+    int32_t sid = 0;
+    std::map<int32_t, std::shared_ptr<ProcessGroup>> process_groups;
+};
+
+std::shared_ptr<Process> create_first_process();
+std::shared_ptr<Process> create_process(std::shared_ptr<Process> parent);
+
+void delete_process(std::shared_ptr<Process> process);
+void setsid_handle(std::shared_ptr<Process> process, pmos::Right reply_right);

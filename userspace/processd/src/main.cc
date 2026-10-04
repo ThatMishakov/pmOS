@@ -60,46 +60,7 @@ pmos::PortDispatcher dispatcher(main_port);
 
 pmos::async::detached_task vfs_handle_messages();
 
-void sigaction_reply(pmos::Right reply_right, int result, uint32_t sa_flags = 0, uint32_t sa_handler_ = 0, uint64_t sa_restorer = 0, uint64_t sa_mask = 0)
-{
-    IPC_Sigaction_Reply reply = {
-        .type = IPC_Sigaction_Reply_NUM,
-        .flags = 0,
-        .result = result,
-        .old_sa_flags = sa_flags,
-        .old_sa_handler = sa_handler_,
-        .old_sa_restorer = sa_restorer,
-        .old_sa_mask = sa_mask
-    };
-
-    auto r = pmos::send_message_right_one(reply_right, reply, {}, true);
-    if (!r)
-        kernelLogger() << "processd: Error " << r.error().first << " sending message for sigaction_reply\n" << frg::endlog;
-}
-
-void sigaction_handle(std::shared_ptr<Process> process, pmos::Right reply_right, IPC_Sigaction *msg)
-{
-    auto num = msg->sigval;
-    if (num <= 0 || num >= 65) {
-        sigaction_reply(std::move(reply_right), EINVAL);
-        return;
-    }
-    num -= 1; // Convert to 0-based index
-
-    auto sigaction = process->sigactions[num];
-    if (msg->flags & SIGACTION_FLAG_SET) {
-        process->sigactions[num] = {
-            .sa_handler_ = msg->sa_handler_,
-            .sa_restorer = msg->sa_restorer,
-            .sa_mask = msg->sa_mask,
-            .sa_flags = msg->sa_flags,
-        };
-    }
-
-    sigaction_reply(std::move(reply_right), 0, sigaction.sa_flags, sigaction.sa_handler_, sigaction.sa_restorer, sigaction.sa_mask);
-}
-
-void register_process(IPC_Register_Process *msg, pmos::Right reply_right);
+void register_process(IPC_Register_Process *msg, pmos::Right reply_right, std::shared_ptr<Process> process);
 
 pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::shared_ptr<Process> process)
 {
@@ -150,17 +111,6 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
             openpt_handle(std::move(reply_right), openpt_msg->flags);
         }
             break;
-
-        case IPC_Sigaction_NUM: {
-            if (message.size() < sizeof(IPC_Sigaction)) {
-                kernelLogger() << "posixd: Received IPC_Sigaction that is too small while attending file\n" << frg::endlog;
-                break;
-            }
-            auto *sigaction_msg = reinterpret_cast<IPC_Sigaction *>(message.data());
-
-            sigaction_handle(process, std::move(reply_right), sigaction_msg);
-        }
-            break;
         case IPC_Register_Process_NUM: {
             if (msg.size < sizeof(IPC_Register_Process)) {
                 kernelLogger() << "processd: Received IPC_Register_Process that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
@@ -168,7 +118,17 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
             }
 
             IPC_Register_Process *m = reinterpret_cast<IPC_Register_Process *>(ipc_msg);
-            register_process(m, std::move(reply_right));
+            register_process(m, std::move(reply_right), process);
+            break;
+        }
+        case IPC_Setsid_NUM: {
+            if (msg.size < sizeof(IPC_Setsid)) {
+                kernelLogger() << "processd: Received IPC_Setsid that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            // IPC_Setsid *m = reinterpret_cast<IPC_Setsid *>(ipc_msg);
+            setsid_handle(process, std::move(reply_right));
             break;
         }
 
@@ -177,14 +137,16 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
             break;
         }
     }
+
+    delete_process(process);
 }
 
-void register_process(IPC_Register_Process *msg, pmos::Right reply_right)
+void register_process(IPC_Register_Process *msg, pmos::Right reply_right, std::shared_ptr<Process> process)
 {
     (void)msg;
+    (void)process;
 
-    // TODO
-    auto process = std::make_shared<Process>();
+    auto new_process = create_process(process);
 
     auto right = main_port.create_right(pmos::RightType::SendMany);
     auto [send_right, receive_right] = std::move(right.value());
@@ -194,7 +156,7 @@ void register_process(IPC_Register_Process *msg, pmos::Right reply_right)
         .type = IPC_Register_Process_Reply_NUM,
         .flags = 0,
         .result = 0,
-        .pid = process->pid, // PID is TODO (as everything else here)
+        .pid = new_process->pid,
     };
 
     auto r = pmos::send_message_right_one(reply_right, reply, {}, true, std::move(send_right));
@@ -204,6 +166,9 @@ void register_process(IPC_Register_Process *msg, pmos::Right reply_right)
 
 pmos::async::detached_task get_messages_bootstrapd(pmos::ReceiveRight rr)
 {
+    auto process = create_first_process();
+    assert(process);
+
     while (1) {
         auto [msg, message, reply_right, rights] = (co_await dispatcher.get_message(rr)).value();
     
@@ -244,7 +209,7 @@ pmos::async::detached_task get_messages_bootstrapd(pmos::ReceiveRight rr)
             }
 
             IPC_Register_Process *m = reinterpret_cast<IPC_Register_Process *>(ipc_msg);
-            register_process(m, std::move(reply_right));
+            register_process(m, std::move(reply_right), process);
             break;
         }
         default:
