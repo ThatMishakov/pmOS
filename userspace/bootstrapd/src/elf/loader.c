@@ -866,7 +866,7 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
         goto error;
     }
 
-    auto s_res = create_normal_region(TASK_ID_SELF, NULL, stack_size, PROT_READ | PROT_WRITE);
+    auto s_res = create_normal_region(TASK_ID_SELF, NULL, stack_size, PROT_READ | PROT_WRITE | CREATE_FLAG_COW);
     if (s_res.result) {
         result = s_res.result;
         goto error;

@@ -767,6 +767,9 @@ void x86_Page_Table::free_user_pages()
                 free_pdpt(p.page_ppn << 12);
                 pmm::free_memory_for_kernel(p.page_ppn << 12, 1);
             }
+            
+            p.clear_nofree();
+            p.atomic_store(mapper.ptr + i);
         }
     }
 }
