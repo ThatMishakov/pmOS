@@ -910,6 +910,11 @@ klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_clone()
         }
     });
 
+    {
+        auto tlb_ctx = kernel::paging::TLBShootdownContext::create_userspace(*this);
+        invalidate_range(tlb_ctx, nullptr, (size_t)user_addr_max(), false);
+    }
+
     for (auto &reg: this->paging_regions) {
         auto result = reg.clone_to(new_table, reg.start_addr, reg.access_type);
         if (result)

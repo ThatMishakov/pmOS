@@ -13,5 +13,5 @@ struct Sigaction {
 struct Process {
     std::array<Sigaction, 64> sigactions = {};
 
-    int32_t pid = 0;
+    int32_t pid = 2;
 };

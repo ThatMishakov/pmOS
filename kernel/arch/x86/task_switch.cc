@@ -73,7 +73,9 @@ kresult_t TaskDescriptor::inherit_registers_from_current()
     current->before_task_switch();
 
     regs = current->regs;
+    assert(current->holds_sse_data);
     sse_data.copy_from(current->sse_data);
+    holds_sse_data = true;
 
     current->after_task_switch();
 
