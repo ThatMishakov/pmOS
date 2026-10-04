@@ -16,11 +16,7 @@ struct PtyVfs final: public Filesystem {
         return std::unexpected(-ENOENT);
     }
 
-    pmos::async::task<std::expected<pmos::Right, int>> open_file(std::shared_ptr<VNode> vnode) override
-    {
-        kernelLogger() << "posixd: Attempted to open a file on the pty filesystem\n" << frg::endlog;
-        co_return std::unexpected(-ENOSYS); // TODO
-    }
+    pmos::async::task<std::expected<pmos::Right, int>> open_file(std::shared_ptr<VNode> vnode) override;
 
     pmos::async::task<std::expected<StatData, int>> get_file_stat_dynamic(std::shared_ptr<VNode> vnode)
     {
@@ -54,6 +50,8 @@ struct PtyData {
     bool have_manager = true;
     bool locked = true;
 
+    size_t subordinate_count = 0;
+
     unsigned idx = 0;
 
     std::string name() const {
@@ -67,15 +65,22 @@ struct PtyData {
 
     std::shared_ptr<VNode> vnode = nullptr;
 
-    ~PtyData() {
-        if (vnode) {
-            auto parent = vnode->parent.lock();
-            if (parent) {
-                parent->children_cache.erase(vnode->name);
-            }
+    ~PtyData();
+};
+
+std::map<unsigned, std::weak_ptr<PtyData>> pty_map;
+
+PtyData::~PtyData()
+ {
+    if (vnode) {
+        auto parent = vnode->parent.lock();
+        if (parent) {
+            parent->children_cache.erase(vnode->name);
         }
     }
-};
+
+    pty_map.erase(idx);
+}
 
 std::shared_ptr<VNode> create_pty_vnode(std::shared_ptr<PtyData> pty)
 {
@@ -99,6 +104,7 @@ std::expected<std::shared_ptr<PtyData>, int> new_pty()
     static unsigned next_idx = 0;
     auto pty = std::make_shared<PtyData>();
     pty->idx = next_idx++;
+    pty_map[pty->idx] = pty;
     pty->vnode = create_pty_vnode(pty);
     return pty;
 }
@@ -168,6 +174,29 @@ pmos::async::detached_task openpt_manager(pmos::ReceiveRight rr, std::shared_ptr
     co_return;
 }
 
+pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared_ptr<PtyData> pty, unsigned oflags)
+{
+    while (1) {
+        auto [msg, message, reply_right, rights] = (co_await dispatcher.get_message(rr)).value();
+
+        if (message.size() < sizeof(IPC_Generic_Msg)) {
+            kernelLogger() << "posixd: Received very small message while attending pty subordinate\n" << frg::endlog;
+            break;
+        }
+
+        auto *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(message.data());
+        switch (ipc_msg->type) {
+        case IPC_Kernel_Receive_Right_Destroyed_NUM:
+            break;
+        default:
+            kernelLogger() << "posixd: Unknown message type " << ipc_msg->type << " while attending pty subordinate\n" << frg::endlog;
+            break;
+        }
+    }
+
+    co_return;
+}
+
 void openpt_error(pmos::Right &reply_right, int16_t result)
 {
     if (!reply_right)
@@ -213,4 +242,20 @@ void openpt_handle(pmos::Right reply_right, unsigned oflags)
     auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true, std::move(op_right), std::move(io_right));
     if (!result_send)
         kernelLogger() << "posixd: Error " << result_send.error().first << " sending openpt reply to port " << reply_right.get() << "\n" << frg::endlog;
+}
+
+pmos::async::task<std::expected<pmos::Right, int>> PtyVfs::open_file(std::shared_ptr<VNode> vnode)
+{
+    auto pty = pty_map[vnode->inode].lock();
+    assert(pty);
+
+    if (pty->locked)
+        co_return std::unexpected(-EACCES);
+
+    auto [right, receive_right] = main_port.create_right(pmos::RightType::SendMany).value();
+
+    openpt_subordinate(std::move(receive_right), pty, 0);
+    pty->subordinate_count++;
+
+    co_return std::move(right);
 }
