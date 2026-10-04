@@ -99,6 +99,8 @@ void sigaction_handle(std::shared_ptr<Process> process, pmos::Right reply_right,
     sigaction_reply(std::move(reply_right), 0, sigaction.sa_flags, sigaction.sa_handler_, sigaction.sa_restorer, sigaction.sa_mask);
 }
 
+void register_process(IPC_Register_Process *msg, pmos::Right reply_right);
+
 pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::shared_ptr<Process> process)
 {
     while (1) {
@@ -159,6 +161,16 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
             sigaction_handle(process, std::move(reply_right), sigaction_msg);
         }
             break;
+        case IPC_Register_Process_NUM: {
+            if (msg.size < sizeof(IPC_Register_Process)) {
+                kernelLogger() << "processd: Received IPC_Register_Process that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            IPC_Register_Process *m = reinterpret_cast<IPC_Register_Process *>(ipc_msg);
+            register_process(m, std::move(reply_right));
+            break;
+        }
 
         default:
             kernelLogger() << "processd: Unknown message type " << ipc_msg->type << " from process\n" << frg::endlog;

@@ -839,6 +839,12 @@ klib::shared_ptr<x86_Page_Table> x86_Page_Table::create_clone()
         }
     });
 
+    free_user_pages();
+    {
+        auto ctx = TLBShootdownContext::create_userspace(*this);
+        ctx.invalidate_all();
+    }
+
     for (auto &reg: this->paging_regions) {
         auto r = reg.clone_to(new_table, reg.start_addr, reg.access_type);
         if (r)

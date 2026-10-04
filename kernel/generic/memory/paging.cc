@@ -566,10 +566,10 @@ void TLBShootdownContext::invalidate_page(void *page)
 
 bool TLBShootdownContext::flush_all() const
 {
-    return (pages_count >= MAX_PAGES) or (ranges_count > MAX_RANGES);
+    return (pages_count >= MAX_PAGES) or (ranges_count > MAX_RANGES) or flush_all_flag;
 }
 
-bool TLBShootdownContext::empty() const { return pages_count == 0 and ranges_count == 0; }
+bool TLBShootdownContext::empty() const { return pages_count == 0 and ranges_count == 0 and !flush_all_flag; }
 bool TLBShootdownContext::for_kernel() const { return page_table == nullptr; }
 
 namespace kernel::sched
@@ -651,6 +651,12 @@ void TLBShootdownContext::finalize()
     // Allow finalize() to be called again
     pages_count  = 0;
     ranges_count = 0;
+}
+
+void TLBShootdownContext::invalidate_all()
+{
+    assert(!for_kernel() && "invalidate_all() should not be called for kernel shootdown");
+    flush_all_flag = true;
 }
 
 pmos::containers::vector<MemoryRegion> kernel::paging::memory_map;

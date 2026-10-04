@@ -69,6 +69,7 @@ struct SSE_Data {
     /// @return 0 on success, error code otherwise (e.g. out of memory)
     kresult_t init_on_thread_start();
 
+    void copy_from(const SSE_Data &other);
     void save_sse();
     void restore_sse();
 };

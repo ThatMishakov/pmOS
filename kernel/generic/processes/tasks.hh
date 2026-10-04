@@ -412,6 +412,8 @@ namespace proc
 
         void atomic_handle_unblock(u32 reason_mask);
 
+        result_t inherit_registers_from_current();
+
     protected:
         TaskDescriptor() = default;
 

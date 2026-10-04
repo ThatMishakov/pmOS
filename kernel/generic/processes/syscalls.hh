@@ -298,6 +298,9 @@ void syscall_restrict_right(TaskDescriptor *task);
 void syscall_set_tcb(TaskDescriptor *task);
 // Parameters: ulong tcb_address
 
+void syscall_clone(TaskDescriptor *task);
+// Parameters: u64 task_id
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);

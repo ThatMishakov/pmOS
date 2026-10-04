@@ -199,3 +199,12 @@ void SSE_Data::restore_sse()
     }
 }
 #endif
+
+void SSE_Data::copy_from(const SSE_Data &other)
+{
+    assert(other.data);
+    assert(data);
+
+    memcpy(data.get(), other.data.get(), sse_ctx_size);
+    holds_state = true;
+}

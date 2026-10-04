@@ -119,12 +119,15 @@ public:
 
     u16 &get_arch_flags() noexcept { return arch_flags; }
 
+    void invalidate_all();
+
 private:
     Page_Table *page_table = nullptr;
 
     short pages_count  = 0;
     short ranges_count = 0;
     u16 arch_flags     = 0; // This is currently for IO bitmap on x86...
+    bool flush_all_flag = false;
 
     page_ptr pages[MAX_PAGES] = {};
     range ranges[MAX_RANGES]  = {};

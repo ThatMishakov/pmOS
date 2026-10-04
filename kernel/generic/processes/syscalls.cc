@@ -112,7 +112,7 @@ std::array<const char *, 70> syscall_names = {
 
     "SYSCALL SET NOTIFY MASK",
     "SYSCALL LOAD EXECUTABLE",
-    "UNUSED !!!",
+    "SYSCALL CLONE",
     "SYSCALL SET AFFINITY",
     "SYSCALL COMPLETE INTERRUPT",
     "SYSCALL YIELD",
@@ -199,7 +199,7 @@ std::array<syscall_function, 70> syscall_table = {
 
     syscall_set_notify_mask,
     syscall_load_executable,
-    nullptr,
+    syscall_clone,
     syscall_set_affinity,
     syscall_complete_interrupt,
     syscall_yield,
@@ -3036,6 +3036,42 @@ void syscall_set_tcb(TaskDescriptor *task)
     #endif
 
     syscall_success(task);
+}
+
+void syscall_clone(TaskDescriptor *task)
+{
+    u64 task_id = syscall_arg64(task, 0);
+
+    TaskDescriptor *dest = get_task(task_id);
+    if (!dest) {
+        syscall_error(task) = -ESRCH;
+        return;
+    }
+
+    auto new_page_table = task->page_table->create_clone();
+    if (!new_page_table) {
+        syscall_error(task) = -ENOMEM;
+        return;
+    }
+
+    Auto_Lock_Scope lock(dest->sched_lock);
+
+    auto result = dest->register_page_table(new_page_table);
+    if (result) {
+        syscall_error(task) = result;
+        return;
+    }
+
+    result = dest->inherit_registers_from_current();
+    if (result) {
+        syscall_error(task) = result;
+        return;
+    }
+
+    syscall_return(task) = 1;
+    syscall_return(dest) = 0;
+
+    dest->init();
 }
 
 unsigned syscall_number(TaskDescriptor *task) { return call_flags(task) & 0xFF; }

@@ -64,3 +64,18 @@ bool TaskDescriptor::is_kernel_task() const
 {
     return regs.get_cs() == R0_CODE_SEGMENT;
 }
+
+kresult_t TaskDescriptor::inherit_registers_from_current()
+{
+    auto current = sched::get_current_task();
+    assert(current);
+
+    current->before_task_switch();
+
+    regs = current->regs;
+    sse_data.copy_from(current->sse_data);
+
+    current->after_task_switch();
+
+    return 0;
+}
