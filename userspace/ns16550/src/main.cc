@@ -19,6 +19,7 @@
 #include <sys/mman.h>
 #include <sys/user.h>
 #include <pty.h>
+#include <stdlib.h>
 
 // Either physcial memory base or I/O port base
 uint64_t terminal_base = 0x0;
@@ -572,6 +573,10 @@ pmos::async::detached_task start_shell()
     if (pid < 0) {
         write_str("Failed to fork pty " + std::to_string(errno) + " (" + std::string(strerror(errno)) + ")\n");
         co_return;
+    }
+
+    if (pid == 0) {
+        exit(10);
     }
     write_str("Forked pty with pid " + std::to_string(pid) + "\n");
 

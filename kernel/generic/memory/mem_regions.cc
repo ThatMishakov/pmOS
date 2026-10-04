@@ -81,7 +81,7 @@ ReturnStr<bool> Generic_Mem_Region::on_page_fault(unsigned access_type, void *pa
 
     if (mapping.is_allocated) {
         auto ctx = TLBShootdownContext::create_userspace(*owner);
-        owner->invalidate(ctx, pagefault_addr, true);
+        owner->invalidate(ctx, pagefault_addr, false);
     }
 
     auto page = get_page(pagefault_addr, access_type);
