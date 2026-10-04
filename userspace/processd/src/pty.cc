@@ -61,8 +61,8 @@ struct PtyData {
     }
 
     std::string path() {
-        // TODO
-        return "/dev/pts/" + name();
+        assert(vnode);
+        return vnode->path();
     }
 
     std::shared_ptr<VNode> vnode = nullptr;
@@ -90,6 +90,7 @@ std::shared_ptr<VNode> create_pty_vnode(std::shared_ptr<PtyData> pty)
     pty->vnode = vnode;
 
     pty_root_vnode->children_cache[vnode->name] = vnode;
+    vnode->parent = pty_root_vnode;
     return vnode;
 }
 
@@ -140,19 +141,20 @@ pmos::async::detached_task openpt_manager(pmos::ReceiveRight rr, std::shared_ptr
                 break;
             }
 
-            auto name = pty->name();
-            size_t name_length = name.size();
+            auto path = pty->path();
+            size_t path_length = path.size();
 
-            size_t reply_size = sizeof(IPC_Ttyname_Reply) + name_length;
+            size_t reply_size = sizeof(IPC_Ttyname_Reply) + path_length;
             std::unique_ptr<char[]> reply_data(new char[reply_size]);
             auto *reply = reinterpret_cast<IPC_Ttyname_Reply *>(reply_data.get());
             reply->type = IPC_Ttyname_Reply_NUM;
             reply->result_code = 0;
             reply->flags = 0;
-            memcpy(reply->tty_name, name.c_str(), name_length);
+            memcpy(reply->tty_name, path.c_str(), path_length);
 
-            auto span = std::span<char>(reply_data.get(), reply_size);
-            auto result_send = pmos::send_message_right_one(reply_right, span, {}, true);
+            auto span = std::span(reply_data.get(), reply_size);
+            auto result_send = pmos::send_message_right(
+                reply_right, span, std::pair<pmos::Port const *, pmos::RightType>{nullptr, pmos::RightType::SendOnce}, true);
             if (!result_send)
                 kernelLogger() << "posixd: Error " << result_send.error().first << " sending ttyname reply to port " << reply_right.get() << "\n" << frg::endlog;
         }
