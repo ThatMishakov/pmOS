@@ -183,6 +183,7 @@ NotificationResult InterruptHandler::send_interrupt_notification()
         assert(port->alive);
 
         n.pending_completion = true;
+        n.sent = true;
 
         Auto_Lock_Scope l(port->lock);
         port->enqueue(klib::unique_ptr(&n));

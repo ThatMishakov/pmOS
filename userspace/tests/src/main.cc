@@ -122,13 +122,15 @@ void test_exception()
 
 extern "C" void test_delete_ipc();
 extern "C" void read_test_file();
+extern "C" void timer_free_test();
 
 int main()
 {
     sleep(1);
     printf("Starting tests...\n");
     test_delete_ipc();
-    //tick();
+    // tick();
+    // timer_free_test();
     test_containers();
     test_exception();
     read_test_file();
