@@ -472,6 +472,8 @@ unsigned Right::type_as_int() const
         return RIGHT_TYPE_TIMER;
     case RightType::Process:
         return RIGHT_TYPE_PROCESS;
+    case RightType::TaskGroup:
+        return RIGHT_TYPE_TASK_GROUP;
     default:
         return 0;
     }

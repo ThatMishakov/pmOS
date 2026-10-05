@@ -137,6 +137,7 @@ ReturnStr<std::pair<ipc::Right *, u64>> ProcessRight::duplicate(proc::TaskGroup 
     if (!parent_group->atomic_alive())
         return Error(-ESRCH);
 
+    new_right->right_sender_id = ++parent_group->current_right_id;
     parent_group->rights.insert(new_right.get());
     process->rights.push_back(new_right.get());
 

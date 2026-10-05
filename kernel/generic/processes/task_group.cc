@@ -209,6 +209,7 @@ kresult_t TaskGroup::atomic_register_task(TaskDescriptor *task)
 
 kresult_t TaskGroup::atomic_remove_task(TaskDescriptor *task)
 {
+    bool should_destroy = false;
     {
         Auto_Lock_Scope lock(tasks_lock);
         if (tasks.count(task->task_id) == 0)
@@ -220,8 +221,7 @@ kresult_t TaskGroup::atomic_remove_task(TaskDescriptor *task)
         task->rights_namespace.compare_exchange_strong(
             expected, nullptr, std::memory_order::release, std::memory_order::consume);
 
-        if (!alive())
-            destroy();
+        should_destroy = !alive();
     }
 
     // TODO: It looks like this doesn't work
@@ -256,6 +256,9 @@ kresult_t TaskGroup::atomic_remove_task(TaskDescriptor *task)
         Auto_Lock_Scope lock(task->sched_lock);
         task->task_groups.erase(this);
     }
+
+    if (should_destroy)
+        destroy();
 
     return 0;
 }
@@ -445,12 +448,13 @@ ReturnStr<std::pair<ipc::Right *, u64>> TaskGroupRight::duplicate(proc::TaskGrou
 
     Auto_Lock_Scope l1(group->rights_to_group_lock);
 
-    Auto_Lock_Scope_Double(parent_group->tasks_lock, group->tasks_lock);
-    if (!parent_group->alive())
+    Auto_Lock_Scope l2(parent_group->rights_lock);
+    if (!parent_group->atomic_alive())
         return Error(-ESRCH);
     if (!group->atomic_alive())
         return Error(-ENOENT);
 
+    new_right->right_sender_id = ++parent_group->current_right_id;
     parent_group->rights.insert(new_right.get());
     group->rights_to_group.push_back(new_right.get());
 
@@ -474,8 +478,8 @@ ReturnStr<TaskGroupRight *> TaskGroupRight::create_for_group(TaskGroup *for_grou
 
     Auto_Lock_Scope l(for_group->rights_to_group_lock);
 
-    Auto_Lock_Scope_Double(parent_group->tasks_lock, for_group->tasks_lock);
-    if (!parent_group->alive())
+    Auto_Lock_Scope l1(parent_group->rights_lock);
+    if (!parent_group->atomic_alive())
         return Error(-ESRCH);
     if (!for_group->atomic_alive())
         return Error(-ENOENT);
