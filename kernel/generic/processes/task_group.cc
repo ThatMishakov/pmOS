@@ -59,6 +59,15 @@ void TaskGroup::destroy()
         }
     }
 
+    auto first_right_to_group = [this] -> TaskGroupRight * {
+        Auto_Lock_Scope l(rights_to_group_lock);
+        if (rights_to_group.empty())
+            return nullptr;
+        return &*rights_to_group.begin();
+    };
+    while (auto r = first_right_to_group())
+        r->destroy(ipc::Right::DestroyReason::DeletedBySender);
+
     auto first_right = [this] {
         Auto_Lock_Scope l(rights_lock);
         auto r = rights.begin();
