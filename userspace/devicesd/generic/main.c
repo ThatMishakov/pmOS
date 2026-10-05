@@ -99,10 +99,10 @@ int default_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *rep
             request_serial(desc, m, *reply_right);
             *reply_right = 0;
         } break;
-        case IPC_Request_PCI_Devices_NUM:
-            request_pci_devices(desc, (IPC_Request_PCI_Devices *)msg_buff, *reply_right);
-            *reply_right = 0;
-            break;
+        // case IPC_Request_PCI_Devices_NUM:
+        //     request_pci_devices(desc, (IPC_Request_PCI_Devices *)msg_buff, *reply_right);
+        //     *reply_right = 0;
+        //     break;
         // case IPC_Kernel_Named_Port_Notification_NUM:
         //     named_port_notification(desc, (IPC_Kernel_Named_Port_Notification *)msg_buff,
         //                             other_rights[0]);

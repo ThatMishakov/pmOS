@@ -738,71 +738,71 @@ int pcicdevice_compare(const void *aa, const void *bb)
     return (*a)->function - (*b)->function;
 }
 
-void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d)
-{
-    int e;
-    size_t requests = (desc->size - sizeof(IPC_Request_PCI_Devices)) / sizeof(struct IPC_PCIDevice);
-    VECTOR(struct IPC_PCIDeviceLocation) devices = VECTOR_INIT;
+// void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d)
+// {
+//     int e;
+//     size_t requests = (desc->size - sizeof(IPC_Request_PCI_Devices)) / sizeof(struct IPC_PCIDevice);
+//     VECTOR(struct IPC_PCIDeviceLocation) devices = VECTOR_INIT;
 
-    struct PCIDevice *dd;
-    int result = 0;
-    VECTOR_FOREACH(pci_devices, dd)
-    {
-        for (size_t i = 0; i < requests; ++i) {
-            if (d->devices[i].vendor_id != 0xffff && d->devices[i].vendor_id != dd->vendor_id)
-                continue;
+//     struct PCIDevice *dd;
+//     int result = 0;
+//     VECTOR_FOREACH(pci_devices, dd)
+//     {
+//         for (size_t i = 0; i < requests; ++i) {
+//             if (d->devices[i].vendor_id != 0xffff && d->devices[i].vendor_id != dd->vendor_id)
+//                 continue;
 
-            if (d->devices[i].device_id != 0xffff && d->devices[i].device_id != dd->device_id)
-                continue;
+//             if (d->devices[i].device_id != 0xffff && d->devices[i].device_id != dd->device_id)
+//                 continue;
 
-            if (d->devices[i].class_code != 0xff && d->devices[i].class_code != dd->class_code)
-                continue;
+//             if (d->devices[i].class_code != 0xff && d->devices[i].class_code != dd->class_code)
+//                 continue;
 
-            if (d->devices[i].subclass != 0xff && d->devices[i].subclass != dd->subclass)
-                continue;
+//             if (d->devices[i].subclass != 0xff && d->devices[i].subclass != dd->subclass)
+//                 continue;
 
-            // if (d->devices[i].prog_if != 0xff &&
-            //     d->devices[i].prog_if != dd.prog_if)
-            //     continue;
+//             // if (d->devices[i].prog_if != 0xff &&
+//             //     d->devices[i].prog_if != dd.prog_if)
+//             //     continue;
 
-            VECTOR_PUSH_BACK_CHECKED(devices,
-                                     ((struct IPC_PCIDeviceLocation) {
-                                         .group    = dd->group,
-                                         .bus      = dd->bus,
-                                         .device   = dd->device,
-                                         .function = dd->function,
-                                     }),
-                                     result);
-            if (result != 0)
-                goto error;
-            break;
-        }
-    }
+//             VECTOR_PUSH_BACK_CHECKED(devices,
+//                                      ((struct IPC_PCIDeviceLocation) {
+//                                          .group    = dd->group,
+//                                          .bus      = dd->bus,
+//                                          .device   = dd->device,
+//                                          .function = dd->function,
+//                                      }),
+//                                      result);
+//             if (result != 0)
+//                 goto error;
+//             break;
+//         }
+//     }
 
-    size_t reply_size =
-        sizeof(IPC_Request_PCI_Devices_Reply) + devices.size * sizeof(struct IPC_PCIDeviceLocation);
-    IPC_Request_PCI_Devices_Reply *reply = alloca(reply_size);
+//     size_t reply_size =
+//         sizeof(IPC_Request_PCI_Devices_Reply) + devices.size * sizeof(struct IPC_PCIDeviceLocation);
+//     IPC_Request_PCI_Devices_Reply *reply = alloca(reply_size);
 
-    reply->type                  = IPC_Request_PCI_Devices_NUM;
-    reply->flags                 = 0;
-    reply->result_num_of_devices = devices.size;
-    memcpy(reply->devices, devices.data, devices.size * sizeof(struct IPC_PCIDeviceLocation));
+//     reply->type                  = IPC_Request_PCI_Devices_NUM;
+//     reply->flags                 = 0;
+//     reply->result_num_of_devices = devices.size;
+//     memcpy(reply->devices, devices.data, devices.size * sizeof(struct IPC_PCIDeviceLocation));
 
-    send_message_port(d->reply_port, reply_size, (char *)reply);
-    return;
-error:
-    e = -errno;
+//     send_message_port(d->reply_port, reply_size, (char *)reply);
+//     return;
+// error:
+//     e = -errno;
 
-    fprintf(stderr, "Error: Could not allocate IPC_PCIDeviceLocation: %i\n", errno);
+//     fprintf(stderr, "Error: Could not allocate IPC_PCIDeviceLocation: %i\n", errno);
 
-    IPC_Request_PCI_Devices_Reply reply_e = {
-        .type                  = IPC_Request_PCI_Devices_NUM,
-        .flags                 = 0,
-        .result_num_of_devices = e,
-    };
+//     IPC_Request_PCI_Devices_Reply reply_e = {
+//         .type                  = IPC_Request_PCI_Devices_NUM,
+//         .flags                 = 0,
+//         .result_num_of_devices = e,
+//     };
 
-    send_message_port(d->reply_port, sizeof(reply_e), (char *)&reply_e);
-}
+//     send_message_port(d->reply_port, sizeof(reply_e), (char *)&reply_e);
+// }
 
 struct PCIDevice *find_pci_device_descriptor(struct PCIHostBridge *g, uint8_t bus, uint8_t device,
                                              uint8_t function)

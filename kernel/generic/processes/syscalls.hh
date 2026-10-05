@@ -301,6 +301,9 @@ void syscall_set_tcb(TaskDescriptor *task);
 void syscall_clone(TaskDescriptor *task);
 // Parameters: u64 task_id
 
+void syscall_process_for_task(TaskDescriptor *task);
+// Parameters: u64 task_id
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);

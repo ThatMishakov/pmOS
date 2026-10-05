@@ -39,6 +39,7 @@
 #include <utils.hh>
 // #include <cpus/cpus.hh>
 #include "task_group.hh"
+#include <processes/process.hh>
 
 #include <array>
 #include <assert.h>
@@ -84,7 +85,7 @@ std::array<const char *, 70> syscall_names = {
     "SYSCALL GET MESSAGE INFO",
     "SYSCALL GET FIRST MESSAGE",
     "SYSCALL SEND MESSAGE RIGHT",
-    "SYSCALL SEND MESSAGE PORT",
+    "SYSCALL PROCESS FOR TASK",
     "SYSCALL CREATE PORT",
     "SYSCALL SET ATTRIBUTE",
     "SYSCALL SET INTERRUPT",
@@ -171,7 +172,7 @@ std::array<syscall_function, 70> syscall_table = {
     syscall_get_message_info,
     syscall_get_first_message,
     send_message_right,
-    syscall_send_message_port,
+    syscall_process_for_task,
     syscall_create_port,
     syscall_set_attribute,
     syscall_set_interrupt,
@@ -750,69 +751,6 @@ void syscall_get_first_message(TaskDescriptor *current)
 
     syscall_success(current);
     syscall_return(current) = reply_right_id;
-}
-
-void syscall_send_message_port(TaskDescriptor *current)
-{
-    static constexpr unsigned flag_send_extended = 1 << 8;
-
-    u64 port_num   = syscall_arg64(current, 0);
-    ulong size     = syscall_arg(current, 1, 1);
-    ulong message  = syscall_arg(current, 2, 1);
-    u64 mem_object = 0;
-    ulong flags    = syscall_flags(current);
-
-    if (flags & flag_send_extended) {
-        mem_object = syscall_arg64(current, 1);
-
-        auto result = syscall_args_checked(current, 2, 2, 1, &size);
-        if (!result.success()) {
-            syscall_error(current) = result.result;
-            return;
-        }
-        if (!result.val) {
-            // TODO: block properly
-            return;
-        }
-
-        result = syscall_args_checked(current, 3, 2, 1, &message);
-        if (!result.success()) {
-            syscall_error(current) = result.result;
-            return;
-        }
-        if (!result.val) {
-            return;
-        }
-    }
-
-    // TODO: Check permissions
-
-    auto port = Port::atomic_get_port(port_num);
-    if (!port) {
-        syscall_error(current) = -ENOENT;
-        return;
-    }
-
-    // Fail on mem object here, since that interface was bad anyway, and this function is going away once everything is switched
-    // to send_message_right; so just don't bother with changing the signature everywhere in userspace
-    // (if someone is reading this and is trying to figure out how to send memory object, just get a right to it, and send it
-    // as right with send_message_right)
-    if (mem_object) {
-        syscall_error(current) = -ENOSYS;
-        return;
-    }
-
-    syscall_success(current);
-    auto result = port->atomic_send_from_user(current, (char *)message, size);
-    if (!result.success()) {
-        syscall_error(current) = result.result;
-        return;
-    }
-
-    if (!result.val)
-        return;
-
-    // TODO: This is problematic if the task switches
 }
 
 void syscall_get_message_info(TaskDescriptor *task)
@@ -3073,6 +3011,38 @@ void syscall_clone(TaskDescriptor *task)
     syscall_return(dest) = 0;
 
     dest->init();
+}
+
+void syscall_process_for_task(TaskDescriptor *task)
+{
+    u64 task_id = syscall_arg64(task, 0);
+
+    auto group = task->rights_namespace.load(std::memory_order::consume);
+    if (!group) {
+        syscall_error(task) = -ESRCH;
+        return;
+    }
+
+    // TODO: Since I want to make this use process rights, which I haven't implemented yet,
+    // only let create the right for the self right shorthand for now
+    TaskDescriptor *dest;
+    if (task_id == 0) {
+        dest = task;
+    } else {
+        dest = get_task(task_id);
+        if (!dest) {
+            syscall_error(task) = -ESRCH;
+            return;
+        }
+    }
+
+    auto right = ProcessRight::create_for_group(dest->process, group);
+    if (!right.success()) {
+        syscall_error(task) = right.result;
+        return;
+    }
+
+    syscall_return(task) = right.val->right_sender_id;
 }
 
 unsigned syscall_number(TaskDescriptor *task) { return call_flags(task) & 0xFF; }
