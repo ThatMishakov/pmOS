@@ -304,6 +304,9 @@ void syscall_clone(TaskDescriptor *task);
 void syscall_process_for_task(TaskDescriptor *task);
 // Parameters: u64 task_id
 
+void syscall_get_process_id(TaskDescriptor *task);
+// Parameters: u64 right
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);

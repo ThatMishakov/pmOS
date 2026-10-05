@@ -23,6 +23,7 @@ enum class RightType {
     IntSource,
     IntNotification,
     Timer,
+    Process,
     Unknown,
 };
 
@@ -50,6 +51,7 @@ public:
     Right clone() const;
     std::expected<Right, int> clone_noexcept() const noexcept;
 
+    std::expected<uint64_t, int> process_id() const noexcept;
 private:
     pmos_right_t right = INVALID_RIGHT;
     RightType type_    = {};

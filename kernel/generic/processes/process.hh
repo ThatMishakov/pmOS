@@ -39,7 +39,7 @@ struct Process {
 
     // Locking order: Don't take this lock while holding of any of the
     // child tasks
-    Spinlock lock;
+    mutable Spinlock lock;
     bool alive = true;
     tasks_tree child_tasks;
 
@@ -50,6 +50,8 @@ struct Process {
     kresult_t atomic_terminate();
 
     u64 get_id() const;
+
+    bool atomic_alive() const;
 };
 
 

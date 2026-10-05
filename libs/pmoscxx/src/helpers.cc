@@ -20,6 +20,10 @@ static RightType type_from_kernel(unsigned type)
         return RightType::IntSource;
     case RIGHT_TYPE_INT_NOTIFICATION:
         return RightType::IntNotification;
+    case RIGHT_TYPE_TIMER:
+        return RightType::Timer;
+    case RIGHT_TYPE_PROCESS:
+        return RightType::Process;
     default:
         return RightType::Unknown;
     }
@@ -40,6 +44,10 @@ static RightType type_from_flags(unsigned flags, int index)
         return RightType::IntSource;
     case RIGHT_TYPE_INT_NOTIFICATION:
         return RightType::IntNotification;
+    case RIGHT_TYPE_TIMER:
+        return RightType::Timer;
+    case RIGHT_TYPE_PROCESS:
+        return RightType::Process;
     default:
         return RightType::Unknown;
     }
@@ -384,6 +392,14 @@ std::expected<ReceiveRight, int> watch_right(const Port &port, const Right &righ
         std::unexpected(-static_cast<int>(result.result));
 
     return ReceiveRight{result.right, RightType::SendOnce, port.get()};
+}
+
+std::expected<uint64_t, int> Right::process_id() const noexcept
+{
+    auto result = ::pmos_get_process_id(right);
+    if (result.result)
+        return std::unexpected(-static_cast<int>(result.result));
+    return result.value;
 }
 
 }

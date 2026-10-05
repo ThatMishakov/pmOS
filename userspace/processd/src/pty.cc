@@ -160,11 +160,15 @@ pmos::async::detached_task openpt_manager(pmos::ReceiveRight rr, std::shared_ptr
     co_return;
 }
 
-int ttiocsctty_handle(std::shared_ptr<PtyData> pty, unsigned flags, std::shared_ptr<Process> process)
+int ttiocsctty_handle(std::shared_ptr<PtyData> pty, unsigned flags, uint64_t sender_process_id)
 {
-    auto session = process->process_group->session;
-    kernelLogger() << "posixd: TIOCSCTTY request for pty " << pty->idx << " from process " << process->pid << " with session " << session->sid << "\n" << frg::endlog;
+    auto process = get_process_kernel_id(sender_process_id);
+    if (!process) {
+        kernelLogger() << "posixd: TIOCSCTTY request for pty " << pty->idx << " from unknown kernel process " << sender_process_id << "\n" << frg::endlog;
+        return -EPERM;
+    }
 
+    auto session = process->process_group->session;
     if (process->pid != session->sid)
         return -EPERM;
 
@@ -205,7 +209,7 @@ pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared
 
             switch (ioctl_msg->request) {
             case TIOCSCTTY:
-                result_code = ttiocsctty_handle(pty, ioctl_msg->flags, process);
+                result_code = ttiocsctty_handle(pty, ioctl_msg->flags, msg.sender_process);
                 break;
             default:
                 result_code = -ENOTTY;

@@ -71,7 +71,7 @@ extern void deactivate_page_table();
 namespace kernel::proc::syscalls
 {
 
-std::array<const char *, 70> syscall_names = {
+std::array<const char *, 71> syscall_names = {
     "SYSCALL EXIT",
     "SYSCALL GET TASK ID",
     "SYSCALL CREATE PROCESS",
@@ -146,6 +146,7 @@ std::array<const char *, 70> syscall_names = {
     "SYSCALL RESTRICT RIGHT",
     "SYSCALL SET TCB",
     "SYSCALL GET TCB",
+    "SYSCALL GET PROCESS ID",
 };
 
 const char *syscall_name(unsigned id)
@@ -158,7 +159,7 @@ const char *syscall_name(unsigned id)
 
 using syscall_function = void (*)(TaskDescriptor *task);
 
-std::array<syscall_function, 70> syscall_table = {
+std::array<syscall_function, 71> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -233,6 +234,7 @@ std::array<syscall_function, 70> syscall_table = {
     syscall_restrict_right,
     syscall_set_tcb,
     nullptr,
+    syscall_get_process_id,
 };
 
 void syscall_handler()
@@ -3023,8 +3025,6 @@ void syscall_process_for_task(TaskDescriptor *task)
         return;
     }
 
-    // TODO: Since I want to make this use process rights, which I haven't implemented yet,
-    // only let create the right for the self right shorthand for now
     TaskDescriptor *dest;
     if (task_id == 0) {
         dest = task;
@@ -3043,6 +3043,56 @@ void syscall_process_for_task(TaskDescriptor *task)
     }
 
     syscall_return(task) = right.val->right_sender_id;
+}
+
+ReturnStr<std::pair<Process *, u32 /* mask */>> get_process_by_right(TaskDescriptor *current, u64 right_id)
+{
+    assert(current);
+    if (right_id == 0) {
+        assert(current->process);
+        return std::pair<Process *, u32>(current->process, (u32)-1);
+    }
+
+    auto group = current->get_rights_namespace();
+    if (!group) {
+        return Error(-ESRCH);
+    }
+
+    auto right = group->atomic_get_right(right_id);
+    if (!right) {
+        return Error(-ENOENT);
+    }
+
+    if (right->type() != RightType::Process) {
+        return Error(-EINVAL);
+    }
+
+    auto process_right = static_cast<ProcessRight *>(right);
+    Auto_Lock_Scope lock(process_right->lock);
+    if (!process_right->alive)
+        return Error(-ENOENT);
+
+    assert(process_right->process);
+    return std::pair{process_right->process, process_right->permissions_mask};
+}
+
+void syscall_get_process_id(TaskDescriptor *task)
+{
+    u64 right = syscall_arg64(task, 0);
+
+    auto result = get_process_by_right(task, right);
+    if (!result.success()) {
+        syscall_error(task) = result.result;
+        return;
+    }
+
+    auto [process, _] = result.val;
+    if (!process->atomic_alive()) {
+        syscall_error(task) = -ESRCH;
+        return;
+    }
+
+    syscall_return(task) = process->get_id();
 }
 
 unsigned syscall_number(TaskDescriptor *task) { return call_flags(task) & 0xFF; }

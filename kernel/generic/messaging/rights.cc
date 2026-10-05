@@ -470,6 +470,8 @@ unsigned Right::type_as_int() const
         return RIGHT_TYPE_INT_NOTIFICATION;
     case RightType::Timer:
         return RIGHT_TYPE_TIMER;
+    case RightType::Process:
+        return RIGHT_TYPE_PROCESS;
     default:
         return 0;
     }

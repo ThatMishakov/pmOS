@@ -34,7 +34,7 @@ static const uint64_t page_mask = PAGE_SIZE - 1;
 
 extern pmos_port_t request_port;
 
-result_t add_posix_stuff(struct AuxVecBuilder *builder, uint64_t task_group_id)
+result_t add_posix_stuff(struct AuxVecBuilder *builder, uint64_t task_group_id, uint64_t task_id)
 {
     // This server is single threaded so this is fine
     static uint64_t posix_right_id = 0;
@@ -43,12 +43,29 @@ result_t add_posix_stuff(struct AuxVecBuilder *builder, uint64_t task_group_id)
         // Just don't pass it
         return 0;
 
+    right_request_t process_right = process_for_task(task_id, 0);
+    if (process_right.result) {
+        print_str("Loader: Failed to create process right for posix server: ");
+        print_hex(process_right.result);
+        print_str("\n");
+        return process_right.result;
+    }
+
     IPC_Register_Process msg = {
         .type = IPC_Register_Process_NUM,
         .flags = 0,
     };
-    auto send_result = send_message_right(posix_server_right, request_port, &msg, sizeof(msg), nullptr, 0);
+
+    message_extra_t extra = {
+        .extra_rights = {process_right.right},
+    };
+
+    auto send_result = send_message_right(posix_server_right, request_port, &msg, sizeof(msg), &extra, 0);
     if (send_result.result) {
+        print_str("Loader: Failed to send message to posix server: ");
+        print_hex(send_result.result);
+        print_str("\n");
+        delete_right(process_right.right);
         return send_result.result;
     }
 
@@ -840,7 +857,7 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
         }
     }
 
-    int posix_res = add_posix_stuff(builder, group_id);
+    int posix_res = add_posix_stuff(builder, group_id, task_id);
     if (posix_res) {
         result = posix_res;
         goto error;

@@ -60,12 +60,12 @@ pmos::PortDispatcher dispatcher(main_port);
 
 pmos::async::detached_task vfs_handle_messages();
 
-void register_process(IPC_Register_Process *msg, pmos::Right reply_right, std::shared_ptr<Process> process);
+void register_process(IPC_Register_Process *msg, pmos::Right reply_right, std::shared_ptr<Process> process, pmos::Right process_right);
 
 pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::shared_ptr<Process> process)
 {
     while (1) {
-        auto [msg, message, reply_right, _] = (co_await dispatcher.get_message(rr)).value();
+        auto [msg, message, reply_right, extra_rights] = (co_await dispatcher.get_message(rr)).value();
     
         if (msg.size < sizeof(IPC_Generic_Msg)) {
             kernelLogger() << "processd: Received very small message\n" << frg::endlog;
@@ -118,7 +118,7 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
             }
 
             IPC_Register_Process *m = reinterpret_cast<IPC_Register_Process *>(ipc_msg);
-            register_process(m, std::move(reply_right), process);
+            register_process(m, std::move(reply_right), process, std::move(extra_rights[0]));
             break;
         }
         case IPC_Setsid_NUM: {
@@ -141,12 +141,56 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
     delete_process(process);
 }
 
-void register_process(IPC_Register_Process *msg, pmos::Right reply_right, std::shared_ptr<Process> process)
+void register_process(IPC_Register_Process *msg, pmos::Right reply_right, std::shared_ptr<Process> process, pmos::Right process_right)
 {
     (void)msg;
     (void)process;
 
-    auto new_process = create_process(process);
+    if (!process_right || process_right.type() != pmos::RightType::Process) {
+        kernelLogger() << "processd: Received invalid process right for register_process\n" << frg::endlog;
+        IPC_Register_Process_Reply reply = {
+            .type = IPC_Register_Process_Reply_NUM,
+            .flags = 0,
+            .result = -EINVAL,
+            .pid = 0,
+        };
+
+        auto r = pmos::send_message_right_one(reply_right, reply, {}, true);
+        if (!r)
+            kernelLogger() << "processd: Error " << r.error().first << " sending message to right " << reply_right.get() << " for register_process\n" << frg::endlog;
+        return;
+    }
+    auto process_id = process_right.process_id();
+    if (!process_id) {
+        kernelLogger() << "processd: Received process right for register_process with no process id\n" << frg::endlog;
+        IPC_Register_Process_Reply reply = {
+            .type = IPC_Register_Process_Reply_NUM,
+            .flags = 0,
+            .result = -EINVAL,
+            .pid = 0,
+        };
+
+        auto r = pmos::send_message_right_one(reply_right, reply, {}, true);
+        if (!r)
+            kernelLogger() << "processd: Error " << r.error().first << " sending message to right " << reply_right.get() << " for register_process\n" << frg::endlog;
+        return;
+    }
+    if (get_process_kernel_id(process_id.value())) {
+        kernelLogger() << "processd: Received process right for register_process with already registered process id " << process_id.value() << "\n" << frg::endlog;
+        IPC_Register_Process_Reply reply = {
+            .type = IPC_Register_Process_Reply_NUM,
+            .flags = 0,
+            .result = -EEXIST, // TODO!
+            .pid = 0,
+        };
+
+        auto r = pmos::send_message_right_one(reply_right, reply, {}, true);
+        if (!r)
+            kernelLogger() << "processd: Error " << r.error().first << " sending message to right " << reply_right.get() << " for register_process\n" << frg::endlog;
+        return;
+    }
+
+    auto new_process = create_process(process, std::move(process_right), process_id.value());
 
     auto right = main_port.create_right(pmos::RightType::SendMany);
     auto [send_right, receive_right] = std::move(right.value());
@@ -209,7 +253,7 @@ pmos::async::detached_task get_messages_bootstrapd(pmos::ReceiveRight rr)
             }
 
             IPC_Register_Process *m = reinterpret_cast<IPC_Register_Process *>(ipc_msg);
-            register_process(m, std::move(reply_right), process);
+            register_process(m, std::move(reply_right), process, std::move(rights[0]));
             break;
         }
         default:

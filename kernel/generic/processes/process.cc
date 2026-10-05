@@ -145,4 +145,10 @@ ReturnStr<std::pair<ipc::Right *, u64>> ProcessRight::duplicate(proc::TaskGroup 
     return Success(std::make_pair(ptr, ptr->right_sender_id));
 }
 
+bool Process::atomic_alive() const
+{
+    Auto_Lock_Scope l(lock);
+    return alive;
+}
+
 } // namespace kernel::proc

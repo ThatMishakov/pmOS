@@ -3,6 +3,7 @@
 #include <cassert>
 #include <pmos/ipc.h>
 #include "log.hh"
+#include <unordered_map>
 
 int32_t allocate_pid()
 {
@@ -14,6 +15,8 @@ int32_t allocate_pid()
 std::map<int32_t, std::shared_ptr<Session>> sessions;
 std::map<int32_t, std::shared_ptr<ProcessGroup>> process_groups;
 std::map<int32_t, std::shared_ptr<Process>> processes;
+
+std::unordered_map<uint64_t, std::shared_ptr<Process>> processes_by_kernel_id;
 
 std::shared_ptr<Session> create_session(pid_t sid)
 {
@@ -49,15 +52,17 @@ std::shared_ptr<Process> create_first_process()
     return process;
 }
 
-std::shared_ptr<Process> create_process(std::shared_ptr<Process> parent)
+std::shared_ptr<Process> create_process(std::shared_ptr<Process> parent, pmos::Right process_right, uint64_t kernel_process_id)
 {
     assert(parent);
     auto process = std::make_shared<Process>();
     process->pid = allocate_pid();
     process->parent = parent;
     process->process_group = parent->process_group;
+    process->process_right = std::move(process_right);
     processes[process->pid] = process;
     parent->process_group->processes[process->pid] = process;
+    processes_by_kernel_id[kernel_process_id] = process;
     return process;
 }
 
@@ -93,7 +98,16 @@ void delete_process(std::shared_ptr<Process> process)
 
     remove_process_from_group(process->process_group, process);
     processes.erase(process->pid);
+    processes_by_kernel_id.erase(process->kernel_process_id);
     // TODO
+}
+
+std::shared_ptr<Process> get_process_kernel_id(uint64_t kernel_process_id)
+{
+    auto it = processes_by_kernel_id.find(kernel_process_id);
+    if (it == processes_by_kernel_id.end())
+        return nullptr;
+    return it->second;
 }
 
 void setsid_reply(pmos::Right &reply_right, int32_t result_sid)
