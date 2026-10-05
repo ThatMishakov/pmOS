@@ -576,7 +576,10 @@ pmos::async::detached_task start_shell()
     }
 
     if (pid == 0) {
-        exit(10);
+        int result = execl("/bin/bash", "bash", NULL);
+        if (result < 0)
+            perror("Failed to exec bash");
+        _exit(127);
     }
     write_str("Forked pty with pid " + std::to_string(pid) + "\n");
 
