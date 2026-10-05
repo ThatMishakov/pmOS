@@ -32,6 +32,7 @@ enum class RightType : u8 {
     InterruptNotification,
     Timer,
     Process,
+    TaskGroup,
 };
 
 struct Right {

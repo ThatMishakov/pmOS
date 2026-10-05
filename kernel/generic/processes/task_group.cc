@@ -394,4 +394,89 @@ kresult_t TaskGroup::transfer_rights(ipc::GenericMessage *msg, std::array<u64, 4
     return 0;
 }
 
+ipc::RightType TaskGroupRight::type() const { return ipc::RightType::TaskGroup; }
+
+void TaskGroupRight::remove_from_parent()
+{
+    assert(group);
+    Auto_Lock_Scope l(group->rights_to_group_lock);
+    group->rights_to_group.erase(this);
+}
+
+void TaskGroupRight::rcu_push()
+{
+    rcu_head.rcu_func = [](void *self, bool) {
+        TaskGroupRight *t =
+            reinterpret_cast<TaskGroupRight *>(reinterpret_cast<char *>(self) - offsetof(TaskGroupRight, rcu_head));
+        delete t;
+    };
+    sched::get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
+}
+
+ReturnStr<std::pair<ipc::Right *, u64>> TaskGroupRight::duplicate(proc::TaskGroup *to_group)
+{
+    assert(group);
+    assert(parent_group);
+    assert(parent_group == to_group);
+
+    klib::unique_ptr<TaskGroupRight> new_right = new TaskGroupRight();
+    if (!new_right)
+        return Error(-ENOMEM);
+
+    new_right->group        = group;
+    new_right->parent_group = parent_group;
+    new_right->of_message   = false;
+    new_right->permissions_mask = permissions_mask;
+
+    Auto_Lock_Scope l(lock);
+    if (!alive || of_message || parent_group != to_group)
+        return Error(-ENOENT);
+
+    Auto_Lock_Scope ll(new_right->lock);
+
+    Auto_Lock_Scope l1(group->rights_to_group_lock);
+
+    Auto_Lock_Scope_Double(parent_group->tasks_lock, group->tasks_lock);
+    if (!parent_group->alive())
+        return Error(-ESRCH);
+    if (!group->atomic_alive())
+        return Error(-ENOENT);
+
+    parent_group->rights.insert(new_right.get());
+    group->rights_to_group.push_back(new_right.get());
+
+    auto ptr = new_right.release();
+
+    return Success(std::make_pair(ptr, ptr->right_sender_id));
+}
+
+ReturnStr<TaskGroupRight *> TaskGroupRight::create_for_group(TaskGroup *for_group, TaskGroup *parent_group)
+{
+    assert(for_group);
+    assert(parent_group);
+
+    klib::unique_ptr<TaskGroupRight> right = new TaskGroupRight();
+    if (!right)
+        return Error(-ENOMEM);
+
+    right->group        = for_group;
+    right->parent_group = parent_group;
+    right->of_message   = false;
+
+    Auto_Lock_Scope l(for_group->rights_to_group_lock);
+
+    Auto_Lock_Scope_Double(parent_group->tasks_lock, for_group->tasks_lock);
+    if (!parent_group->alive())
+        return Error(-ESRCH);
+    if (!for_group->atomic_alive())
+        return Error(-ENOENT);
+
+    right->right_sender_id = ++parent_group->current_right_id;
+    parent_group->rights.insert(right.get());
+    for_group->rights_to_group.push_back(right.get());
+
+    auto ptr = right.release();
+    return Success(ptr);
+}
+
 } // namespace kernel::proc

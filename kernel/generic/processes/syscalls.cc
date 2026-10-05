@@ -71,7 +71,7 @@ extern void deactivate_page_table();
 namespace kernel::proc::syscalls
 {
 
-std::array<const char *, 71> syscall_names = {
+std::array<const char *, 72> syscall_names = {
     "SYSCALL EXIT",
     "SYSCALL GET TASK ID",
     "SYSCALL CREATE PROCESS",
@@ -147,6 +147,7 @@ std::array<const char *, 71> syscall_names = {
     "SYSCALL SET TCB",
     "SYSCALL GET TCB",
     "SYSCALL GET PROCESS ID",
+    "SYSCALL RIGHT FOR TASK GROUP",
 };
 
 const char *syscall_name(unsigned id)
@@ -159,7 +160,7 @@ const char *syscall_name(unsigned id)
 
 using syscall_function = void (*)(TaskDescriptor *task);
 
-std::array<syscall_function, 71> syscall_table = {
+std::array<syscall_function, 72> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -235,6 +236,7 @@ std::array<syscall_function, 71> syscall_table = {
     syscall_set_tcb,
     nullptr,
     syscall_get_process_id,
+    syscall_right_for_task_group,
 };
 
 void syscall_handler()
@@ -3093,6 +3095,36 @@ void syscall_get_process_id(TaskDescriptor *task)
     }
 
     syscall_return(task) = process->get_id();
+}
+
+void syscall_right_for_task_group(TaskDescriptor *task)
+{
+    u64 group_id = syscall_arg64(task, 0);
+
+    auto group = task->rights_namespace.load(std::memory_order::consume);
+    if (!group) {
+        syscall_error(task) = -ESRCH;
+        return;
+    }
+
+    TaskGroup *dest;
+    if (group_id == 0) {
+        dest = group;
+    } else {
+        dest = TaskGroup::get_task_group(group_id);
+        if (!dest) {
+            syscall_error(task) = -ESRCH;
+            return;
+        }
+    }
+
+    auto right = TaskGroupRight::create_for_group(dest, group);
+    if (!right.success()) {
+        syscall_error(task) = right.result;
+        return;
+    }
+
+    syscall_return(task) = right.val->right_sender_id;
 }
 
 unsigned syscall_number(TaskDescriptor *task) { return call_flags(task) & 0xFF; }

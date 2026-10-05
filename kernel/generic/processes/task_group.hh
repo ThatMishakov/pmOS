@@ -48,6 +48,22 @@ namespace kernel::proc
 class TaskDescriptor;
 class TaskGroup;
 
+struct TaskGroupRight final: ipc::Right {
+    TaskGroup *group = nullptr;
+    union {
+        pmos::containers::DoubleListHead<TaskGroupRight> parent_head = {};
+        memory::RCU_Head rcu_head;
+    };
+
+    static ReturnStr<TaskGroupRight *> create_for_group(TaskGroup *for_group, TaskGroup *namespace_group);
+
+    virtual ReturnStr<std::pair<ipc::Right *, u64>> duplicate(proc::TaskGroup *) override;
+    virtual ipc::RightType type() const override;
+    virtual void remove_from_parent() override;
+
+    virtual void rcu_push() override;
+};
+
 class TaskGroup
 {
 public:
@@ -199,6 +215,10 @@ public: // Fun!!!
     rights_tree::RBTreeHead rights;
     mutable Spinlock rights_lock;
     u64 current_right_id = 0;
+
+    using rights_list = pmos::containers::CircularDoubleList<TaskGroupRight, &TaskGroupRight::parent_head>;
+    mutable Spinlock rights_to_group_lock;
+    rights_list rights_to_group;
 
     friend struct ipc::Right;
     friend class ipc::Port;
