@@ -108,7 +108,7 @@ kresult_t Port::send_from_system(pmos::containers::vector<char> &&v)
 {
     assert(lock.is_locked() && "Spinlock not locked!");
 
-    auto ptr = klib::make_unique<Message>(0, klib::forward<pmos::containers::vector<char>>(v));
+    auto ptr = klib::make_unique<Message>(0, 0, klib::forward<pmos::containers::vector<char>>(v));
     if (!ptr)
         return -ENOMEM;
 
@@ -142,7 +142,7 @@ ReturnStr<bool> Port::send_from_user(proc::TaskDescriptor *sender, const char *u
         return result;
 
     auto ptr =
-        klib::make_unique<Message>(sender->task_id, klib::forward<pmos::containers::vector<char>>(message));
+        klib::make_unique<Message>(sender->task_id, sender->process_id(), klib::forward<pmos::containers::vector<char>>(message));
     if (!ptr)
         return Error(-ENOMEM);
 
@@ -162,7 +162,7 @@ ReturnStr<bool> Port::atomic_send_from_user(proc::TaskDescriptor *sender,
         return result;
 
     auto ptr = klib::make_unique<Message>(
-        sender->task_id, klib::forward<pmos::containers::vector<char>>(message));
+        sender->task_id, sender->process_id(), klib::forward<pmos::containers::vector<char>>(message));
     if (!ptr)
         return Error(-ENOMEM);
 
@@ -273,7 +273,7 @@ bool Port::atomic_alive() const
 
 ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
     Port::send_message_right(Right *r, proc::TaskGroup *verify_group, Port *reply_port,
-                             rights_array array, message_buffer data, uint64_t sender_id,
+                             rights_array array, message_buffer data, proc::TaskDescriptor *sender,
                              RightType new_right_type, bool always_destroy_right)
 {
     assert(r);
@@ -285,7 +285,7 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
 
     auto send_to = right->parent_port();
 
-    klib::unique_ptr<Message> msg = new Message(sender_id, std::move(data));
+    klib::unique_ptr<Message> msg = new Message(sender->task_id, sender->process_id(), std::move(data));
     if (!msg)
         return Error(-ENOMEM);
 
@@ -467,6 +467,11 @@ u64 Message::sent_with_right() const
 u64 Message::sender_task_id() const
 {
     return task_id_from;
+}
+
+u64 Message::sender_process_id() const
+{
+    return process_id_from;
 }
 
 void Message::delete_self()

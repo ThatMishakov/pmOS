@@ -18,6 +18,7 @@ int32_t allocate_pid();
 
 struct ProcessGroup;
 struct Session;
+struct PtyData;
 
 struct Process {
     int32_t pid;
@@ -35,6 +36,8 @@ struct ProcessGroup {
 struct Session {
     int32_t sid = 0;
     std::map<int32_t, std::shared_ptr<ProcessGroup>> process_groups;
+
+    std::shared_ptr<PtyData> controlling_terminal = nullptr;
 };
 
 std::shared_ptr<Process> create_first_process();

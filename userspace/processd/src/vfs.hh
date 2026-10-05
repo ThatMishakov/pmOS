@@ -10,6 +10,7 @@
 #include <pmos/helpers.hh>
 
 struct VNode;
+struct Process;
 
 struct StatData {
     uint64_t st_size;
@@ -28,7 +29,7 @@ struct Filesystem {
 
     // nullptr -> block
     virtual std::expected<std::shared_ptr<VNode>, int> resolve_child(std::shared_ptr<VNode> parent, const std::string &name) = 0;
-    virtual pmos::async::task<std::expected<pmos::Right, int>> open_file(std::shared_ptr<VNode> vnode) = 0;
+    virtual pmos::async::task<std::expected<pmos::Right, int>> open_file(std::shared_ptr<VNode> vnode, std::shared_ptr<Process> process) = 0;
     virtual pmos::async::task<std::expected<StatData, int>> get_file_stat_dynamic(std::shared_ptr<VNode> vnode) = 0;
 
     virtual ~Filesystem() = default;
@@ -38,7 +39,7 @@ struct ExternalFilesystem: public Filesystem {
     pmos::Right fs_right;
 
     std::expected<std::shared_ptr<VNode>, int> resolve_child(std::shared_ptr<VNode> parent, const std::string &name) override;
-    pmos::async::task<std::expected<pmos::Right, int>> open_file(std::shared_ptr<VNode> vnode) override;
+    pmos::async::task<std::expected<pmos::Right, int>> open_file(std::shared_ptr<VNode> vnode, std::shared_ptr<Process> process) override;
     pmos::async::task<std::expected<StatData, int>> get_file_stat_dynamic(std::shared_ptr<VNode> vnode) override;
 };
 
@@ -128,6 +129,6 @@ struct Path {
     std::vector<std::string> _components;
 };
 
-pmos::async::detached_task open_file(pmos::Right reply_right, std::string path);
+pmos::async::detached_task open_file(pmos::Right reply_right, std::string path, std::shared_ptr<Process> process);
 pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right fs_right, const std::string &mountpoint, int64_t root_inode);
 pmos::async::detached_task stat_handle(std::shared_ptr<VNode> vnode, pmos::Right reply_right, unsigned flags, std::string path);

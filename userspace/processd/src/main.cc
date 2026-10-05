@@ -85,7 +85,7 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
 
             auto *m = reinterpret_cast<IPC_Open *>(message.data());
             std::string path(m->path, message.size() - sizeof(IPC_Open));
-            open_file(std::move(reply_right), path);
+            open_file(std::move(reply_right), path, process);
         } break;
 
         case IPC_Stat_NUM: {
@@ -150,7 +150,7 @@ void register_process(IPC_Register_Process *msg, pmos::Right reply_right, std::s
 
     auto right = main_port.create_right(pmos::RightType::SendMany);
     auto [send_right, receive_right] = std::move(right.value());
-    handle_process_messages(std::move(receive_right), process);
+    handle_process_messages(std::move(receive_right), new_process);
 
     IPC_Register_Process_Reply reply = {
         .type = IPC_Register_Process_Reply_NUM,

@@ -12,7 +12,7 @@ struct DevVfs final: public Filesystem {
         return std::unexpected(-ENOENT);
     }
 
-    pmos::async::task<std::expected<pmos::Right, int>> open_file(std::shared_ptr<VNode> vnode) override
+    pmos::async::task<std::expected<pmos::Right, int>> open_file(std::shared_ptr<VNode> vnode, std::shared_ptr<Process>) override
     {
         kernelLogger() << "posixd: Attempted to open a file on the devfs\n" << frg::endlog;
         co_return std::unexpected(-ENOSYS); // TODO

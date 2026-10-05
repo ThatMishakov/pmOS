@@ -90,7 +90,7 @@ public:
 
     static ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
         send_message_right(Right *right, proc::TaskGroup *verify_group, Port *reply_port,
-                           rights_array array, message_buffer data, uint64_t sender_id,
+                           rights_array array, message_buffer data, proc::TaskDescriptor *sender,
                            RightType new_right_type, bool always_destroy_right);
 
     bool atomic_add_to_rights(ReceiveRight *right);

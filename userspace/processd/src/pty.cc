@@ -6,6 +6,8 @@
 #include <fcntl.h>
 #include "vfs.hh"
 #include "devfs.hh"
+#include "process.hh"
+#include <termios.h>
 
 struct PtyVfs final: public Filesystem {
     std::expected<std::shared_ptr<VNode>, int> resolve_child(std::shared_ptr<VNode> parent, const std::string &name) override
@@ -16,7 +18,7 @@ struct PtyVfs final: public Filesystem {
         return std::unexpected(-ENOENT);
     }
 
-    pmos::async::task<std::expected<pmos::Right, int>> open_file(std::shared_ptr<VNode> vnode) override;
+    pmos::async::task<std::expected<pmos::Right, int>> open_file(std::shared_ptr<VNode> vnode, std::shared_ptr<Process> process) override;
 
     pmos::async::task<std::expected<StatData, int>> get_file_stat_dynamic(std::shared_ptr<VNode> vnode)
     {
@@ -24,6 +26,12 @@ struct PtyVfs final: public Filesystem {
         co_return std::unexpected(-ENOSYS); // TODO
     }
 };
+
+std::string PtyData::path()
+{
+    assert(vnode);
+    return vnode->path();
+}
 
 std::shared_ptr<PtyVfs> pty_fs;
 std::shared_ptr<VNode> pty_root_vnode;
@@ -45,28 +53,6 @@ void init_pty_filesystem()
 
 extern pmos::Port main_port;
 extern pmos::PortDispatcher dispatcher;
-
-struct PtyData {
-    bool have_manager = true;
-    bool locked = true;
-
-    size_t subordinate_count = 0;
-
-    unsigned idx = 0;
-
-    std::string name() const {
-        return std::to_string(idx);
-    }
-
-    std::string path() {
-        assert(vnode);
-        return vnode->path();
-    }
-
-    std::shared_ptr<VNode> vnode = nullptr;
-
-    ~PtyData();
-};
 
 std::map<unsigned, std::weak_ptr<PtyData>> pty_map;
 
@@ -174,7 +160,27 @@ pmos::async::detached_task openpt_manager(pmos::ReceiveRight rr, std::shared_ptr
     co_return;
 }
 
-pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared_ptr<PtyData> pty, unsigned oflags)
+int ttiocsctty_handle(std::shared_ptr<PtyData> pty, unsigned flags, std::shared_ptr<Process> process)
+{
+    auto session = process->process_group->session;
+    kernelLogger() << "posixd: TIOCSCTTY request for pty " << pty->idx << " from process " << process->pid << " with session " << session->sid << "\n" << frg::endlog;
+
+    if (process->pid != session->sid)
+        return -EPERM;
+
+    if (pty->session)
+        return -EPERM;
+
+    if (session->controlling_terminal)
+        return -EPERM;
+
+    pty->session = session;
+    session->controlling_terminal = pty;
+
+    return 0;
+}
+
+pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared_ptr<PtyData> pty, unsigned oflags, std::shared_ptr<Process> process)
 {
     while (1) {
         auto [msg, message, reply_right, rights] = (co_await dispatcher.get_message(rr)).value();
@@ -187,6 +193,36 @@ pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared
         auto *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(message.data());
         switch (ipc_msg->type) {
         case IPC_Kernel_Receive_Right_Destroyed_NUM:
+            break;
+        case IPC_Ioctl_NUM: {
+            if (message.size() < sizeof(IPC_Ioctl)) {
+                kernelLogger() << "posixd: Received IPC_Ioctl that is too small while attending pty subordinate\n" << frg::endlog;
+                break;
+            }
+
+            auto *ioctl_msg = reinterpret_cast<IPC_Ioctl *>(ipc_msg);
+            int result_code = 0;
+
+            switch (ioctl_msg->request) {
+            case TIOCSCTTY:
+                result_code = ttiocsctty_handle(pty, ioctl_msg->flags, process);
+                break;
+            default:
+                result_code = -ENOTTY;
+                break;
+            }
+
+            IPC_Ioctl_Reply reply = {
+                .type         = IPC_Ioctl_Reply_NUM,
+                .flags        = 0,
+                .result_code  = static_cast<int16_t>(result_code),
+                .ioctl_result = 0,
+            };
+
+            auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+            if (!result_send)
+                kernelLogger() << "posixd: Error " << result_send.error().first << " sending ioctl reply to port " << reply_right.get() << "\n" << frg::endlog;
+        }
             break;
         default:
             kernelLogger() << "posixd: Unknown message type " << ipc_msg->type << " while attending pty subordinate\n" << frg::endlog;
@@ -244,17 +280,18 @@ void openpt_handle(pmos::Right reply_right, unsigned oflags)
         kernelLogger() << "posixd: Error " << result_send.error().first << " sending openpt reply to port " << reply_right.get() << "\n" << frg::endlog;
 }
 
-pmos::async::task<std::expected<pmos::Right, int>> PtyVfs::open_file(std::shared_ptr<VNode> vnode)
+pmos::async::task<std::expected<pmos::Right, int>> PtyVfs::open_file(std::shared_ptr<VNode> vnode, std::shared_ptr<Process> process)
 {
     auto pty = pty_map[vnode->inode].lock();
     assert(pty);
+    assert(process);
 
     if (pty->locked)
         co_return std::unexpected(-EACCES);
 
     auto [right, receive_right] = main_port.create_right(pmos::RightType::SendMany).value();
 
-    openpt_subordinate(std::move(receive_right), pty, 0);
+    openpt_subordinate(std::move(receive_right), pty, 0, process);
     pty->subordinate_count++;
 
     co_return std::move(right);

@@ -25,6 +25,8 @@ struct Process {
     void atomic_destroy_cleanup();
 
     kresult_t atomic_terminate();
+
+    u64 get_id() const;
 };
 
 

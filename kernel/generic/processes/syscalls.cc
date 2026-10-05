@@ -863,6 +863,7 @@ void syscall_get_message_info(TaskDescriptor *task)
         u64 msg_struct_size     = sizeof(Message_Descriptor);
         Message_Descriptor desc = {
             .sender             = msg->sender_task_id(),
+            .sender_process     = msg->sender_process_id(),
             .size               = msg->size(),
             .sent_with_right    = msg->sent_with_right(),
             .other_rights_count = (unsigned)msg->rights_count(),
@@ -2444,7 +2445,7 @@ void send_message_right(TaskDescriptor *current)
 
     auto send_result =
         Port::send_message_right(right, group, reply_port, rights, std::move(*buffer.val),
-                                 current->task_id, new_type, always_delete);
+                                 current, new_type, always_delete);
     if (!send_result.success()) {
         syscall_error(current) = {send_result.result, send_result.val.second};
         return;

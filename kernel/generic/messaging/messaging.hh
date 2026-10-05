@@ -73,6 +73,7 @@ struct GenericMessage {
 
     virtual u64 sent_with_right() const = 0;
     virtual u64 sender_task_id() const = 0;
+    virtual u64 sender_process_id() const = 0;
 
     virtual inline size_t rights_count() const
     {
@@ -92,13 +93,14 @@ struct GenericMessage {
 // The final here is more of an optimization, more than anything else, I might inherit from this later as well...
 struct Message final: public GenericMessage {
     u64 task_id_from    = 0;
+    u64 process_id_from = 0;
     u64 sent_with_right_ = 0;
     pmos::containers::vector<char> content;
     Right *reply_right            = {};
     std::array<Right *, 4> rights = {};
 
-    Message(u64 task_id_from, pmos::containers::vector<char> content)
-        : task_id_from(task_id_from), content(klib::move(content))
+    Message(u64 task_id_from, u64 process_id_from, pmos::containers::vector<char> content)
+        : task_id_from(task_id_from), process_id_from(process_id_from), content(klib::move(content))
     {
     }
 
@@ -115,7 +117,7 @@ struct Message final: public GenericMessage {
 
     virtual u64 sent_with_right() const override;
     virtual u64 sender_task_id() const override;
-
+    virtual u64 sender_process_id() const override;
     virtual ~Message();
 
     virtual void delete_self() override;

@@ -111,6 +111,7 @@ struct ReceiveRight: GenericMessage {
     virtual ReturnStr<bool> copy_to_user_buff(char *buff) const override;
     virtual u64 sent_with_right() const override;
     virtual u64 sender_task_id() const override;
+    virtual u64 sender_process_id() const override;
 };
 
 struct SendRight: Right, ReceiveRight {

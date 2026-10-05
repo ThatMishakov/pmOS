@@ -480,6 +480,11 @@ u64 ReceiveRight::sender_task_id() const
     return 0; // Kernel
 }
 
+u64 ReceiveRight::sender_process_id() const
+{
+    return 0; // Kernel
+}
+
 u64 ReceiveRight::sent_with_right() const
 {
     return right_parent_id;

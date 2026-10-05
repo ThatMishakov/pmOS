@@ -414,6 +414,8 @@ namespace proc
 
         result_t inherit_registers_from_current();
 
+        u64 process_id() const;
+
     protected:
         TaskDescriptor() = default;
 

@@ -195,7 +195,7 @@ pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right
     mount_filesystem_reply(reply_right, 0);
 }
 
-pmos::async::task<std::expected<pmos::Right, int>> ExternalFilesystem::open_file(std::shared_ptr<VNode> vnode)
+pmos::async::task<std::expected<pmos::Right, int>> ExternalFilesystem::open_file(std::shared_ptr<VNode> vnode, std::shared_ptr<Process>)
 {
     assert(vnode);
     assert(vnode->parent_fs.get() == this);
@@ -300,7 +300,7 @@ pmos::Right create_file_right(std::shared_ptr<VNode> vnode)
     return std::move(send_right);
 }
 
-pmos::async::detached_task open_file(pmos::Right reply_right, std::string path)
+pmos::async::detached_task open_file(pmos::Right reply_right, std::string path, std::shared_ptr<Process> process)
 {
     auto result = co_await resolve_path(std::move(path));
     if (!result) {
@@ -314,7 +314,7 @@ pmos::async::detached_task open_file(pmos::Right reply_right, std::string path)
         co_return;
     }
 
-    auto fs_right = co_await vnode->parent_fs->open_file(vnode);
+    auto fs_right = co_await vnode->parent_fs->open_file(vnode, process);
     if (!fs_right) {
         open_file_error_reply(reply_right, fs_right.error());
         co_return;
@@ -490,16 +490,16 @@ pmos::async::detached_task vfs_handle_messages()
             std::string mountpoint(m->mount_path, message.size() - sizeof(IPC_Mount_FS));
             mount_filesystem(std::move(reply_right), std::move(rights[0]), mountpoint, m->root_fd);
         } break;
-        case IPC_Open_NUM: {
-            if (message.size() < sizeof(IPC_Open)) {
-                kernelLogger() << "posixd: Received IPC_Open that is too small from task " << msg.sender << " of size " << message.size() << "\n" << frg::endlog;
-                break;
-            }
+        // case IPC_Open_NUM: {
+        //     if (message.size() < sizeof(IPC_Open)) {
+        //         kernelLogger() << "posixd: Received IPC_Open that is too small from task " << msg.sender << " of size " << message.size() << "\n" << frg::endlog;
+        //         break;
+        //     }
 
-            auto *m = reinterpret_cast<IPC_Open *>(message.data());
-            std::string path(m->path, message.size() - sizeof(IPC_Open));
-            open_file(std::move(reply_right), path);
-        } break;
+        //     auto *m = reinterpret_cast<IPC_Open *>(message.data());
+        //     std::string path(m->path, message.size() - sizeof(IPC_Open));
+        //     open_file(std::move(reply_right), path);
+        // } break;
         default:
             kernelLogger() << "posixd: Unknown message type " << ipc_msg->type << "\n" << frg::endlog;
             break;

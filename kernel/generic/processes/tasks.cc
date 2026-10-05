@@ -1198,4 +1198,10 @@ bool TaskDescriptor::is_terminating() const
     return sched_pending_mask & SCHED_FLAG_TERMINATE;
 }
 
+u64 TaskDescriptor::process_id() const
+{
+    assert(process);
+    return process->get_id();
+}
+
 } // namespace kernel::proc

@@ -37,4 +37,9 @@ kresult_t Process::atomic_terminate()
     return 0;
 }
 
+u64 Process::get_id() const
+{
+    return id;
+}
+
 } // namespace kernel::proc
