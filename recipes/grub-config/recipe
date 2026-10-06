@@ -1,12 +1,13 @@
 #!/bin/sh
 
 version=1
-revision=1
+revision=2
 
 source_dir=scripts
 
 build() {
     CONFIG_FILE="grub.cfg"
+    LIBRARIES=$LIBRARIES \
     ${source_dir}/make_grub_config.sh "$CONFIG_FILE" "$BOOT_SERVICES"
 }
 

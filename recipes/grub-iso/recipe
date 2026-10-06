@@ -1,7 +1,7 @@
 #!/bin/sh
 
 version=1
-revision=1
+revision=2
 
 source_dir=scripts
 deps="grub-config kernel bootstrapd ${BOOT_SERVICES}"
@@ -9,5 +9,6 @@ imagedeps="grub2 xorriso"
 
 build() {
     SYSROOT="$sysroot" \
+    LIBRARIES=$LIBRARIES \
     ${source_dir}/make_grub_iso.sh "$build_dir/pmos-grub.iso" "${BOOT_SERVICES}" "grub.cfg"
 }
