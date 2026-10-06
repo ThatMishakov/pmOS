@@ -62,6 +62,80 @@ pmos::async::detached_task vfs_handle_messages();
 
 void register_process(IPC_Register_Process *msg, pmos::Right reply_right, std::shared_ptr<Process> process, pmos::Right process_right);
 
+void execve_reply(pmos::Right reply_right, int error)
+{
+    kernelLogger() << "processd error " << error << "\n" << frg::endlog;
+
+    IPC_Execve_Reply reply = {
+        .type = IPC_Execve_Reply_NUM,
+        .result_code = error,
+    };
+
+    auto r = pmos::send_message_right_one(reply_right, reply, {}, true);
+    if (!r)
+        kernelLogger() << "processd: Error " << r.error().first << " sending message to right " << reply_right.get() << " for execve_reply\n" << frg::endlog;
+}
+
+bool sum_less_or_equals(uint64_t a, uint64_t b, uint64_t size)
+{
+    return (a + b >= a) && (a + b <= size);
+}
+
+pmos::async::detached_task execve_handle(std::shared_ptr<Process> process, std::vector<std::byte> data, pmos::Right reply_right, pmos::Right fs_right, pmos::Right task_group_right)
+{
+    auto msg = reinterpret_cast<IPC_Execve *>(data.data());
+
+    constexpr auto base_length = sizeof(*msg);
+    if (!sum_less_or_equals(base_length, msg->path_length, data.size())) {
+        execve_reply(std::move(reply_right), -EINVAL);
+        co_return;
+    }
+    if (!sum_less_or_equals(base_length + msg->path_length, msg->args_length, data.size())) {
+        execve_reply(std::move(reply_right), -EINVAL);
+        co_return;
+    }
+    if (!sum_less_or_equals(base_length + msg->path_length + msg->args_length, msg->envs_length, data.size())) {
+        execve_reply(std::move(reply_right), -EINVAL);
+        co_return;
+    }
+
+    if (msg->path_length < 1) {
+        execve_reply(std::move(reply_right), -EINVAL);
+        co_return;
+    }
+
+    auto path = std::string(msg->data, strnlen(msg->data, msg->path_length - 1));
+    std::vector<std::string> args;
+    
+    auto args_it = msg->data + msg->path_length;
+    auto envs_it = args_it + msg->args_length;
+    auto it = args_it;
+    while (it < envs_it) {
+        auto l = strnlen(it, envs_it - it);
+        args.push_back(std::string(it, l));
+        it += l + 1;
+    }
+
+    std::vector<std::string> envs;
+    auto envs_end = envs_it + msg->envs_length;
+    it = envs_it;
+    while (it < envs_end) {
+        auto l = strnlen(it, envs_end - it);
+        envs.push_back(std::string(it, l));
+        it += l + 1;
+    }
+
+    auto file_handle = co_await get_file_handle(path, process);
+    if (!file_handle) {
+        execve_reply(std::move(reply_right), file_handle.error());
+        co_return;
+    }
+
+    kernelLogger() << "Got the file handle!\n" << frg::endlog;
+
+    co_return;
+}
+
 pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::shared_ptr<Process> process)
 {
     while (1) {
@@ -129,6 +203,15 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
 
             // IPC_Setsid *m = reinterpret_cast<IPC_Setsid *>(ipc_msg);
             setsid_handle(process, std::move(reply_right));
+            break;
+        }
+        case IPC_Execve_NUM: {
+            if (msg.size < sizeof(IPC_Execve)) {
+                kernelLogger() << "processd: Received IPC_Execve that is too small from task " << msg.sender << " (pid " << process->pid << ") of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            execve_handle(process, std::move(message), std::move(reply_right), std::move(extra_rights[0]), std::move(extra_rights[1]));
             break;
         }
 

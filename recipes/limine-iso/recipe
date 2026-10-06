@@ -1,6 +1,5 @@
 #!/bin/sh
 
-name=limine-iso
 version=1
 revision=1
 

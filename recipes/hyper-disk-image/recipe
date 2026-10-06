@@ -5,7 +5,7 @@ revision=1
 
 source_dir=scripts
 imagedeps="e2fsprogs mtools fdisk"
-deps="hyper-config kernel bootstrapd ${BOOT_SERVICES} base-fs"
+deps="hyper-config kernel bootstrapd ${BOOT_SERVICES} $PKGS base-fs"
 hostdeps="hyper"
 
 build() {

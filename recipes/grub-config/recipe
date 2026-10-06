@@ -1,6 +1,5 @@
 #!/bin/sh
 
-name=grub-config
 version=1
 revision=1
 

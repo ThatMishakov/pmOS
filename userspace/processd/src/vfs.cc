@@ -300,6 +300,21 @@ pmos::Right create_file_right(std::shared_ptr<VNode> vnode)
     return std::move(send_right);
 }
 
+pmos::async::task<std::expected<pmos::Right /* io_right */, int>> get_file_handle(std::string path, std::shared_ptr<Process> process)
+{
+    auto result = co_await resolve_path(std::move(path));
+    if (!result) {
+        co_return std::unexpected(result.error());
+    }
+
+    auto vnode = result.value();
+    if (vnode->type == FileType::Directory) {
+        co_return std::unexpected(EISDIR);
+    }
+
+    co_return co_await vnode->parent_fs->open_file(vnode, process);    
+}
+
 pmos::async::detached_task open_file(pmos::Right reply_right, std::string path, std::shared_ptr<Process> process)
 {
     auto result = co_await resolve_path(std::move(path));
