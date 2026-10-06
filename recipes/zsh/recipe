@@ -1,0 +1,14 @@
+#!/bin/sh
+
+version=5.9.2
+revision=1
+
+git_url=https://github.com/zsh-users/zsh.git
+commit="ddee3e7a751a4f03d5a1041fd44bb7af7bc0cebb"
+
+configure() {
+	CC="clang --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot}" \
+	CXX="clang++ --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot}" \
+	CPP="clang --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot} -E" \
+	${source_dir}/configure --build=$(uname -m)-pc-linux-gnu --host=$JINX_ARCH-pmos --prefix=${prefix}
+}
