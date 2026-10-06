@@ -351,9 +351,9 @@ static void ec_handle_query(uacpi_handle opaque)
 
     char buff[5];
     to_method_name(buff, ec_event);
-
     uacpi_status result = uacpi_eval(device->node, buff, NULL, NULL);
-    if (result != UACPI_STATUS_OK) {
+    // NOT_FOUNDs are normal with some firmwares, Linux also silences this
+    if (result != UACPI_STATUS_OK && result != UACPI_STATUS_NOT_FOUND) {
         printf("[devicesd] Failed to handle EC event, result %i\n", result);
     }
 

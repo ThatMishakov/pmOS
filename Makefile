@@ -3,6 +3,7 @@ i686-IMG=build-i686/pmos-hyper.img
 x86_64-IMG=build-x86_64/pmos.img
 x86_64-HYPER-IMG=build-x86_64/pmos-hyper.img
 x86_64-GRUB-ISO=build-x86_64/pmos-grub.iso
+x86_64-HYPER-ISO=build-x86_64/pmos-hyper.iso
 riscv64-IMG=build-riscv64/pmos.img
 loongarch64-IMG=build-loongarch64/pmos.img
 
@@ -43,6 +44,9 @@ $(x86_64-HYPER-IMG): build-x86_64/.jinx-parameters
 
 $(x86_64-GRUB-ISO): build-x86_64/.jinx-parameters
 	@cd build-x86_64 && ../jinx/jinx build grub-iso
+
+$(x86_64-HYPER-ISO): build-x86_64/.jinx-parameters
+	@cd build-x86_64 && ../jinx/jinx build hyper-iso
 
 emul: $(x86_64-HYPER-IMG)
 	bochs-debugger -q -f .bochsrc
@@ -117,4 +121,4 @@ qemu-loongarch64: $(loongarch64-IMG) ovmf-loongarch64
 qemu-single: $(ISO) ovmf-riscv64
 	qemu-system-riscv64 -M virt -cpu rv64 -device ramfb -device virtio-keyboard -device qemu-xhci -device usb-kbd -m 2G -drive if=pflash,unit=0,format=raw,file=ovmf-riscv64/OVMF.fd -cdrom $(ISO) -serial stdio
 
-.PHONY: $(x86_64-IMG) $(riscv64-IMG) $(loongarch64-IMG) $(i686-IMG) $(x86_64-HYPER-IMG) $(x86_64-GRUB-ISO)
+.PHONY: $(x86_64-IMG) $(riscv64-IMG) $(loongarch64-IMG) $(i686-IMG) $(x86_64-HYPER-IMG) $(x86_64-GRUB-ISO) $(x86_64-HYPER-ISO)

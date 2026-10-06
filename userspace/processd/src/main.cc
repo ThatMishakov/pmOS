@@ -26,6 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "fs_ops.hh"
 #include <cassert>
 #include <cinttypes>
 #include <memory>
