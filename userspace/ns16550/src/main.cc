@@ -576,9 +576,9 @@ pmos::async::detached_task start_shell()
     }
 
     if (pid == 0) {
-        int result = execl("/bin/bash", "bash", NULL);
+        int result = execl("/bin/zsh", "zsh", NULL);
         if (result < 0)
-            perror("Failed to exec bash");
+            perror("Failed to exec zsh");
         _exit(127);
     }
     write_str("Forked pty with pid " + std::to_string(pid) + "\n");

@@ -9,7 +9,7 @@ use pmos::async_helpers::get_named_right;
 use pmos::ipc_msgs::IPCMountFS;
 use pmos::ipc::send_message_right;
 use pmos::ipc::send_message_right_consume;
-use pmos::ipc_msgs::IPC_FLAG_IO_OP_SEEK;
+use pmos::ipc_msgs::IPC_FLAG_IO_OP_FIXED;
 
 use futures::StreamExt;
 
@@ -507,7 +507,7 @@ async fn ipc_fs_open(executor: Executor, reply_right: Option<SendRight>, fs: Ext
                 }
                 let reply_right = reply_right.unwrap();
 
-                if (data.flags & IPC_FLAG_IO_OP_SEEK) != 0 {
+                if (data.flags & IPC_FLAG_IO_OP_FIXED) == 0 {
                     let mut buffer = vec![0u8; data.max_size as usize];
 
                     let result = file.read_bytes(buffer.as_mut_slice()).await;
@@ -519,8 +519,16 @@ async fn ipc_fs_open(executor: Executor, reply_right: Option<SendRight>, fs: Ext
                         ipc_read_reply(reply_right, 0, 0, &buffer[..bytes_read as usize]);
                     }
                 } else {
-                    // Not implemented
-                    ipc_read_reply(reply_right, -libc::ENOSYS as i16, 0, &[]);
+                    let mut buffer = vec![0u8; data.max_size as usize];
+
+                    let result = file.read_bytes_at(buffer.as_mut_slice(), data.offset).await;
+                    if let Err(e) = result {
+                        let error_code = ext4error_to_int(e);
+                        ipc_read_reply(reply_right, error_code as i16, 0, &[]);
+                    } else {
+                        let bytes_read = result.unwrap();
+                        ipc_read_reply(reply_right, 0, 0, &buffer[..bytes_read as usize]);
+                    }
                 }
             },
             _ => {

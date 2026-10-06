@@ -9,6 +9,7 @@ template<typename T> class scope_guard
 public:
     explicit scope_guard(T on_exit_scope): on_exit_scope_(move(on_exit_scope)) {}
     void dismiss() noexcept { dismissed_ = true; }
+    void release() noexcept { dismissed_ = true; }
 
     ~scope_guard()
     {

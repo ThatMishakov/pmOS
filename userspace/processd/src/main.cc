@@ -42,6 +42,7 @@
 #include <variant>
 #include <vector>
 #include <pmos/async/coroutines.hh>
+#include <pmos/utility/scope_guard.hh>
 #include "log.hh"
 #include <string.h>
 #include <charconv>
@@ -50,6 +51,8 @@
 #include "process.hh"
 #include "pty.hh"
 #include "devfs.hh"
+#include <elf.h>
+#include <pmos/memory.h>
 
 void KernelSink::operator()(const char *message)
 {
@@ -80,6 +83,109 @@ void execve_reply(pmos::Right reply_right, int error)
 bool sum_less_or_equals(uint64_t a, uint64_t b, uint64_t size)
 {
     return (a + b >= a) && (a + b <= size);
+}
+
+#define ELF_ENDIANNESS 1
+#ifdef __x86_64__
+#define ELF_INSTR_SET EM_X86_64
+#elif defined(__i386__)
+#define ELF_INSTR_SET EM_386
+#elif defined(__riscv)
+#define ELF_INSTR_SET EM_RISCV
+#elif defined(__loongarch__)
+#define ELF_INSTR_SET EM_LOONGARCH
+#endif
+
+pmos::async::task<std::expected<std::optional<std::string>, int>> get_interpreter_path(pmos::Right &file_handle)
+{
+    Elf32_Ehdr ehdr;
+
+    auto read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)&ehdr, sizeof(ehdr)), 0);
+    if (!read_result)
+        co_return std::unexpected(read_result.error());
+
+    if (ehdr.e_ident[4] == R_LARCH_32) {
+        uint32_t phdr_size = ehdr.e_phentsize;
+        uint32_t phdr_count = ehdr.e_phnum;
+        uint32_t total_size = phdr_size * phdr_count;
+        std::vector<uint8_t> phdr_data(total_size);
+        auto phdr_read_result = co_await read_file(file_handle, phdr_data, ehdr.e_phoff);
+        if (!phdr_read_result)
+            co_return std::unexpected((int)phdr_read_result.error());
+
+        for (uint32_t i = 0; i < phdr_count; ++i) {
+            Elf32_Phdr *phdr = reinterpret_cast<Elf32_Phdr *>(phdr_data.data() + i * phdr_size);
+            if (phdr->p_type == PT_INTERP) {
+                std::vector<char> interp_path(phdr->p_filesz);
+                auto interp_read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)interp_path.data(), interp_path.size()), phdr->p_offset);
+                if (!interp_read_result)
+                    co_return std::unexpected(interp_read_result.error());
+                co_return std::string(interp_path.data(), interp_path.size());
+            }
+        }
+    } else if (ehdr.e_ident[4] == R_LARCH_64) {
+        Elf64_Ehdr ehdr64;
+        auto read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)&ehdr64, sizeof(ehdr64)), 0);
+        if (!read_result)
+            co_return std::unexpected((int)read_result.error());
+
+        uint64_t phdr_size = ehdr64.e_phentsize;
+        uint64_t phdr_count = ehdr64.e_phnum;
+        uint64_t total_size = phdr_size * phdr_count;
+        std::vector<uint8_t> phdr_data(total_size);
+        auto phdr_read_result = co_await read_file(file_handle, phdr_data, ehdr64.e_phoff);
+        if (!phdr_read_result)
+            co_return std::unexpected((int)phdr_read_result.error());
+
+        for (uint64_t i = 0; i < phdr_count; ++i) {
+            Elf64_Phdr *phdr = reinterpret_cast<Elf64_Phdr *>(phdr_data.data() + i * phdr_size);
+            if (phdr->p_type == PT_INTERP) {
+                std::vector<char> interp_path(phdr->p_filesz);
+                auto interp_read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)interp_path.data(), interp_path.size()), phdr->p_offset);
+                if (!interp_read_result)
+                    co_return std::unexpected(interp_read_result.error());
+                co_return std::string(interp_path.data(), interp_path.size());
+            }
+        }
+    } else {
+        co_return std::unexpected(-ENOEXEC);
+    }
+
+    co_return {};
+}
+
+pmos::async::task<std::expected<void, int>> load_executable(uint64_t task_id, pmos::Right &file_handle, std::shared_ptr<Process> process)
+{
+    Elf32_Ehdr ehdr;
+
+    auto read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)&ehdr, sizeof(ehdr)), 0);
+    if (!read_result) {
+        co_return std::unexpected((int)read_result.error());
+    }
+
+    if (memcmp(&ehdr.e_ident, ELFMAG, SELFMAG))
+        co_return std::unexpected(-ENOEXEC);
+
+    if (ehdr.e_ident[5] != ELF_ENDIANNESS)
+        co_return std::unexpected(-ENOEXEC);
+
+    if (ehdr.e_type != ET_EXEC && ehdr.e_type != ET_DYN)
+        co_return std::unexpected(-ENOEXEC);
+
+    page_table_req_ret_t pt_request = assign_page_table(task_id, 0, PAGE_TABLE_CREATE, ehdr.e_machine);
+    if (pt_request.result)
+        co_return std::unexpected((int)pt_request.result);
+    pmos_pagetable_t page_table_id = pt_request.page_table;
+
+    auto interp_path_result = co_await get_interpreter_path(file_handle);
+    if (!interp_path_result)
+        co_return std::unexpected(interp_path_result.error());
+    
+    auto interp = std::move(interp_path_result.value());
+    if (interp)
+        kernelLogger() << "processd: load_executable: interpreter path: " << interp.value() << "\n" << frg::endlog;
+
+    kernelLogger() << "processd: load_executable: assigned page table " << page_table_id << " for task " << task_id << "\n" << frg::endlog;
 }
 
 pmos::async::detached_task execve_handle(std::shared_ptr<Process> process, std::vector<std::byte> data, pmos::Right reply_right, pmos::Right fs_right, pmos::Right task_group_right)
@@ -132,7 +238,26 @@ pmos::async::detached_task execve_handle(std::shared_ptr<Process> process, std::
         co_return;
     }
 
-    kernelLogger() << "Got the file handle!\n" << frg::endlog;
+    auto new_task = syscall_new_task(PROCESS_RIGHT_NEW);
+    if (new_task.result != SUCCESS) {
+        execve_reply(std::move(reply_right), (int)new_task.result);
+        co_return;
+    }
+    pmos::utility::scope_guard guard([&]{
+        syscall_kill_task(new_task.value);
+    });
+
+    syscall_set_task_name(new_task.value, path.c_str(), path.size());
+
+    auto exec_result = co_await load_executable(new_task.value, file_handle.value(), process);
+    if (!exec_result) {
+        execve_reply(std::move(reply_right), exec_result.error());
+        co_return;
+    }
+
+    // TODO
+
+    kernelLogger() << "processd: execve_handle: starting new task " << new_task.value << " for process " << process->pid << "\n" << frg::endlog;
 
     co_return;
 }

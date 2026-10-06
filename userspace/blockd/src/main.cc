@@ -520,7 +520,7 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
             printf("Partition %i: type %x, start %" PRIu32 ", size %" PRIu32 "\n", i, part.type,
                    part.lba_start, part.num_sectors);
 
-            partitions.push_back(std::make_shared<Partition>(part.lba_start + 0, part.lba_start + part.num_sectors));
+            partitions.push_back(std::make_shared<Partition>(part.lba_start + 0, part.lba_start + part.num_sectors - 1));
         }
         disk.partitions = std::move(partitions);
     }

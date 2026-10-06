@@ -1,14 +1,32 @@
 #!/bin/sh
 
 version=5.9.2
-revision=1
+revision=2
 
-git_url=https://github.com/zsh-users/zsh.git
-commit="ddee3e7a751a4f03d5a1041fd44bb7af7bc0cebb"
+tarball_url=https://www.zsh.org/pub/zsh-5.9.2.tar.xz
+tarball_blake2b="0cbbbcfcd5dbc460aa9be27868e411c2fac9737af41882b39cff94b8aba885274b2553e58828b750ddbe35750c6a9b3eb390776e7439c41c329c4edd22f4b74e"
+
+imagedeps="build-essential"
+deps="ncurses mlibc $CXX_DEPS"
+hostdeps="$TOOLCHAIN_DEPS"
 
 configure() {
 	CC="clang --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot}" \
 	CXX="clang++ --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot}" \
 	CPP="clang --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot} -E" \
-	${source_dir}/configure --build=$(uname -m)-pc-linux-gnu --host=$JINX_ARCH-pmos --prefix=${prefix}
+	CPPFLAGS="-D_GNU_SOURCE" \
+	${source_dir}/configure --build=$(uname -m)-pc-linux-gnu --host=$JINX_ARCH-pmos --prefix=${prefix} --bindir=/bin
+}
+
+build() {
+	make -j ${parallelism}
+}
+
+package() {
+	make install DESTDIR=${dest_dir}
+
+	mkdir -p ${dest_dir}${prefix}/bin
+	pushd ${dest_dir}${prefix}/bin
+	ln -sv /bin/zsh zsh
+	popd
 }

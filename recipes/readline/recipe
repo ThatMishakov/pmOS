@@ -2,7 +2,7 @@
 version=8.3
 revision=2
 source_method=tarball
-tarball_url="https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz"
+tarball_url="https://ftpmirror.gnu.org/gnu/readline/readline-8.3.tar.gz"
 tarball_sha256="fe5383204467828cd495ee8d1d3c037a7eba1389c22bc6a041f627976f9061cc"
 
 imagedeps="build-essential"

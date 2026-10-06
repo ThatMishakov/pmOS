@@ -24,12 +24,12 @@ copy_service() {
     mcopy -i "$BOOT_PARTITION" "${BOOT_DIR}/${SERVICE}.yaml" "::/${SERVICE}.yaml"
 }
 
-dd if=/dev/zero of="$DISK_IMAGE" bs=1M count=128
+dd if=/dev/zero of="$DISK_IMAGE" bs=1M count=256
 
 # Create an MBR partition table
 echo 'label: dos' | sfdisk "$DISK_IMAGE"
 echo '2048,130048,0x0C,*' | sfdisk --append "$DISK_IMAGE"
-echo '132096,130048,0x83' | sfdisk --append "$DISK_IMAGE"
+echo '132096,392192,0x83' | sfdisk --append "$DISK_IMAGE"
 
 # Create a FAT32 filesystem for the boot partition
 dd if=/dev/zero of="$BOOT_PARTITION" bs=1M count=64
@@ -63,7 +63,7 @@ for LIBRARY in $LIBRARIES; do
 done
 
 # Create an ext4 filesystem for the root partition
-dd if=/dev/zero of="$EXT4_PARTITION" bs=1M count=64
+dd if=/dev/zero of="$EXT4_PARTITION" bs=1M count=191
 ROOTFS_STAGE=$(mktemp -d)
 cp -a "$SYSROOT"/. "$ROOTFS_STAGE"/
 mkdir -p "$ROOTFS_STAGE/run/initramfs"

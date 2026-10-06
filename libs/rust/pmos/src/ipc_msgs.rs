@@ -142,7 +142,7 @@ struct IPCNamedRightNotificationHdr {
     result: i32,
 }
 
-pub const IPC_FLAG_IO_OP_SEEK: u32 = 0x01;
+pub const IPC_FLAG_IO_OP_FIXED: u32 = 0x01;
 
 pub const IPC_READ_NUM: u32 = 0x42;
 #[repr(C)]
