@@ -9,9 +9,13 @@ use pmos::async_helpers::get_named_right;
 use pmos::ipc_msgs::IPCMountFS;
 use pmos::ipc::send_message_right;
 use pmos::ipc::send_message_right_consume;
+use pmos::ipc::MemoryObjectRight;
 use pmos::ipc_msgs::IPC_FLAG_IO_OP_FIXED;
 
 use futures::StreamExt;
+use futures::future::poll_fn;
+use std::task::Poll;
+use std::task::Waker;
 
 use std::num::NonZeroU32;
 
@@ -27,6 +31,8 @@ use ext4plus::prelude::Dir;
 use ext4plus::prelude::Inode;
 use ext4plus::FileType;
 use ext4plus::prelude::File;
+
+use std::collections::BTreeMap;
 
 #[derive(PartialEq)]
 enum RunType {
@@ -471,7 +477,80 @@ fn ipc_read_reply(reply_right: SendRight, result: i16, flags: u16, data: &[u8]) 
     }
 }
 
-async fn ipc_fs_open(executor: Executor, reply_right: Option<SendRight>, fs: Ext4, _flags: u32, inode: u64) {
+enum ObjectInner {
+    Ready(pmos::ipc::MemoryObjectRight),
+    Pending {
+        waiters: Vec<Waker>,
+    },
+    Failed(i32),
+}
+
+struct State {
+    memory_objects: BTreeMap<u64, ObjectInner>,
+}
+
+type SharedState = Rc<RefCell<State>>;
+
+async fn get_object(state: SharedState, file: &mut File) -> Result<MemoryObjectRight, i32> {
+    let (ino, file_size) = {
+        let inode = file.inode();
+        (inode.index.get() as u64, inode.size_in_bytes())
+    };
+
+    if state.borrow().memory_objects.get(&ino).is_none() {
+        let page_size = get_page_size();
+        let aligned_size = ((file_size + page_size - 1) & !(page_size - 1)).max(page_size);
+        let obj = MemoryObjectRight::create(aligned_size).map_err(|e| e.get())?;
+
+        state.borrow_mut().memory_objects.insert(ino, ObjectInner::Pending { waiters: Vec::new() });
+
+        let mut mmap = unsafe { obj.map(0, aligned_size) }.map_err(|e| e.get())?;
+        let slice = unsafe { mmap.as_mut_slice() };
+        let slice = &mut slice[..file_size as usize];
+
+        let mut copied = 0;
+        while copied < slice.len() {
+            let bytes_read = file.read_bytes_at(&mut slice[copied..], copied as u64).await.map_err(ext4error_to_int)?;
+            if bytes_read == 0 {
+                break;
+            }
+            copied += bytes_read;
+        }
+
+        let waiters = {
+            let mut state = state.borrow_mut();
+            let waiters = match state.memory_objects.get_mut(&ino).unwrap() {
+                ObjectInner::Pending { waiters } => std::mem::take(waiters),
+                _ => unreachable!(),
+            };
+            state.memory_objects.insert(ino, ObjectInner::Ready(obj));
+            waiters
+        };
+
+        for waiter in waiters {
+            waiter.wake();
+        }
+    }
+
+    poll_fn(|cx| {
+        let mut state = state.borrow_mut();
+        match state.memory_objects.get_mut(&ino) {
+            Some(ObjectInner::Ready(obj)) => {
+                Poll::Ready(Ok(obj.clone().expect("dup")))
+            }
+            Some(ObjectInner::Failed(e)) => Poll::Ready(Err(*e)),
+            Some(ObjectInner::Pending { waiters }) => {
+                if !waiters.iter().any(|w| w.will_wake(cx.waker())) {
+                    waiters.push(cx.waker().clone());
+                }
+                Poll::Pending
+            }
+            None => panic!("entry removed while waiting"),
+        }
+    }).await
+}
+
+async fn ipc_fs_open(state: SharedState, executor: Executor, reply_right: Option<SendRight>, fs: Ext4, _flags: u32, inode: u64) {
     let inode = u32::try_from(inode).ok().and_then(NonZeroU32::new);
     if inode.is_none() {
         _ = ipc_fs_open_reply(reply_right, -ENOENT as i16, 0, None);
@@ -537,6 +616,31 @@ async fn ipc_fs_open(executor: Executor, reply_right: Option<SendRight>, fs: Ext
                     }
                 }
             },
+            pmos::ipc_msgs::Message::IPCGetObject(_) => {
+                if reply_right.is_none() {
+                    println!("ext4: Received IPCGetObject with no reply right!");
+                    continue;
+                }
+                let reply_right = reply_right.unwrap();
+
+                let result = get_object(state.clone(), &mut file).await;
+                match result {
+                    Ok(obj) => {
+                        let msg = pmos::ipc_msgs::IPCGetObjectReply::new(0);
+                        let result = send_message_right(&msg, &mut Some(reply_right), &mut [Some(obj.into()), None, None, None]);
+                        if let Err(e) = result {
+                            println!("ext4: Failed to send IPCGetObjectReply message: {}", e.0);
+                        }
+                    },
+                    Err(e) => {
+                        let msg = pmos::ipc_msgs::IPCGetObjectReply::new(e as i16);
+                        let result = send_message_right(&msg, &mut Some(reply_right), &mut [None, None, None, None]);
+                        if let Err(e) = result {
+                            println!("ext4: Failed to send IPCGetObjectReply message: {}", e.0);
+                        }
+                    }
+                }
+            }
             _ => {
                 println!("Ext4: received unknown message in IPC open file consumer");
             }
@@ -545,6 +649,9 @@ async fn ipc_fs_open(executor: Executor, reply_right: Option<SendRight>, fs: Ext
 }
 
 async fn ipc_handle(executor: Executor, mut receiver: ManyReceiver, fs: Ext4) {
+    let shared_state = Rc::new(RefCell::new(State {
+        memory_objects: BTreeMap::new(),
+    }));
     while let Some(mut msg) = receiver.next().await {
         let reply_right = msg.reply_right.take();
         match msg.deserialize() {
@@ -552,7 +659,7 @@ async fn ipc_handle(executor: Executor, mut receiver: ManyReceiver, fs: Ext4) {
                 executor.spawn(ipc_handle_resolve_path(executor.clone(), reply_right, fs.clone(), req.path_component, req.inode));
             }
             pmos::ipc_msgs::Message::IPCFSOpen(req) => {
-                executor.spawn(ipc_fs_open(executor.clone(), reply_right, fs.clone(), req.flags, req.inode));
+                executor.spawn(ipc_fs_open(shared_state.clone(), executor.clone(), reply_right, fs.clone(), req.flags, req.inode));
             }
             _ => {
                 eprintln!("ext4: Received unexpected message type {}", msg.get_known_id().unwrap_or(0));

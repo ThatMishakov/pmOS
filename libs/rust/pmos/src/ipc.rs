@@ -107,6 +107,9 @@ unsafe extern "C" {
 
     #[link_name = "watch_right"]
     unsafe fn watch_right(right: Right, notification_port: Port) -> RightRequestResult;
+
+    #[link_name = "create_mem_object"]
+    unsafe fn create_mem_object(size: u64, flags: u32) -> RightRequestResult;
 }
 
 impl Drop for IPCPort {
@@ -547,6 +550,10 @@ impl ObjectMmap {
         unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.size) }
     }
 
+    pub unsafe fn as_mut_slice(&mut self) -> &mut [u8] {
+        unsafe { std::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.size) }
+    }
+
     pub fn len(&self) -> usize {
         self.size
     }
@@ -592,6 +599,7 @@ impl Drop for ReceiveManyRight {
 }
 
 const MAP_PROT_READ: u64 = 1 << 0;
+const MAP_PROT_WRITE: u64 = 1 << 1;
 const MAP_MEM_OBJECT_IS_RIGHT: u64 = 1 << 15;
 
 impl MemoryObjectRight {
@@ -603,7 +611,7 @@ impl MemoryObjectRight {
             size_uint: size,
             offset_object: offset,
             object_size: size,
-            access_flags: MAP_PROT_READ | MAP_MEM_OBJECT_IS_RIGHT,
+            access_flags: MAP_PROT_READ | MAP_PROT_WRITE | MAP_MEM_OBJECT_IS_RIGHT,
         };
 
         let result = unsafe { map_mem_object(&params) };
@@ -613,6 +621,24 @@ impl MemoryObjectRight {
                 size: size as usize,
             }
         })  
+    }
+
+    pub fn clone(&self) -> Result<MemoryObjectRight, Error> {
+        let RightRequestResult { result, right } = unsafe { dup_right(self.0) };
+        if result.success() {
+            Ok(MemoryObjectRight(right))
+        } else {
+            Err(result.result().unwrap_err())
+        }
+    }
+
+    pub fn create(size: u64) -> Result<MemoryObjectRight, Error> {
+        let RightRequestResult { result, right } = unsafe { create_mem_object(size, 0) };
+        if result.success() {
+            Ok(MemoryObjectRight(right))
+        } else {
+            Err(result.result().unwrap_err())
+        }
     }
 }
 

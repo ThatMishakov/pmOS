@@ -154,6 +154,14 @@ pub struct IPCRead {
     pub max_size: u64,
 }
 
+pub const IPC_GET_OBJECT_NUM: u32 = 0x44;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCGetObject {
+    msg_type: u32,
+    pub flags: u32,
+}
+
 pub const IPC_READ_REPLY_NUM: u32 = 0x50;
 #[derive(Debug)]
 pub struct IPCReadReply<'a> {
@@ -168,6 +176,25 @@ struct IPCReadReplyHdr {
     msg_type: u32,
     flags: u16,
     result: i16,
+}
+
+pub const IPC_GET_OBJECT_REPLY_NUM: u32 = 0x53;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCGetObjectReply {
+    msg_type: u32,
+    pub flags: u16,
+    pub result: i16,
+}
+
+impl IPCGetObjectReply {
+    pub fn new(result: i16) -> Self {
+        IPCGetObjectReply {
+            msg_type: IPC_GET_OBJECT_REPLY_NUM,
+            flags: 0,
+            result,
+        }
+    }
 }
 
 impl Serializable for IPCReadReply<'_> {
@@ -641,6 +668,7 @@ pub enum Message<'a> {
     IPCKernelRightDestroyed(IPCKernelRightDestroyed),
     IPCNamedRightNotification(IPCNamedRightNotification),
     IPCRead(IPCRead),
+    IPCGetObject(IPCGetObject),
     IPCFSOpen(IPCFSOpen),
     IPCMountFS(IPCMountFS),
     IPCMountFSReply(IPCMountFSReply),
@@ -740,6 +768,8 @@ impl super::ipc::Message {
                 }
                 IPC_READ_NUM =>
                     try_from_bytes::<IPCRead>(data).map(|data| Message::IPCRead(data.clone())).unwrap_or(Message::Unknown),
+                IPC_GET_OBJECT_NUM =>
+                    try_from_bytes::<IPCGetObject>(data).map(|data| Message::IPCGetObject(data.clone())).unwrap_or(Message::Unknown),
                 IPC_OPEN_NUM => {
                     if data.len() < size_of::<IPCOpenHdr>() {
                         return Message::Unknown;
