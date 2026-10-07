@@ -40,7 +40,7 @@
 #include <pmos/load_data.h>
 #include <sched/defs.hh>
 #include <sched/sched.hh>
-#include "elf.hh"
+#include <pmos/utility/auxvec_builder.hh>
 #include <elf.h>
 #include "process.hh"
 
@@ -691,10 +691,9 @@ ReturnStr<bool>
 
     regs.program_counter() = program_entry;
 
-    ElFAuxvec auxvec_builder;
-    auxvec_builder.set_width(table->is_32bit() ? ElFAuxvec::PtrWidth::W32bit : ElFAuxvec::PtrWidth::W64bit);
+    pmos::utility::ElFAuxvecBuilder auxvec_builder;
+    auxvec_builder.set_width(table->is_32bit() ? pmos::utility::ElFAuxvecBuilder::PtrWidth::W32bit : pmos::utility::ElFAuxvecBuilder::PtrWidth::W64bit);
     auto &auxvals = auxvec_builder.auxvec();
-    auto &extra_info = auxvec_builder.extra_info();
     auto &args = auxvec_builder.args();
 
     // Stack...
@@ -725,11 +724,7 @@ ReturnStr<bool>
         if (!vec.append_range(arr))
             return Error(-ENOMEM);
 
-        auto idx = extra_info.size();
-        if (!extra_info.push_back(std::move(vec)))
-            return Error(-ENOMEM);
-
-        if (!auxvals.push_back({AT_MEM_OBJ_ID, (int) idx}))
+        if (!auxvals.push_back({AT_MEM_OBJ_ID, std::move(vec)}))
             return Error(-ENOMEM);
     }
 
@@ -740,11 +735,7 @@ ReturnStr<bool>
         if (!vec.append_range(arr))
             return Error(-ENOMEM);
 
-        auto idx = extra_info.size();
-        if (!extra_info.push_back(std::move(vec)))
-            return Error(-ENOMEM);
-
-        if (!auxvals.push_back({AT_TASK_GROUP_ID, (int) idx}))
+        if (!auxvals.push_back({AT_TASK_GROUP_ID, std::move(vec)}))
             return Error(-ENOMEM);
     }
 
