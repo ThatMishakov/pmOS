@@ -354,7 +354,13 @@ fn ext4error_to_int(error: Ext4Error) -> i32 {
 }
 
 fn ext4direntry_error_to_int(error: ext4plus::prelude::DirEntryNameError) -> i32 {
-    todo!()
+    use ext4plus::prelude::DirEntryNameError as E;
+    match error {
+        E::Empty => -libc::ENOENT as i32,
+        E::TooLong => -libc::ENAMETOOLONG as i32,
+        E::ContainsNull | E::ContainsSeparator => -libc::EINVAL as i32,
+        _ => -libc::EIO as i32,
+    }
 }
 
 fn ext4filetype_to_int(file_type: FileType) -> u32 {

@@ -53,6 +53,7 @@
 #include "devfs.hh"
 #include <elf.h>
 #include <pmos/memory.h>
+#include <sys/mman.h>
 
 void KernelSink::operator()(const char *message)
 {
@@ -120,7 +121,10 @@ pmos::async::task<std::expected<std::optional<std::string>, int>> get_interprete
                 auto interp_read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)interp_path.data(), interp_path.size()), phdr->p_offset);
                 if (!interp_read_result)
                     co_return std::unexpected(interp_read_result.error());
-                co_return std::string(interp_path.data(), interp_path.size());
+                if (interp_path.empty())
+                    co_return std::unexpected(-ENOEXEC);
+                size_t len = strnlen(interp_path.data(), interp_path.size());
+                co_return std::string(interp_path.data(), len);
             }
         }
     } else if (ehdr.e_ident[4] == R_LARCH_64) {
@@ -144,7 +148,10 @@ pmos::async::task<std::expected<std::optional<std::string>, int>> get_interprete
                 auto interp_read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)interp_path.data(), interp_path.size()), phdr->p_offset);
                 if (!interp_read_result)
                     co_return std::unexpected(interp_read_result.error());
-                co_return std::string(interp_path.data(), interp_path.size());
+                if (interp_path.empty())
+                    co_return std::unexpected(-ENOEXEC);
+                size_t len = strnlen(interp_path.data(), interp_path.size());
+                co_return std::string(interp_path.data(), len);
             }
         }
     } else {
@@ -152,6 +159,229 @@ pmos::async::task<std::expected<std::optional<std::string>, int>> get_interprete
     }
 
     co_return {};
+}
+
+pmos::async::task<std::expected<uint64_t /* reloc offset */, int>> load_into_memory(uint64_t page_table, pmos::Right &file_handle)
+{
+    Elf32_Ehdr ehdr;
+    uint64_t reloc_offset = 0;
+    const auto page_size = getpagesize();
+
+    auto read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)&ehdr, sizeof(ehdr)), 0);
+    if (!read_result)
+        co_return std::unexpected(read_result.error());
+
+    bool is_relocatable = (ehdr.e_type == ET_DYN);
+
+    if (ehdr.e_ident[4] == R_LARCH_32) {
+        uint32_t phdr_size = ehdr.e_phentsize;
+        uint32_t phdr_count = ehdr.e_phnum;
+        uint32_t total_size = phdr_size * phdr_count;
+        std::vector<uint8_t> phdr_data(total_size);
+        auto phdr_read_result = co_await read_file(file_handle, phdr_data, ehdr.e_phoff);
+        if (!phdr_read_result)
+            co_return std::unexpected((int)phdr_read_result.error());
+
+        const uint32_t page_mask = page_size - 1;
+
+        if (is_relocatable) {
+            uint32_t min_page = UINT_MAX, max_page = 0;
+
+            for (uint32_t i = 0; i < phdr_count; ++i) {
+                Elf32_Phdr *phdr = reinterpret_cast<Elf32_Phdr *>(phdr_data.data() + i * phdr_size);
+                if (phdr->p_type != PT_LOAD)
+                    continue;
+
+                uint32_t start_page = phdr->p_vaddr & ~page_mask;
+                uint32_t end_page   = ((phdr->p_vaddr & page_mask) + phdr->p_memsz + page_mask) & ~page_mask;
+
+                if (start_page < min_page)
+                    min_page = start_page;
+                if (end_page > max_page)
+                    max_page = end_page;
+            }
+
+            auto c_result = create_normal_region64(page_table, min_page, max_page - min_page, PROT_READ | PROT_WRITE | PROT_EXEC);
+            if (c_result.result)
+                co_return std::unexpected((int)c_result.result);
+            reloc_offset = c_result.virt_addr_intptr - min_page;
+            release_memory_range64(page_table, min_page, max_page - min_page);
+        }
+
+        auto obj_result = co_await get_mem_object(file_handle, PROT_READ | PROT_EXEC);
+        if (!obj_result)
+            co_return std::unexpected(obj_result.error());
+        auto mem_object = std::move(obj_result.value());
+
+        for (uint32_t i = 0; i < phdr_count; ++i) {
+            Elf32_Phdr *phdr = reinterpret_cast<Elf32_Phdr *>(phdr_data.data() + i * phdr_size);
+            if (phdr->p_type != PT_LOAD)
+                continue;
+
+            if ((phdr->p_vaddr & 0xfff) != (phdr->p_offset & 0xfff))
+                co_return std::unexpected(-ENOEXEC);
+
+            if (!(phdr->p_flags & PF_W)) {
+                // Direct map
+
+                const uint32_t region_start = phdr->p_vaddr & ~page_mask;
+                const uint32_t file_offset  = phdr->p_offset & ~page_mask;
+                const uint32_t size         = ((phdr->p_vaddr & page_mask) + phdr->p_memsz + page_mask) & ~page_mask;
+
+                unsigned protection = CREATE_FLAG_FIXED;
+                if (phdr->p_flags & PF_X)
+                    protection |= PROT_EXEC;
+                if (phdr->p_flags & PF_R)
+                    protection |= PROT_READ;
+
+                map_mem_object_param_t map_params = {
+                    .page_table_id = page_table,
+                    .object_right = mem_object.get(),
+                    .addr_start_uint = region_start + reloc_offset,
+                    .size = size,
+                    .offset_object = file_offset,
+                    .object_size = size,
+                    .access_flags = protection,
+                };
+                if (auto mem_request = map_mem_object(&map_params); mem_request.result)
+                    co_return std::unexpected((int)mem_request.result);
+            } else {
+                // Copy on write
+
+                const uint32_t region_start = phdr->p_vaddr & ~page_mask;
+                const uint32_t size         = ((phdr->p_vaddr & page_mask) + phdr->p_memsz + page_mask) & ~page_mask;
+                const uint32_t file_offset  = phdr->p_offset & ~page_mask;
+                const uint32_t file_size    = phdr->p_offset + phdr->p_filesz - file_offset;
+
+                unsigned protection = CREATE_FLAG_COW | CREATE_FLAG_FIXED | PROT_WRITE;
+                if (phdr->p_flags & PF_X)
+                    protection |= PROT_EXEC;
+                if (phdr->p_flags & PF_R)
+                    protection |= PROT_READ;
+
+                map_mem_object_param_t map_params = {
+                    .page_table_id = page_table,
+                    .object_right = mem_object.get(),
+                    .addr_start_uint = region_start + reloc_offset,
+                    .size = size,
+                    .offset_object = file_offset,
+                    .object_size = file_size,
+                    .access_flags = protection,
+                };
+                if (auto mem_request = map_mem_object(&map_params); mem_request.result)
+                    co_return std::unexpected((int)mem_request.result);
+            }
+        }
+    } else if (ehdr.e_ident[4] == R_LARCH_64) {
+        Elf64_Ehdr ehdr;
+        auto read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)&ehdr, sizeof(ehdr)), 0);
+        if (!read_result)
+            co_return std::unexpected((int)read_result.error());
+
+        uint64_t phdr_size = ehdr.e_phentsize;
+        uint64_t phdr_count = ehdr.e_phnum;
+        uint64_t total_size = phdr_size * phdr_count;
+        std::vector<uint8_t> phdr_data(total_size);
+        auto phdr_read_result = co_await read_file(file_handle, phdr_data, ehdr.e_phoff);
+        if (!phdr_read_result)
+            co_return std::unexpected((int)phdr_read_result.error());
+    
+        const uint64_t page_mask = page_size - 1;
+        
+        if (is_relocatable) {
+            const uint64_t page_mask = page_size - 1;
+            uint64_t min_page = UINT_MAX, max_page = 0;
+
+            for (uint64_t i = 0; i < phdr_count; ++i) {
+                Elf64_Phdr *phdr = reinterpret_cast<Elf64_Phdr *>(phdr_data.data() + i * phdr_size);
+                if (phdr->p_type != PT_LOAD)
+                    continue;
+
+                uint64_t start_page = phdr->p_vaddr & ~page_mask;
+                uint64_t end_page   = ((phdr->p_vaddr & page_mask) + phdr->p_memsz + page_mask) & ~page_mask;
+
+                if (start_page < min_page)
+                    min_page = start_page;
+                if (end_page > max_page)
+                    max_page = end_page;
+            }
+
+            auto c_result = create_normal_region64(page_table, min_page, max_page - min_page, PROT_READ | PROT_WRITE | PROT_EXEC);
+            if (c_result.result)
+                co_return std::unexpected((int)c_result.result);
+            reloc_offset = c_result.virt_addr_intptr - min_page;
+            release_memory_range64(page_table, min_page, max_page - min_page);
+        }
+
+        auto obj_result = co_await get_mem_object(file_handle, PROT_READ | PROT_EXEC);
+        if (!obj_result)
+            co_return std::unexpected(obj_result.error());
+        auto mem_object = std::move(obj_result.value());
+
+        for (uint64_t i = 0; i < phdr_count; ++i) {
+            Elf64_Phdr *phdr = reinterpret_cast<Elf64_Phdr *>(phdr_data.data() + i * phdr_size);
+            if (phdr->p_type != PT_LOAD)
+                continue;
+
+            if ((phdr->p_vaddr & 0xfff) != (phdr->p_offset & 0xfff))
+                co_return std::unexpected(-ENOEXEC);
+
+            if (!(phdr->p_flags & PF_W)) {
+                // Direct map
+
+                const uint64_t region_start = phdr->p_vaddr & ~page_mask;
+                const uint64_t file_offset  = phdr->p_offset & ~page_mask;
+                const uint64_t size         = ((phdr->p_vaddr & page_mask) + phdr->p_memsz + page_mask) & ~page_mask;
+
+                unsigned protection = CREATE_FLAG_FIXED;
+                if (phdr->p_flags & PF_X)
+                    protection |= PROT_EXEC;
+                if (phdr->p_flags & PF_R)
+                    protection |= PROT_READ;
+
+                map_mem_object_param_t map_params = {
+                    .page_table_id = page_table,
+                    .object_right = mem_object.get(),
+                    .addr_start_uint = region_start + reloc_offset,
+                    .size = size,
+                    .offset_object = file_offset,
+                    .object_size = size,
+                    .access_flags = protection,
+                };
+                if (auto mem_request = map_mem_object(&map_params); mem_request.result)
+                    co_return std::unexpected((int)mem_request.result);
+            } else {
+                // Copy on write
+
+                const uint64_t region_start = phdr->p_vaddr & ~page_mask;
+                const uint64_t size         = ((phdr->p_vaddr & page_mask) + phdr->p_memsz + page_mask) & ~page_mask;
+                const uint64_t file_offset  = phdr->p_offset & ~page_mask;
+                const uint64_t file_size    = phdr->p_offset + phdr->p_filesz - file_offset;
+
+                unsigned protection = CREATE_FLAG_COW | CREATE_FLAG_FIXED | PROT_WRITE;
+                if (phdr->p_flags & PF_X)
+                    protection |= PROT_EXEC;
+                if (phdr->p_flags & PF_R)
+                    protection |= PROT_READ;
+
+                map_mem_object_param_t map_params = {
+                    .page_table_id = page_table,
+                    .object_right = mem_object.get(),
+                    .addr_start_uint = region_start + reloc_offset,
+                    .size = size,
+                    .offset_object = file_offset,
+                    .object_size = file_size,
+                    .access_flags = protection,
+                };
+                if (auto mem_request = map_mem_object(&map_params); mem_request.result)
+                    co_return std::unexpected((int)mem_request.result);
+            }
+        }
+    } else {
+        co_return std::unexpected(-ENOEXEC);
+    }
+
+    co_return reloc_offset;
 }
 
 pmos::async::task<std::expected<void, int>> load_executable(uint64_t task_id, pmos::Right &file_handle, std::shared_ptr<Process> process)
@@ -207,6 +437,30 @@ pmos::async::task<std::expected<void, int>> load_executable(uint64_t task_id, pm
     if (pt_request.result)
         co_return std::unexpected((int)pt_request.result);
     pmos_pagetable_t page_table_id = pt_request.page_table;
+
+    uint64_t interp_reloc_offset = 0;
+    uint64_t reloc_offset = 0;
+
+    if (interp && !interp_is_relocatable) {
+        auto result = co_await load_into_memory(page_table_id, interp_handle);
+        if (!result)
+            co_return std::unexpected(result.error());
+
+        interp_reloc_offset = result.value();
+    }
+
+    auto result = co_await load_into_memory(page_table_id, file_handle);
+    if (!result)
+        co_return std::unexpected(result.error());
+    reloc_offset = result.value();
+
+    if (interp && interp_is_relocatable) {
+        auto result = co_await load_into_memory(page_table_id, interp_handle);
+        if (!result)
+            co_return std::unexpected(result.error());
+
+        interp_reloc_offset = result.value();
+    }
 
     kernelLogger() << "processd: load_executable: assigned page table " << page_table_id << " for task " << task_id << "\n" << frg::endlog;
     co_return std::unexpected(-ENOSYS);
