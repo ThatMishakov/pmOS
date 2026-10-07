@@ -172,20 +172,44 @@ pmos::async::task<std::expected<void, int>> load_executable(uint64_t task_id, pm
     if (ehdr.e_type != ET_EXEC && ehdr.e_type != ET_DYN)
         co_return std::unexpected(-ENOEXEC);
 
-    page_table_req_ret_t pt_request = assign_page_table(task_id, 0, PAGE_TABLE_CREATE, ehdr.e_machine);
-    if (pt_request.result)
-        co_return std::unexpected((int)pt_request.result);
-    pmos_pagetable_t page_table_id = pt_request.page_table;
-
     auto interp_path_result = co_await get_interpreter_path(file_handle);
     if (!interp_path_result)
         co_return std::unexpected(interp_path_result.error());
     
     auto interp = std::move(interp_path_result.value());
-    if (interp)
-        kernelLogger() << "processd: load_executable: interpreter path: " << interp.value() << "\n" << frg::endlog;
+    pmos::Right interp_handle;
+    bool interp_is_relocatable = false;
+    if (interp) {
+        auto interp_file = co_await get_file_handle(*interp, process);
+        if (!interp_file)
+            co_return std::unexpected(interp_file.error());
+        interp_handle = std::move(interp_file.value());
+
+        Elf32_Ehdr interp_ehdr;
+        auto interp_read_result = co_await read_file(interp_handle, std::span<uint8_t>((uint8_t *)&interp_ehdr, sizeof(interp_ehdr)), 0);
+        if (!interp_read_result)
+            co_return std::unexpected((int)interp_read_result.error());
+
+        if (memcmp(&interp_ehdr.e_ident, ELFMAG, SELFMAG))
+            co_return std::unexpected(-ENOEXEC);
+        if (interp_ehdr.e_ident[5] != ELF_ENDIANNESS)
+            co_return std::unexpected(-ENOEXEC);
+        if (interp_ehdr.e_type != ET_EXEC && interp_ehdr.e_type != ET_DYN)
+            co_return std::unexpected(-ENOEXEC);
+
+        if (interp_ehdr.e_machine != ehdr.e_machine)
+            co_return std::unexpected(-ENOEXEC);
+
+        interp_is_relocatable = (interp_ehdr.e_type == ET_DYN);
+    }
+
+    page_table_req_ret_t pt_request = assign_page_table(task_id, 0, PAGE_TABLE_CREATE, ehdr.e_machine);
+    if (pt_request.result)
+        co_return std::unexpected((int)pt_request.result);
+    pmos_pagetable_t page_table_id = pt_request.page_table;
 
     kernelLogger() << "processd: load_executable: assigned page table " << page_table_id << " for task " << task_id << "\n" << frg::endlog;
+    co_return std::unexpected(-ENOSYS);
 }
 
 pmos::async::detached_task execve_handle(std::shared_ptr<Process> process, std::vector<std::byte> data, pmos::Right reply_right, pmos::Right fs_right, pmos::Right task_group_right)
