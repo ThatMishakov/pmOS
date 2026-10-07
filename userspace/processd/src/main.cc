@@ -476,6 +476,16 @@ pmos::async::task<std::expected<void, int>> load_executable(uint64_t task_id, pm
             throw std::bad_alloc();
     }
 
+    auto &builder_envs = auxvec_builder.envp();
+    for (const auto &env : envs) {
+        pmos::containers::string str;
+        if (!str.assign(env))
+            throw std::bad_alloc();
+        
+        if (!builder_envs.push_back(std::move(str)))
+            throw std::bad_alloc();
+    }
+
     auto &auxvals = auxvec_builder.auxvec();
 
     kernelLogger() << "processd: load_executable: assigned page table " << page_table_id << " for task " << task_id << "\n" << frg::endlog;

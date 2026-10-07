@@ -119,7 +119,7 @@ inline size_t ElFAuxvecBuilder::strings_size_aligned() const
 
 inline pmos::containers::vector<ElFAuxvecBuilder::AuxVecVal> &ElFAuxvecBuilder::auxvec() { return auxvec_; }
 inline pmos::containers::vector<pmos::containers::string> &ElFAuxvecBuilder::args() { return args_; }
-
+inline pmos::containers::vector<pmos::containers::string> &ElFAuxvecBuilder::envp() { return envp_; }
 template<class... Ts>
 struct overloads : Ts... { using Ts::operator()...; };
 
