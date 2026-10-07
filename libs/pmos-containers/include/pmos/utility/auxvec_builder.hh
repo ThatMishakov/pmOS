@@ -1,6 +1,6 @@
 #pragma once
 #include <pmos/containers/vector.hh>
-#include <lib/string.hh>
+#include <pmos/containers/string.hh>
 #include <cstdint>
 #include <utility>
 #include <cstddef>
@@ -29,11 +29,11 @@ public:
         W64bit,
     };
 
-    pmos::containers::vector<klib::string> &args();
-    const pmos::containers::vector<klib::string> &args() const;
+    pmos::containers::vector<pmos::containers::string> &args();
+    const pmos::containers::vector<pmos::containers::string> &args() const;
 
-    pmos::containers::vector<klib::string> &envp();
-    const pmos::containers::vector<klib::string> &envp() const;
+    pmos::containers::vector<pmos::containers::string> &envp();
+    const pmos::containers::vector<pmos::containers::string> &envp() const;
 
     pmos::containers::vector<AuxVecVal> &auxvec();
     const pmos::containers::vector<AuxVecVal> &auxvec() const;
@@ -49,8 +49,8 @@ public:
 
     bool is_64bit() const;
 protected:
-    pmos::containers::vector<klib::string> args_;
-    pmos::containers::vector<klib::string> envp_;
+    pmos::containers::vector<pmos::containers::string> args_;
+    pmos::containers::vector<pmos::containers::string> envp_;
     pmos::containers::vector<AuxVecVal> auxvec_;
     PtrWidth ptr_width_;
 
@@ -92,12 +92,12 @@ inline size_t ElFAuxvecBuilder::strings_size_aligned() const
 
     size_t size = 0;
     size += std::accumulate(args_.begin(), args_.end(), (size_t)0,
-        [](size_t acc, const klib::string &str) {
+        [](size_t acc, const pmos::containers::string &str) {
             return acc + str.size() + 1;
         }
     );
     size += std::accumulate(envp_.begin(), envp_.end(), (size_t)0,
-        [](size_t acc, const klib::string &str) {
+        [](size_t acc, const pmos::containers::string &str) {
             return acc + str.size() + 1;
         }
     );
@@ -118,7 +118,7 @@ inline size_t ElFAuxvecBuilder::strings_size_aligned() const
 }
 
 inline pmos::containers::vector<ElFAuxvecBuilder::AuxVecVal> &ElFAuxvecBuilder::auxvec() { return auxvec_; }
-inline pmos::containers::vector<klib::string> &ElFAuxvecBuilder::args() { return args_; }
+inline pmos::containers::vector<pmos::containers::string> &ElFAuxvecBuilder::args() { return args_; }
 
 template<class... Ts>
 struct overloads : Ts... { using Ts::operator()...; };

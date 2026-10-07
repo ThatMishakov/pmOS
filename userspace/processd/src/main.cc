@@ -54,6 +54,7 @@
 #include <elf.h>
 #include <pmos/memory.h>
 #include <sys/mman.h>
+#include <pmos/utility/auxvec_builder.hh>
 
 void KernelSink::operator()(const char *message)
 {
@@ -384,7 +385,7 @@ pmos::async::task<std::expected<uint64_t /* reloc offset */, int>> load_into_mem
     co_return reloc_offset;
 }
 
-pmos::async::task<std::expected<void, int>> load_executable(uint64_t task_id, pmos::Right &file_handle, std::shared_ptr<Process> process)
+pmos::async::task<std::expected<void, int>> load_executable(uint64_t task_id, pmos::Right &file_handle, std::shared_ptr<Process> process, std::vector<std::string> args, std::vector<std::string> envs)
 {
     Elf32_Ehdr ehdr;
 
@@ -462,6 +463,21 @@ pmos::async::task<std::expected<void, int>> load_executable(uint64_t task_id, pm
         interp_reloc_offset = result.value();
     }
 
+    pmos::utility::ElFAuxvecBuilder auxvec_builder;
+    auxvec_builder.set_width(ehdr.e_ident[4] == R_LARCH_32 ? pmos::utility::ElFAuxvecBuilder::PtrWidth::W32bit : pmos::utility::ElFAuxvecBuilder::PtrWidth::W64bit);
+
+    auto &builder_args = auxvec_builder.args();
+    for (const auto &arg : args) {
+        pmos::containers::string str;
+        if (!str.assign(arg))
+            throw std::bad_alloc();
+
+        if (!builder_args.push_back(std::move(str)))
+            throw std::bad_alloc();
+    }
+
+    auto &auxvals = auxvec_builder.auxvec();
+
     kernelLogger() << "processd: load_executable: assigned page table " << page_table_id << " for task " << task_id << "\n" << frg::endlog;
     co_return std::unexpected(-ENOSYS);
 }
@@ -527,7 +543,7 @@ pmos::async::detached_task execve_handle(std::shared_ptr<Process> process, std::
 
     syscall_set_task_name(new_task.value, path.c_str(), path.size());
 
-    auto exec_result = co_await load_executable(new_task.value, file_handle.value(), process);
+    auto exec_result = co_await load_executable(new_task.value, file_handle.value(), process, std::move(args), std::move(envs));
     if (!exec_result) {
         execve_reply(std::move(reply_right), exec_result.error());
         co_return;

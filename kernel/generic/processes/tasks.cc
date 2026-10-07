@@ -740,10 +740,8 @@ ReturnStr<bool>
     }
 
     {
-        auto str = name.clone();
-        if (str.empty())
-            str = "<unknown>";
-        if (str.empty())
+        pmos::containers::string str;
+        if (!str.assign(name))
             return Error(-ENOMEM);
             
         if (!args.push_back(std::move(str)))
