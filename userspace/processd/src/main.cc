@@ -488,6 +488,115 @@ pmos::async::task<std::expected<void, int>> load_executable(uint64_t task_id, pm
 
     auto &auxvals = auxvec_builder.auxvec();
 
+    size_t stack_size = 16 * 1024 * 1024; // 16 MB stack
+    auto stack_result = create_normal_region(page_table_id, nullptr, stack_size, PROT_NONE);
+    if (stack_result.result)
+        co_return std::unexpected((int)stack_result.result);
+
+    if (!auxvals.push_back({AT_USRSTACKBASE, stack_result.virt_addr_intptr}))
+        throw std::bad_alloc();
+    if (!auxvals.push_back({AT_USRSTACKLIM, stack_result.virt_addr_intptr + stack_size}))
+        throw std::bad_alloc();
+
+    if (!auxvals.push_back({AT_PAGESZ, getpagesize()}))
+        throw std::bad_alloc();
+
+    // Pheader stuff
+    if (ehdr.e_ident[4] == R_LARCH_32) {
+        if (!auxvals.push_back({AT_PHDR, (uint64_t)(ehdr.e_phoff + reloc_offset)}))
+            throw std::bad_alloc();
+        if (!auxvals.push_back({AT_PHENT, (uint64_t)ehdr.e_phentsize}))
+            throw std::bad_alloc();
+        if (!auxvals.push_back({AT_PHNUM, (uint64_t)ehdr.e_phnum}))
+            throw std::bad_alloc();
+
+        if (!auxvals.push_back({AT_ENTRY, ehdr.e_entry + reloc_offset}))
+            throw std::bad_alloc();
+    } else {
+        Elf64_Ehdr ehdr64;
+        auto read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)&ehdr64, sizeof(ehdr64)), 0);
+        if (!read_result)
+            co_return std::unexpected((int)read_result.error());
+
+        if (!auxvals.push_back({AT_PHDR, ehdr64.e_phoff + reloc_offset}))
+            throw std::bad_alloc();
+        if (!auxvals.push_back({AT_PHENT, (uint64_t)ehdr64.e_phentsize}))
+            throw std::bad_alloc();
+        if (!auxvals.push_back({AT_PHNUM, (uint64_t)ehdr64.e_phnum}))
+            throw std::bad_alloc();
+
+        if (!auxvals.push_back({AT_ENTRY, ehdr64.e_entry + reloc_offset}))
+            throw std::bad_alloc();
+    }
+
+    if (interp) {
+        if (!auxvals.push_back({AT_BASE, interp_reloc_offset}))
+            throw std::bad_alloc();
+    }
+
+    auto group = create_task_group();
+    if (group.result)
+        co_return std::unexpected((int)group.result);
+    pmos::utility::scope_guard group_guard([=]{
+        remove_task_from_group(TASK_ID_SELF, group.value);
+    });
+
+    auto add_result = add_task_to_group(task_id, group.value);
+    if (add_result)
+        co_return std::unexpected((int)add_result);
+    uint64_t group_id = group.value;
+
+    {
+        auto arr = std::bit_cast<std::array<std::byte, sizeof(group_id)>>(group_id);
+        auto vec = pmos::containers::vector<std::byte>();
+        if (!vec.append_range(arr))
+            throw std::bad_alloc();
+
+        if (!auxvals.push_back({AT_TASK_GROUP_ID, std::move(vec)}))
+            throw std::bad_alloc();
+    }
+
+    auto right = main_port.create_right(pmos::RightType::SendMany);
+    auto [send_right, receive_right] = std::move(right.value());
+
+    {
+        auto transfer_result = transfer_right(group_id, send_right.get(), 0);
+        if (transfer_result.result)
+            co_return std::unexpected(transfer_result.result);
+        send_right.release();
+
+        auto right_id = transfer_result.right;
+        auto arr = std::bit_cast<std::array<std::byte, sizeof(right_id)>>(right_id);
+        auto vec = pmos::containers::vector<std::byte>();
+        if (!vec.append_range(arr))
+            throw std::bad_alloc();
+        if (!auxvals.push_back({AT_POSIX_RIGHT, std::move(vec)}))
+            throw std::bad_alloc();
+    }
+
+    auto s_reg = create_normal_region(PAGE_TABLE_SELF, NULL, stack_size, PROT_READ | PROT_WRITE | CREATE_FLAG_COW);
+    if (s_reg.result)
+        co_return std::unexpected((int)s_reg.result);
+    pmos::utility::scope_guard s_reg_guard([=]{
+        release_memory_range(PAGE_TABLE_SELF, s_reg.virt_addr, stack_size);
+    });
+
+    auto data = auxvec_builder.serialize(stack_result.virt_addr_intptr + stack_size);
+    if (!data)
+        throw std::bad_alloc();
+    auto vec = std::move(data.value());
+
+    memcpy((void *)(s_reg.virt_addr_intptr + stack_size - vec.size()), vec.data(), vec.size());
+
+    auto t_res = transfer_region(page_table_id, s_reg.virt_addr, stack_result.virt_addr_intptr, PROT_READ | PROT_WRITE | CREATE_FLAG_FIXED);
+    if (t_res.result)
+        co_return std::unexpected((int)t_res.result);
+    s_reg_guard.release();
+
+    auto sr = init_stack(task_id, stack_result.virt_addr_intptr + stack_size - vec.size());
+    if (sr.result)
+        co_return std::unexpected((int)sr.result);
+
     kernelLogger() << "processd: load_executable: assigned page table " << page_table_id << " for task " << task_id << "\n" << frg::endlog;
     co_return std::unexpected(-ENOSYS);
 }
