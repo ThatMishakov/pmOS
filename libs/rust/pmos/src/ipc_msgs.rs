@@ -404,6 +404,25 @@ pub struct IPCFSStatDynamic {
     pub inode: u64,
 }
 
+pub const IPC_FS_READLINK_NUM: u32 = 0xC8;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCFSReadlink {
+    msg_type: u32,
+    pub flags: u32,
+    pub inode: u64,
+}
+
+impl IPCFSReadlink {
+    pub fn new(flags: u32, inode: u64) -> Self {
+        Self {
+            msg_type: IPC_FS_READLINK_NUM,
+            flags,
+            inode,
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct IPCFSResolvePathHdr {
@@ -535,6 +554,23 @@ pub struct IPCFSStatDynamicReply {
     pub st_btim_tv_nsec: u64,
     pub st_blocks: u64,
 }
+
+pub const IPC_FS_READLINK_REPLY_NUM: u32 = 0xDA;
+pub struct IPCFSReadlinkReply<'a> {
+    pub result: i32,
+    pub link_target: &'a [u8],
+}
+
+impl Serializable for IPCFSReadlinkReply<'_> {
+    fn serialize(&self) -> Cow<'_, [u8]> {
+        let mut out = Vec::with_capacity(core::mem::size_of::<u32>() + core::mem::size_of::<i32>() + self.link_target.len());
+        out.extend_from_slice(&(IPC_FS_READLINK_REPLY_NUM as u32).to_ne_bytes());
+        out.extend_from_slice(&(self.result as i32).to_ne_bytes());
+        out.extend_from_slice(self.link_target);
+        Cow::from(out)
+    }
+}
+
 
 impl IPCFSStatDynamicReply {
     pub fn new(result: i16, st_size: u64, st_nlink: u64, st_atim_tv_nsec: u64, st_mtim_tv_nsec: u64, st_ctim_tv_nsec: u64, st_btim_tv_nsec: u64, st_blocks: u64) -> Self {
@@ -745,6 +781,7 @@ pub enum Message<'a> {
     IPCGetObject(IPCGetObject),
     IPCFSOpen(IPCFSOpen),
     IPCFSStatDynamic(IPCFSStatDynamic),
+    IPCFSReadlink(IPCFSReadlink),
     IPCMountFS(IPCMountFS),
     IPCMountFSReply(IPCMountFSReply),
     IPCOpen(IPCOpen),
@@ -843,6 +880,8 @@ impl super::ipc::Message {
                 }
                 IPC_FS_STAT_DYNAMIC_NUM =>
                     try_from_bytes::<IPCFSStatDynamic>(data).map(|data| Message::IPCFSStatDynamic(data.clone())).unwrap_or(Message::Unknown),
+                IPC_FS_READLINK_NUM =>
+                    try_from_bytes::<IPCFSReadlink>(data).map(|data| Message::IPCFSReadlink(data.clone())).unwrap_or(Message::Unknown),
                 IPC_READ_NUM =>
                     try_from_bytes::<IPCRead>(data).map(|data| Message::IPCRead(data.clone())).unwrap_or(Message::Unknown),
                 IPC_SEEK_NUM =>

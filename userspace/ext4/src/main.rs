@@ -739,6 +739,58 @@ async fn ipc_handle_state(executor: Executor, reply_right: Option<SendRight>, fs
     }
 }
 
+fn ipc_handle_readlink_reply(reply_right: Option<SendRight>, result: i32, link_target: &[u8]) {
+    let msg = pmos::ipc_msgs::IPCFSReadlinkReply{
+        result,
+        link_target,
+    };
+
+    if let Some(reply_right) = reply_right {
+        let result = send_message_right(&msg, &mut Some(reply_right), &mut [None, None, None, None]);
+        if let Err(e) = result {
+            eprintln!("ext4: Failed to send IPCFSReadlinkReply message: {}", e.0);
+        }
+    }
+}
+
+async fn ipc_handle_readlink(executor: Executor, reply_right: Option<SendRight>, fs: Ext4, inode: u64) {
+    let inode = u32::try_from(inode).ok().and_then(NonZeroU32::new);
+    if inode.is_none() {
+        ipc_handle_readlink_reply(reply_right, -libc::ENOENT as i32, &[]);
+        return;
+    }
+    let inode = inode.unwrap();
+
+    let inode = Inode::read(&fs, inode).await;
+    if let Err(e) = inode {
+        ipc_handle_readlink_reply(reply_right, ext4error_to_int(e), &[]);
+        return;
+    }
+    let inode = inode.unwrap();
+
+
+    if inode.file_type() != FileType::Symlink {
+        ipc_handle_readlink_reply(reply_right, -libc::EINVAL as i32, &[]);
+        return;
+    }
+
+    let target = inode.symlink_target(&fs).await;
+    if let Err(e) = target {
+        ipc_handle_readlink_reply(reply_right, ext4error_to_int(e), &[]);
+        return;
+    }
+    let target = target.unwrap();
+
+    let target = inode.symlink_target(&fs).await;
+    if let Err(e) = target {
+        ipc_handle_readlink_reply(reply_right, ext4error_to_int(e), &[]);
+        return;
+    }
+    let target = target.unwrap();
+
+    ipc_handle_readlink_reply(reply_right, 0, target.as_ref());
+}
+
 async fn ipc_handle(executor: Executor, mut receiver: ManyReceiver, fs: Ext4) {
     let shared_state = Rc::new(RefCell::new(State {
         memory_objects: BTreeMap::new(),
@@ -754,6 +806,9 @@ async fn ipc_handle(executor: Executor, mut receiver: ManyReceiver, fs: Ext4) {
             }
             pmos::ipc_msgs::Message::IPCFSStatDynamic(req) => {
                 executor.spawn(ipc_handle_state(executor.clone(), reply_right, fs.clone(), req.inode));
+            }
+            pmos::ipc_msgs::Message::IPCFSReadlink(req) => {
+                executor.spawn(ipc_handle_readlink(executor.clone(), reply_right, fs.clone(), req.inode));
             }
             _ => {
                 eprintln!("ext4: Received unexpected message type {}", msg.get_known_id().unwrap_or(0));

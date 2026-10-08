@@ -31,6 +31,11 @@ struct Filesystem {
     virtual std::expected<std::shared_ptr<VNode>, int> resolve_child(std::shared_ptr<VNode> parent, const std::string &name) = 0;
     virtual pmos::async::task<std::expected<pmos::Right, int>> open_file(std::shared_ptr<VNode> vnode, std::shared_ptr<Process> process) = 0;
     virtual pmos::async::task<std::expected<StatData, int>> get_file_stat_dynamic(std::shared_ptr<VNode> vnode) = 0;
+    virtual pmos::async::task<std::expected<std::string, int>> read_symlink(std::shared_ptr<VNode> vnode)
+    {
+        (void)vnode;
+        co_return std::unexpected(-ENOSYS);
+    }
 
     virtual ~Filesystem() = default;
 };
@@ -41,6 +46,7 @@ struct ExternalFilesystem: public Filesystem {
     std::expected<std::shared_ptr<VNode>, int> resolve_child(std::shared_ptr<VNode> parent, const std::string &name) override;
     pmos::async::task<std::expected<pmos::Right, int>> open_file(std::shared_ptr<VNode> vnode, std::shared_ptr<Process> process) override;
     pmos::async::task<std::expected<StatData, int>> get_file_stat_dynamic(std::shared_ptr<VNode> vnode) override;
+    pmos::async::task<std::expected<std::string, int>> read_symlink(std::shared_ptr<VNode> vnode) override;
 };
 
 enum class FileType {
@@ -48,6 +54,7 @@ enum class FileType {
     File,
     Directory,
     CharacterDevice,
+    Symlink,
     // TODO
 };
 
@@ -96,6 +103,10 @@ struct VNode: public std::enable_shared_from_this<VNode> {
     inline bool is_directory() const
     {
         return type == FileType::Directory;
+    }
+    inline bool is_link() const
+    {
+        return type == FileType::Symlink;
     }
 
     pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> resolve_child(const std::string &name);

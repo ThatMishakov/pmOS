@@ -70,50 +70,78 @@ pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> get_root_vnode()
     co_return co_await RootNodeWaiter{};
 }
 
-pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> resolve_path(std::string path, std::shared_ptr<VNode> current_vnode = nullptr, std::shared_ptr<VNode> root_vnode = nullptr)
+pmos::async::task<std::expected<std::string, int>> read_symlink(std::shared_ptr<VNode> vnode)
 {
-    auto p = Path::parse(path);
+    assert(vnode);
+    assert(vnode->is_link());
 
-    // Start at root, since getcwd is not implemented
-    if (!root_vnode) {
-        auto root = co_await get_root_vnode();
-        if (!root)
-            co_return root;
-        root_vnode = std::move(root.value());
-    }
+    auto fs = vnode->parent_fs;
+    assert(fs);
+
+    auto result = co_await fs->read_symlink(vnode);
+    co_return result;
+}
+
+pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> resolve_path(std::string path, std::shared_ptr<VNode> current_vnode = nullptr, std::shared_ptr<VNode> root_vnode = nullptr, bool follow_symlinks = true)
+{
+    int symlink_count = 0;
+
+    while (symlink_count < 40) { // SYMLOOP_MAX
+        ++symlink_count;
+
+        auto p = Path::parse(path);
+
+        // Start at root, since getcwd is not implemented
+        if (!root_vnode) {
+            auto root = co_await get_root_vnode();
+            if (!root)
+                co_return root;
+            root_vnode = std::move(root.value());
+        }
 
 
-    if (!current_vnode || !p.relative()) {
-        current_vnode = root_vnode;
-    }
+        if (!current_vnode || !p.relative()) {
+            current_vnode = root_vnode;
+        }
 
-    for (auto i : p.components()) {
-        assert(!i.empty());
-        if (!current_vnode->is_directory())
+        for (auto i : p.components()) {
+            assert(!i.empty());
+            if (!current_vnode->is_directory())
+                co_return std::unexpected(-ENOTDIR);
+
+            if (i == ".") {
+                continue;
+            } else if (i == "..") {
+                if (current_vnode == root_vnode)
+                    continue;
+
+                current_vnode = current_vnode->parent.lock();
+                assert(current_vnode);
+                continue;
+            } else {
+                auto p = co_await current_vnode->resolve_child(i);
+                if (!p)
+                    co_return p;
+
+                current_vnode = p.value();
+            }
+        }
+
+        if (p.trailing_slash() && !current_vnode->is_directory())
             co_return std::unexpected(-ENOTDIR);
 
-        if (i == ".") {
-            continue;
-        } else if (i == "..") {
-            if (current_vnode == root_vnode)
-                continue;
+        if (!follow_symlinks || !current_vnode->is_link())
+            co_return current_vnode;
 
-            current_vnode = current_vnode->parent.lock();
-            assert(current_vnode);
-            continue;
-        } else {
-            auto p = co_await current_vnode->resolve_child(i);
-            if (!p)
-                co_return p;
+        auto symlink_path = co_await read_symlink(current_vnode);
+        if (!symlink_path)
+            co_return std::unexpected(symlink_path.error());
 
-            current_vnode = p.value();
-        }
+        path = std::move(symlink_path.value());
+        current_vnode = current_vnode->parent.lock();
     }
 
-    if (p.trailing_slash() && !current_vnode->is_directory())
-        co_return std::unexpected(-ENOTDIR);
-
-    co_return current_vnode;
+    co_return std::unexpected(-ELOOP);
 }
 
 pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right fs_right, const std::string &mountpoint, int64_t root_inode)
@@ -328,6 +356,8 @@ pmos::async::detached_task open_file(pmos::Right reply_right, std::string path, 
         open_file_error_reply(reply_right, -EISDIR);
         co_return;
     }
+
+    kernelLogger() << "posixd: Opening file " << vnode->path() << " with inode " << vnode->inode << " type " << static_cast<int>(vnode->type) << "\n" << frg::endlog;
 
     auto fs_right = co_await vnode->parent_fs->open_file(vnode, process);
     if (!fs_right) {
@@ -719,6 +749,9 @@ FileType file_type_from_ipc(uint32_t ipc_file_type)
     case IPC_FILE_TYPE_CHAR:
         result = FileType::CharacterDevice;
         break;
+    case IPC_FILE_TYPE_LINK:
+        result = FileType::Symlink;
+        break;
     default:
         // TODO!
         break;
@@ -747,4 +780,43 @@ std::string VNode::path() const
         }
     }
     return result.empty() ? "/" : result;
+}
+
+pmos::async::task<std::expected<std::string, int>> ExternalFilesystem::read_symlink(std::shared_ptr<VNode> vnode)
+{
+    IPC_FS_Readlink req = {
+        .type  = IPC_FS_Readlink_NUM,
+        .flags = 0,
+        .inode = vnode->inode,
+    };
+
+    auto reply_right = pmos::send_message_right_one(fs_right, req, {&main_port, pmos::RightType::SendOnce});
+    if (!reply_right) {
+        kernelLogger() << "posixd: Error " << reply_right.error().first << " sending read symlink message to filesystem\n" << frg::endlog;
+        co_return std::unexpected(reply_right.error().first);
+    }
+
+    auto msg = co_await dispatcher.get_message(reply_right.value());
+    if (!msg) {
+        kernelLogger() << "posixd: Error " << msg.error() << " waiting for read symlink reply from filesystem\n" << frg::endlog;
+        co_return std::unexpected(msg.error());
+    }
+
+    if (msg->descriptor.size < sizeof(IPC_FS_Readlink_Reply)) {
+        kernelLogger() << "posixd: Invalid read symlink reply size " << msg->descriptor.size << "\n" << frg::endlog;
+        co_return std::unexpected(-EIO);
+    }
+
+    auto *reply = reinterpret_cast<IPC_FS_Readlink_Reply *>(msg->data.data());
+    if (reply->type != IPC_FS_Readlink_Reply_NUM) {
+        kernelLogger() << "posixd: Invalid read symlink reply type " << reply->type << "\n" << frg::endlog;
+        co_return std::unexpected(-EIO);
+    }
+
+    if (reply->result_code != 0) {
+        kernelLogger() << "posixd: Filesystem returned error " << reply->result_code << " reading symlink\n" << frg::endlog;
+        co_return std::unexpected(reply->result_code);
+    }
+
+    co_return std::string(reply->path, msg->descriptor.size - sizeof(IPC_FS_Readlink_Reply));
 }
