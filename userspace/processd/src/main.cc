@@ -386,6 +386,56 @@ pmos::async::task<std::expected<uint64_t /* reloc offset */, int>> load_into_mem
     co_return reloc_offset;
 }
 
+pmos::async::task<std::expected<uint64_t, int>> find_phdr_address(pmos::Right &file_handle)
+{
+    Elf32_Ehdr ehdr;
+    auto read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)&ehdr, sizeof(ehdr)), 0);
+    if (!read_result)
+        co_return std::unexpected(read_result.error());
+
+    if (ehdr.e_ident[4] == R_LARCH_32) {
+        uint32_t phdr_size = ehdr.e_phentsize;
+        uint32_t phdr_count = ehdr.e_phnum;
+        uint32_t total_size = phdr_size * phdr_count;
+
+        std::vector<uint8_t> phdr_data(total_size);
+        auto phdr_read_result = co_await read_file(file_handle, phdr_data, ehdr.e_phoff);
+        if (!phdr_read_result)
+            co_return std::unexpected((int)phdr_read_result.error());
+
+        for (uint32_t i = 0; i < phdr_count; ++i) {
+            Elf32_Phdr *phdr = reinterpret_cast<Elf32_Phdr *>(phdr_data.data() + i * phdr_size);
+            if (phdr->p_type == PT_PHDR) {
+                co_return phdr->p_vaddr;
+            }
+        }
+    } else if (ehdr.e_ident[4] == R_LARCH_64) {
+        Elf64_Ehdr ehdr;
+        auto read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)&ehdr, sizeof(ehdr)), 0);
+        if (!read_result)
+            co_return std::unexpected((int)read_result.error());
+
+        uint64_t phdr_size = ehdr.e_phentsize;
+        uint64_t phdr_count = ehdr.e_phnum;
+        uint64_t total_size = phdr_size * phdr_count;
+
+        std::vector<uint8_t> phdr_data(total_size);
+        auto phdr_read_result = co_await read_file(file_handle, phdr_data, ehdr.e_phoff);
+        if (!phdr_read_result)
+            co_return std::unexpected((int)phdr_read_result.error());
+
+        for (uint64_t i = 0; i < phdr_count; ++i) {
+            Elf64_Phdr *phdr = reinterpret_cast<Elf64_Phdr *>(phdr_data.data() + i * phdr_size);
+            if (phdr->p_type == PT_PHDR) {
+                co_return phdr->p_vaddr;
+            }
+        }
+    }
+
+    kernelLogger() << "processd: find_phdr_address: No PT_PHDR found in ELF file\n" << frg::endlog;
+    co_return std::unexpected(-ENOEXEC);
+}
+
 pmos::async::task<std::expected<uint64_t, int>> load_executable(uint64_t task_id, pmos::Right &file_handle, std::shared_ptr<Process> process, std::vector<std::string> args, std::vector<std::string> envs, pmos::Right posix_right)
 {
     Elf32_Ehdr ehdr;
@@ -506,8 +556,6 @@ pmos::async::task<std::expected<uint64_t, int>> load_executable(uint64_t task_id
 
     // Pheader stuff
     if (ehdr.e_ident[4] == R_LARCH_32) {
-        if (!auxvals.push_back({AT_PHDR, (uint64_t)(ehdr.e_phoff + reloc_offset)}))
-            throw std::bad_alloc();
         if (!auxvals.push_back({AT_PHENT, (uint64_t)ehdr.e_phentsize}))
             throw std::bad_alloc();
         if (!auxvals.push_back({AT_PHNUM, (uint64_t)ehdr.e_phnum}))
@@ -523,8 +571,6 @@ pmos::async::task<std::expected<uint64_t, int>> load_executable(uint64_t task_id
         if (!read_result)
             co_return std::unexpected((int)read_result.error());
 
-        if (!auxvals.push_back({AT_PHDR, ehdr64.e_phoff + reloc_offset}))
-            throw std::bad_alloc();
         if (!auxvals.push_back({AT_PHENT, (uint64_t)ehdr64.e_phentsize}))
             throw std::bad_alloc();
         if (!auxvals.push_back({AT_PHNUM, (uint64_t)ehdr64.e_phnum}))
@@ -536,9 +582,33 @@ pmos::async::task<std::expected<uint64_t, int>> load_executable(uint64_t task_id
         entry_point = ehdr64.e_entry + reloc_offset;
     }
 
+    auto phdr_address_result = co_await find_phdr_address(file_handle);
+    if (!phdr_address_result)
+        co_return std::unexpected(phdr_address_result.error());
+
+    if (!auxvals.push_back({AT_PHDR, phdr_address_result.value() + reloc_offset}))
+        throw std::bad_alloc();
+
+    uint64_t interp_entry_point = 0;
     if (interp) {
         if (!auxvals.push_back({AT_BASE, interp_reloc_offset}))
             throw std::bad_alloc();
+
+        Elf32_Ehdr interp_ehdr;
+        auto read_result = co_await read_file(interp_handle, std::span<uint8_t>((uint8_t *)&interp_ehdr, sizeof(interp_ehdr)), 0);
+        if (!read_result)
+            co_return std::unexpected(read_result.error());
+
+        if (interp_ehdr.e_ident[4] == R_LARCH_32) {
+            interp_entry_point = interp_ehdr.e_entry + interp_reloc_offset;
+        } else {
+            Elf64_Ehdr interp_ehdr64;
+            auto read_result = co_await read_file(interp_handle, std::span<uint8_t>((uint8_t *)&interp_ehdr64, sizeof(interp_ehdr64)), 0);
+            if (!read_result)
+                co_return std::unexpected(read_result.error());
+
+            interp_entry_point = interp_ehdr64.e_entry + interp_reloc_offset;
+        }
     }
 
     auto group = create_task_group();
@@ -602,7 +672,10 @@ pmos::async::task<std::expected<uint64_t, int>> load_executable(uint64_t task_id
         co_return std::unexpected((int)sr.result);
 
     kernelLogger() << "processd: load_executable: assigned page table " << page_table_id << " for task " << task_id << "\n" << frg::endlog;
-    co_return entry_point;
+    if (interp)
+        co_return interp_entry_point;
+    else
+        co_return entry_point;
 }
 
 pmos::async::detached_task execve_handle(std::shared_ptr<Process> process, std::vector<std::byte> data, pmos::Right reply_right, pmos::Right fs_right, pmos::Right task_group_right)

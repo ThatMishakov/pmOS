@@ -168,7 +168,7 @@ ReturnStr<std::pair<void *, size_t>> Page_Table::atomic_transfer_region(const kl
     if ((ulong)prefered_to & 07777)
         prefered_to = nullptr;
 
-    auto start_addr = to->find_region_spot(prefered_to, reg->size, false);
+    auto start_addr = to->find_region_spot(prefered_to, reg->size, fixed);
     if (!start_addr.success())
         return start_addr.propagate();
 
