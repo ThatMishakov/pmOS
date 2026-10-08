@@ -29,6 +29,11 @@ struct Process {
     uint64_t kernel_process_id = 0;
     uint64_t receive_right_id = 0;
     bool running_exec = false;
+
+    uint32_t uid = 0;
+    uint32_t gid = 0;
+    uint32_t euid = 0;
+    uint32_t egid = 0;
 };
 
 std::shared_ptr<Process> get_process_kernel_id(uint64_t kernel_process_id);

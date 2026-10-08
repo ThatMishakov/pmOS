@@ -899,6 +899,44 @@ pmos::async::detached_task execve_handle(std::shared_ptr<Process> process, std::
     co_return;
 }
 
+void get_id_handle(std::shared_ptr<Process> process, pmos::Right reply_right, short type)
+{
+    uint32_t id = 0;
+    bool invalid_type = false;
+
+    switch (type) {
+    case IPC_GET_ID_TYPE_UID:
+        id = process->uid;
+        break;
+    case IPC_GET_ID_TYPE_EUID:
+        id = process->euid;
+        break;
+    case IPC_GET_ID_TYPE_GID:
+        id = process->gid;
+        break;
+    case IPC_GET_ID_TYPE_EGID:
+        id = process->egid;
+        break;
+    case IPC_GET_ID_TYPE_PID:
+        id = process->pid;
+        break;
+    default:
+        invalid_type = true;
+        kernelLogger() << "processd: get_id_handle: Unknown type " << type << "\n" << frg::endlog;
+        break;
+    }
+
+    IPC_Get_ID_Reply reply = {
+        .type = IPC_Get_ID_Reply_NUM,
+        .flags = 0,
+        .result = static_cast<int16_t>(invalid_type ? -EINVAL : 0),
+        .id = invalid_type ? 0 : id,
+    };
+        auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+    if (!result_send)
+        kernelLogger() << "processd: get_id_handle: Failed to send reply message\n" << frg::endlog;
+}
+
 pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::shared_ptr<Process> process)
 {
     process->receive_right_id = rr.get();
@@ -978,6 +1016,27 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
             }
 
             execve_handle(process, std::move(message), std::move(reply_right), std::move(extra_rights[0]), std::move(extra_rights[1]));
+            break;
+        }
+        case IPC_Get_ID_NUM: {
+            if (msg.size < sizeof(IPC_Get_ID)) {
+                kernelLogger() << "processd: Received IPC_Get_ID that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            IPC_Get_ID *m = reinterpret_cast<IPC_Get_ID *>(ipc_msg);
+
+            get_id_handle(process, std::move(reply_right), m->id_type);
+            break;
+        }
+        case IPC_Pipe_Open_NUM: {
+            if (msg.size < sizeof(IPC_Pipe_Open)) {
+                kernelLogger() << "processd: Received IPC_Pipe_Open that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            IPC_Pipe_Open *m = reinterpret_cast<IPC_Pipe_Open *>(ipc_msg);
+            pipe_open(*m, std::move(reply_right));
             break;
         }
 

@@ -357,8 +357,6 @@ pmos::async::detached_task open_file(pmos::Right reply_right, std::string path, 
         co_return;
     }
 
-    kernelLogger() << "posixd: Opening file " << vnode->path() << " with inode " << vnode->inode << " type " << static_cast<int>(vnode->type) << "\n" << frg::endlog;
-
     auto fs_right = co_await vnode->parent_fs->open_file(vnode, process);
     if (!fs_right) {
         open_file_error_reply(reply_right, fs_right.error());
