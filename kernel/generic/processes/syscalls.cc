@@ -1797,10 +1797,38 @@ void syscall_is_in_task_group(TaskDescriptor *current_task)
     syscall_return(current_task) = has_task;
 }
 
+ReturnStr<std::pair<TaskGroup *, u32 /* mask */>> get_group_by_right(TaskDescriptor *current, u64 right_id)
+{
+    assert(current);
+    auto group = current->get_rights_namespace();
+    if (!group)
+        return Error(-ESRCH);
+
+    if (right_id == 0) {
+        return std::pair<TaskGroup *, u32>(group, (u32)-1);
+    }
+
+    auto right = group->atomic_get_right(right_id);
+    if (!right)
+        return Error(-ENOENT);
+
+    if (right->type() != RightType::TaskGroup)
+        return Error(-EINVAL);
+
+    auto group_right = static_cast<TaskGroupRight *>(right);
+    Auto_Lock_Scope lock(group_right->lock);
+    if (!group_right->alive)
+        return Error(-ENOENT);
+
+    assert(group_right->group);
+    return std::pair{group_right->group, group_right->permissions_mask};
+}
+
 void syscall_add_to_task_group(TaskDescriptor *current_task)
 {
     u64 pid   = syscall_arg64(current_task, 0);
     u64 group = syscall_arg64(current_task, 1);
+    auto flags = syscall_flags(current_task);
 
     const auto task = pid == 0 ? current_task : get_task(pid);
     if (!task) {
@@ -1808,14 +1836,33 @@ void syscall_add_to_task_group(TaskDescriptor *current_task)
         return;
     }
 
-    // TODO: Add permissions or whatever
-    const auto group_ptr = TaskGroup::get_task_group(group);
+    TaskGroup *group_ptr;
+    if (flags & 0x1) {
+        auto group_result = get_group_by_right(task, group);
+        if (!group_result.success()) {
+            syscall_error(current_task) = group_result.result;
+            return;
+        }
+
+        // TODO: Check permission mask...
+
+        group_ptr = group_result.val.first;
+    } else {
+        // TODO: Add permissions or whatever
+        group_ptr = TaskGroup::get_task_group(group);
+    }
+
     if (!group_ptr) {
         syscall_error(current_task) = -ENOENT;
         return;
     }
 
-    syscall_error(current_task) = group_ptr->atomic_register_task(task);
+    auto result = group_ptr->atomic_register_task(task);
+    if (result) {
+        syscall_error(current_task) = result;
+    } else {
+        syscall_return(current_task) = group_ptr->get_id();
+    }
 }
 
 void syscall_set_notify_mask(TaskDescriptor *current_task)

@@ -55,6 +55,7 @@
 #include <pmos/memory.h>
 #include <sys/mman.h>
 #include <pmos/utility/auxvec_builder.hh>
+#include <fcntl.h>
 
 void KernelSink::operator()(const char *message)
 {
@@ -436,6 +437,114 @@ pmos::async::task<std::expected<uint64_t, int>> find_phdr_address(pmos::Right &f
     co_return std::unexpected(-ENOEXEC);
 }
 
+struct OpenFileIpc {
+    pmos_right_t io_right;
+    pmos_right_t op_right;
+    uint64_t flags;
+};
+
+std::expected<void, int> pass_filesystem(pmos::Right fs_object_right, pmos::Right task_group_right, uint64_t task_group, uint64_t page_table, pmos::utility::ElFAuxvecBuilder &auxvec)
+{
+    auto size = get_mem_object_size(fs_object_right.get(), 0);
+    if (size.result)
+        return std::unexpected((int)size.result);
+    
+    auto table_size = sizeof(OpenFileIpc) * 512;
+
+    if (size.value < table_size)
+        return std::unexpected(-EINVAL);
+
+    if (size.value > 64*1024) // Unrasonably large size
+        return std::unexpected(-EINVAL);
+
+    map_mem_object_param_t map_params = {
+        .page_table_id = 0,
+        .object_right = fs_object_right.get(),
+        .addr_start_uint = 0,
+        .size = size.value,
+        .offset_object = 0,
+        .object_size = size.value,
+        .access_flags = PROT_READ,
+    };
+    auto map_result = map_mem_object(&map_params);
+    if (map_result.result != SUCCESS)
+        return std::unexpected((int)map_result.result);
+    pmos::utility::scope_guard unmap_object([&] {
+        munmap(map_result.virt_addr, size.value);
+    });
+
+    auto group_result = add_task_to_group(TASK_ID_SELF, task_group_right.get(), FLAG_GROUP_ID_IS_RIGHT);
+    if (group_result.result != SUCCESS)
+        return std::unexpected((int)group_result.result);
+    auto source_group_id = group_result.value;
+    pmos::utility::scope_guard remove_from_group([&] {
+        remove_task_from_group(TASK_ID_SELF, source_group_id);
+    });
+
+    auto page_size = getpagesize();
+    auto map_size = (table_size + page_size - 1) & ~(page_size - 1);
+    auto new_map_result = create_normal_region(0, nullptr, map_size, PROT_READ | PROT_WRITE);
+    if (new_map_result.result)
+        return std::unexpected((int)new_map_result.result);
+    pmos::utility::scope_guard unmap_table([&] {
+        munmap(new_map_result.virt_addr, map_size);
+    });
+
+    {
+        auto namespace_result = set_namespace(source_group_id, NAMESPACE_RIGHTS);
+        if (namespace_result.result != SUCCESS)
+            return std::unexpected((int)namespace_result.result);
+        pmos::utility::scope_guard reset_namespace([&] {
+            set_namespace(namespace_result.value, NAMESPACE_RIGHTS);
+        });
+
+        for (size_t i = 0; i < 512; ++i) {
+            OpenFileIpc *entry = reinterpret_cast<OpenFileIpc *>(map_result.virt_addr) + i;
+            OpenFileIpc *dest = reinterpret_cast<OpenFileIpc *>(new_map_result.virt_addr) + i;
+            if (entry->io_right == 0)
+                continue;
+
+            if (entry->flags & O_CLOEXEC)
+                continue;
+
+            auto dup_result = dup_right(entry->io_right);
+            if (dup_result.result)
+                return std::unexpected((int)dup_result.result);
+            
+            auto transfer_result = transfer_right(task_group, dup_result.right, 0);
+            if (transfer_result.result) {
+                delete_right(dup_result.right);
+                return std::unexpected((int)transfer_result.result);
+            }
+
+            dest->io_right = transfer_result.right;
+
+            dup_result = dup_right(entry->op_right);
+            if (dup_result.result)
+                return std::unexpected((int)dup_result.result);
+            
+            transfer_result = transfer_right(task_group, dup_result.right, 0);
+            if (transfer_result.result) {
+                delete_right(dup_result.right);
+                return std::unexpected((int)transfer_result.result);
+            }
+
+            dest->op_right = transfer_result.right;
+            dest->flags = entry->flags;
+        }
+    }
+
+    auto move_result = transfer_region(page_table, new_map_result.virt_addr, 0, PROT_READ | PROT_WRITE);
+    if (move_result.result)
+        return std::unexpected((int)move_result.result);
+    unmap_table.release();
+
+    if (!auxvec.auxvec().push_back({AT_FD_TABLE, move_result.virt_addr_intptr}))
+        throw std::bad_alloc();
+
+    return {};
+}
+
 pmos::async::task<std::expected<uint64_t, int>> load_executable(uint64_t task_id, pmos::Right &file_handle, std::shared_ptr<Process> process, std::vector<std::string> args, std::vector<std::string> envs, pmos::Right posix_right)
 {
     Elf32_Ehdr ehdr;
@@ -618,9 +727,9 @@ pmos::async::task<std::expected<uint64_t, int>> load_executable(uint64_t task_id
         remove_task_from_group(TASK_ID_SELF, group.value);
     });
 
-    auto add_result = add_task_to_group(task_id, group.value);
-    if (add_result)
-        co_return std::unexpected((int)add_result);
+    auto add_result = add_task_to_group(task_id, group.value, 0);
+    if (add_result.result)
+        co_return std::unexpected((int)add_result.result);
     uint64_t group_id = group.value;
 
     {
