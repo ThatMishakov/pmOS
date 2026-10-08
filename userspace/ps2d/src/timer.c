@@ -46,7 +46,7 @@ void init_timer()
 
 void port_start_timer(unsigned time_ms)
 {
-    syscall_r current_time = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP);
+    syscall_r current_time = pmos_get_time(CLOCK_MONOTONIC);
     if (current_time.result) {
         fprintf(stderr, "[PS2d] Failed to get time: %i (%s)\n", (int)current_time.result, strerror(-(int)current_time.result));
         exit(1);

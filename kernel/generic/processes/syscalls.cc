@@ -1981,10 +1981,10 @@ void syscall_get_time(TaskDescriptor *current_task)
     ulong mode = syscall_arg(current_task, 0, 0);
 
     switch (mode) {
-    case GET_TIME_NANOSECONDS_SINCE_BOOTUP:
+    case CLOCK_MONOTONIC:
         syscall_return(current_task) = get_ns_since_bootup();
         break;
-    case GET_TIME_REALTIME_NANOSECONDS:
+    case CLOCK_REALTIME:
         syscall_return(current_task) = unix_time_bootup * 1000000000 + get_ns_since_bootup();
         break;
     default:

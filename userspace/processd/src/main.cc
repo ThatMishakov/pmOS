@@ -920,6 +920,12 @@ void get_id_handle(std::shared_ptr<Process> process, pmos::Right reply_right, sh
     case IPC_GET_ID_TYPE_PID:
         id = process->pid;
         break;
+    case IPC_GET_ID_TYPE_PPID: {
+        auto parent = process->parent;
+        if (parent)
+            id = parent->pid;
+    }
+        break;
     default:
         invalid_type = true;
         kernelLogger() << "processd: get_id_handle: Unknown type " << type << "\n" << frg::endlog;

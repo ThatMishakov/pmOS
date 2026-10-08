@@ -616,7 +616,7 @@ void uacpi_kernel_stall(uacpi_u8 usec) { usleep(usec); }
 
 uacpi_u64 uacpi_kernel_get_nanoseconds_since_boot(void)
 {
-    return pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
+    return pmos_get_time(CLOCK_MONOTONIC).value;
 }
 
 struct isr_data {
