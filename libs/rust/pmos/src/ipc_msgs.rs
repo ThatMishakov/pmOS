@@ -154,6 +154,16 @@ pub struct IPCRead {
     pub max_size: u64,
 }
 
+pub const IPC_SEEK_NUM: u32 = 0x43;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCSeek {
+    msg_type: u32,
+    pub flags: u16,
+    pub whence: u16,
+    pub offset: i64,
+}
+
 pub const IPC_GET_OBJECT_NUM: u32 = 0x44;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
@@ -176,6 +186,27 @@ struct IPCReadReplyHdr {
     msg_type: u32,
     flags: u16,
     result: i16,
+}
+
+pub const IPC_SEEK_REPLY_NUM: u32 = 0x52;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCSeekReply {
+    msg_type: u32,
+    pub flags: u16,
+    pub result: i16,
+    pub new_offset: u64,
+}
+
+impl IPCSeekReply {
+    pub fn new(result: i16, new_offset: u64) -> Self {
+        IPCSeekReply {
+            msg_type: IPC_SEEK_REPLY_NUM,
+            flags: 0,
+            result,
+            new_offset,
+        }
+    }
 }
 
 pub const IPC_GET_OBJECT_REPLY_NUM: u32 = 0x53;
@@ -364,6 +395,15 @@ pub struct IPCFSResolvePath {
     pub path_component: String,
 }
 
+pub const IPC_FS_STAT_DYNAMIC_NUM: u32 = 0xC7;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCFSStatDynamic {
+    msg_type: u32,
+    pub flags: u32,
+    pub inode: u64,
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct IPCFSResolvePathHdr {
@@ -476,6 +516,39 @@ impl IPCFSResolvePathReply {
             st_gid,
             st_rdev,
             st_blksize,
+        }
+    }
+}
+
+pub const IPC_FS_STAT_DYNAMIC_REPLY_NUM: u32 = 0xD9;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Zeroable, Pod)]
+pub struct IPCFSStatDynamicReply {
+    msg_type: u32,
+    pub flags: u16,
+    pub result: i16,
+    pub st_size: u64,
+    pub st_nlink: u64,
+    pub st_atim_tv_nsec: u64,
+    pub st_mtim_tv_nsec: u64,
+    pub st_ctim_tv_nsec: u64,
+    pub st_btim_tv_nsec: u64,
+    pub st_blocks: u64,
+}
+
+impl IPCFSStatDynamicReply {
+    pub fn new(result: i16, st_size: u64, st_nlink: u64, st_atim_tv_nsec: u64, st_mtim_tv_nsec: u64, st_ctim_tv_nsec: u64, st_btim_tv_nsec: u64, st_blocks: u64) -> Self {
+        IPCFSStatDynamicReply {
+            msg_type: IPC_FS_STAT_DYNAMIC_REPLY_NUM,
+            flags: 0,
+            result,
+            st_size,
+            st_nlink,
+            st_atim_tv_nsec,
+            st_mtim_tv_nsec,
+            st_ctim_tv_nsec,
+            st_btim_tv_nsec,
+            st_blocks,
         }
     }
 }
@@ -668,8 +741,10 @@ pub enum Message<'a> {
     IPCKernelRightDestroyed(IPCKernelRightDestroyed),
     IPCNamedRightNotification(IPCNamedRightNotification),
     IPCRead(IPCRead),
+    IPCSeek(IPCSeek),
     IPCGetObject(IPCGetObject),
     IPCFSOpen(IPCFSOpen),
+    IPCFSStatDynamic(IPCFSStatDynamic),
     IPCMountFS(IPCMountFS),
     IPCMountFSReply(IPCMountFSReply),
     IPCOpen(IPCOpen),
@@ -766,8 +841,12 @@ impl super::ipc::Message {
                             })
                         ).unwrap_or(Message::Unknown)
                 }
+                IPC_FS_STAT_DYNAMIC_NUM =>
+                    try_from_bytes::<IPCFSStatDynamic>(data).map(|data| Message::IPCFSStatDynamic(data.clone())).unwrap_or(Message::Unknown),
                 IPC_READ_NUM =>
                     try_from_bytes::<IPCRead>(data).map(|data| Message::IPCRead(data.clone())).unwrap_or(Message::Unknown),
+                IPC_SEEK_NUM =>
+                    try_from_bytes::<IPCSeek>(data).map(|data| Message::IPCSeek(data.clone())).unwrap_or(Message::Unknown),
                 IPC_GET_OBJECT_NUM =>
                     try_from_bytes::<IPCGetObject>(data).map(|data| Message::IPCGetObject(data.clone())).unwrap_or(Message::Unknown),
                 IPC_OPEN_NUM => {
