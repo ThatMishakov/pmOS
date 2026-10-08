@@ -67,6 +67,7 @@ pmos::PortDispatcher dispatcher(main_port);
 pmos::async::detached_task vfs_handle_messages();
 
 void register_process(IPC_Register_Process *msg, pmos::Right reply_right, std::shared_ptr<Process> process, pmos::Right process_right);
+pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::shared_ptr<Process> process);
 
 void execve_reply(pmos::Right reply_right, int error)
 {
@@ -385,7 +386,7 @@ pmos::async::task<std::expected<uint64_t /* reloc offset */, int>> load_into_mem
     co_return reloc_offset;
 }
 
-pmos::async::task<std::expected<void, int>> load_executable(uint64_t task_id, pmos::Right &file_handle, std::shared_ptr<Process> process, std::vector<std::string> args, std::vector<std::string> envs)
+pmos::async::task<std::expected<uint64_t, int>> load_executable(uint64_t task_id, pmos::Right &file_handle, std::shared_ptr<Process> process, std::vector<std::string> args, std::vector<std::string> envs, pmos::Right posix_right)
 {
     Elf32_Ehdr ehdr;
 
@@ -501,6 +502,8 @@ pmos::async::task<std::expected<void, int>> load_executable(uint64_t task_id, pm
     if (!auxvals.push_back({AT_PAGESZ, getpagesize()}))
         throw std::bad_alloc();
 
+    uint64_t entry_point;
+
     // Pheader stuff
     if (ehdr.e_ident[4] == R_LARCH_32) {
         if (!auxvals.push_back({AT_PHDR, (uint64_t)(ehdr.e_phoff + reloc_offset)}))
@@ -512,6 +515,8 @@ pmos::async::task<std::expected<void, int>> load_executable(uint64_t task_id, pm
 
         if (!auxvals.push_back({AT_ENTRY, ehdr.e_entry + reloc_offset}))
             throw std::bad_alloc();
+
+        entry_point = ehdr.e_entry + reloc_offset;
     } else {
         Elf64_Ehdr ehdr64;
         auto read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)&ehdr64, sizeof(ehdr64)), 0);
@@ -527,6 +532,8 @@ pmos::async::task<std::expected<void, int>> load_executable(uint64_t task_id, pm
 
         if (!auxvals.push_back({AT_ENTRY, ehdr64.e_entry + reloc_offset}))
             throw std::bad_alloc();
+
+        entry_point = ehdr64.e_entry + reloc_offset;
     }
 
     if (interp) {
@@ -556,14 +563,11 @@ pmos::async::task<std::expected<void, int>> load_executable(uint64_t task_id, pm
             throw std::bad_alloc();
     }
 
-    auto right = main_port.create_right(pmos::RightType::SendMany);
-    auto [send_right, receive_right] = std::move(right.value());
-
     {
-        auto transfer_result = transfer_right(group_id, send_right.get(), 0);
+        auto transfer_result = transfer_right(group_id, posix_right.get(), 0);
         if (transfer_result.result)
             co_return std::unexpected(transfer_result.result);
-        send_right.release();
+        posix_right.release();
 
         auto right_id = transfer_result.right;
         auto arr = std::bit_cast<std::array<std::byte, sizeof(right_id)>>(right_id);
@@ -598,11 +602,23 @@ pmos::async::task<std::expected<void, int>> load_executable(uint64_t task_id, pm
         co_return std::unexpected((int)sr.result);
 
     kernelLogger() << "processd: load_executable: assigned page table " << page_table_id << " for task " << task_id << "\n" << frg::endlog;
-    co_return std::unexpected(-ENOSYS);
+    co_return entry_point;
 }
 
 pmos::async::detached_task execve_handle(std::shared_ptr<Process> process, std::vector<std::byte> data, pmos::Right reply_right, pmos::Right fs_right, pmos::Right task_group_right)
 {
+    if (process->running_exec) {
+        execve_reply(std::move(reply_right), -EAGAIN);
+        co_return;
+    }
+
+    process->running_exec = true;
+    pmos::utility::scope_guard exec_guard([=]{
+        process->running_exec = false;
+        if (process->receive_right_id)
+            delete_process(process);
+    });
+
     auto msg = reinterpret_cast<IPC_Execve *>(data.data());
 
     constexpr auto base_length = sizeof(*msg);
@@ -662,21 +678,50 @@ pmos::async::detached_task execve_handle(std::shared_ptr<Process> process, std::
 
     syscall_set_task_name(new_task.value, path.c_str(), path.size());
 
-    auto exec_result = co_await load_executable(new_task.value, file_handle.value(), process, std::move(args), std::move(envs));
+    auto process_result = process_for_task(new_task.value, 0);
+    if (process_result.result != SUCCESS) {
+        execve_reply(std::move(reply_right), (int)process_result.result);
+        co_return;
+    }
+    auto process_right = pmos::Right(process_result.right, pmos::RightType::Process);
+
+    auto right = main_port.create_right(pmos::RightType::SendMany);
+    auto [send_right, receive_right] = std::move(right.value());
+
+    auto exec_result = co_await load_executable(new_task.value, file_handle.value(), process, std::move(args), std::move(envs), std::move(send_right));
     if (!exec_result) {
         execve_reply(std::move(reply_right), exec_result.error());
         co_return;
     }
+    auto entry_point = exec_result.value();
 
-    // TODO
+    terminate_process(process->process_right.get());
+    process->process_right = std::move(process_right);
+
+    auto start_result = syscall_start_task(new_task.value, entry_point, 0, 0, 0);
+    if (start_result != SUCCESS) {
+        execve_reply(std::move(reply_right), (int)start_result);
+        co_return;
+    }
+    guard.release();
+
+    delete_receive_right(main_port.get(), process->receive_right_id, 0);
 
     kernelLogger() << "processd: execve_handle: starting new task " << new_task.value << " for process " << process->pid << "\n" << frg::endlog;
+
+    process->running_exec = false;
+    exec_guard.release();
+
+    handle_process_messages(std::move(receive_right), process);
 
     co_return;
 }
 
 pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::shared_ptr<Process> process)
 {
+    process->receive_right_id = rr.get();
+    auto saved_right_id = rr.get();
+
     while (1) {
         auto [msg, message, reply_right, extra_rights] = (co_await dispatcher.get_message(rr)).value();
     
@@ -760,7 +805,11 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
         }
     }
 
-    delete_process(process);
+    if (process->receive_right_id == saved_right_id) {
+        process->receive_right_id = 0;
+        if (!process->running_exec)
+            delete_process(process);
+    }
 }
 
 void register_process(IPC_Register_Process *msg, pmos::Right reply_right, std::shared_ptr<Process> process, pmos::Right process_right)

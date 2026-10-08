@@ -71,7 +71,7 @@ extern void deactivate_page_table();
 namespace kernel::proc::syscalls
 {
 
-std::array<const char *, 72> syscall_names = {
+std::array<const char *, 73> syscall_names = {
     "SYSCALL EXIT",
     "SYSCALL GET TASK ID",
     "SYSCALL CREATE PROCESS",
@@ -148,6 +148,7 @@ std::array<const char *, 72> syscall_names = {
     "SYSCALL GET TCB",
     "SYSCALL GET PROCESS ID",
     "SYSCALL RIGHT FOR TASK GROUP",
+    "SYSCALL TERMINATE PROCESS",
 };
 
 const char *syscall_name(unsigned id)
@@ -160,7 +161,7 @@ const char *syscall_name(unsigned id)
 
 using syscall_function = void (*)(TaskDescriptor *task);
 
-std::array<syscall_function, 72> syscall_table = {
+std::array<syscall_function, 73> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -237,6 +238,7 @@ std::array<syscall_function, 72> syscall_table = {
     nullptr,
     syscall_get_process_id,
     syscall_right_for_task_group,
+    syscall_terminate_process,
 };
 
 void syscall_handler()
@@ -3125,6 +3127,25 @@ void syscall_right_for_task_group(TaskDescriptor *task)
     }
 
     syscall_return(task) = right.val->right_sender_id;
+}
+
+void syscall_terminate_process(TaskDescriptor *task)
+{
+    u64 right = syscall_arg64(task, 0);
+
+    auto result = get_process_by_right(task, right);
+    if (!result.success()) {
+        syscall_error(task) = result.result;
+        return;
+    }
+
+    auto [process, mask] = result.val;
+    // if (!(mask & ProcessRight::PERM_TERMINATE)) {
+    //     syscall_error(task) = -EPERM;
+    //     return;
+    // }
+
+    syscall_error(task) = process->atomic_terminate();
 }
 
 unsigned syscall_number(TaskDescriptor *task) { return call_flags(task) & 0xFF; }

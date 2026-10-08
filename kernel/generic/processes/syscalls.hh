@@ -310,6 +310,9 @@ void syscall_get_process_id(TaskDescriptor *task);
 void syscall_right_for_task_group(TaskDescriptor *task);
 // Parameters: u64 task_group_id
 
+void syscall_terminate_process(TaskDescriptor *task);
+// Parameters: u64 task_group_id
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);
