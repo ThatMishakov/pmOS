@@ -41,6 +41,8 @@ struct PtyData {
     std::deque<Packet> manager_queue;
     std::deque<Packet> subordinate_queue;
 
+    Packet active_packet;
+
     struct BlockedRead {
         pmos::Right reply_right;
         size_t size;
@@ -50,4 +52,6 @@ struct PtyData {
     std::list<BlockedRead> blocked_subordinate_reads;
 
     ~PtyData();
+
+    void issue_signal_to_fg(int signal);
 };

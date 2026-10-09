@@ -9,6 +9,7 @@
 #include "process.hh"
 #include <termios.h>
 #include <pmos/fs-data.h>
+#include <signal.h>
 
 struct PtyVfs final: public Filesystem {
     std::expected<std::shared_ptr<VNode>, int> resolve_child(std::shared_ptr<VNode> parent, const std::string &name) override
@@ -126,10 +127,35 @@ pmos::async::task<std::expected<void, int>> PtyVfs::unlockpt(std::shared_ptr<VNo
     co_return {};
 }
 
+static void termios_default(struct termios *t)
+{
+    memset(t, 0, sizeof(*t));
+    t->c_iflag = ICRNL | IXON;
+    t->c_oflag = OPOST | ONLCR;
+    t->c_cflag = CS8 | CREAD;
+    t->c_lflag = TTYDEF_LFLAG | ECHOK;
+	t->c_cc[VINTR] = CINTR;
+	t->c_cc[VEOF] = CEOF;
+	t->c_cc[VKILL] = CKILL;
+	t->c_cc[VSTART] = CSTART;
+	t->c_cc[VSTOP] = CSTOP;
+	t->c_cc[VSUSP] = CSUSP;
+	t->c_cc[VQUIT] = CQUIT;
+	t->c_cc[VERASE] = CERASE; // DEL character.
+	t->c_cc[VMIN] = CMIN;
+	t->c_cc[VDISCARD] = CDISCARD;
+	t->c_cc[VLNEXT] = CLNEXT;
+	t->c_cc[VWERASE] = CWERASE;
+	t->c_cc[VREPRINT] = CRPRNT;
+	cfsetispeed(t, B38400);
+	cfsetospeed(t, B38400);
+}
+
 std::expected<std::shared_ptr<PtyData>, int> new_pty()
 {
     static unsigned next_idx = 0;
     auto pty = std::make_shared<PtyData>();
+    termios_default(&pty->active_settings);
     pty->idx = next_idx++;
     pty_map[pty->idx] = pty;
     pty->vnode = create_pty_vnode(pty);
@@ -215,6 +241,219 @@ static void handle_read_subordinate(std::shared_ptr<PtyData> pty, IPC_Read *read
     handle_read_reply(pty, read_size, std::move(reply_right), true);
 }
 
+void process_out(const char c, PtyData::Packet &packet, std::shared_ptr<PtyData> pty)
+{
+    if (!(pty->active_settings.c_lflag & OPOST)) {
+        packet.data.push_back(c);
+        return;
+    }
+
+    if (pty->active_settings.c_oflag & ONLCR && c == '\n') {
+        packet.data.push_back('\r');
+        packet.data.push_back('\n');
+        return;
+    }
+
+    packet.data.push_back(c);
+}
+
+void wake_up_manager(std::shared_ptr<PtyData> pty)
+{
+    while (!pty->blocked_manager_reads.empty() && !pty->manager_queue.empty()) {
+        auto blocked_read = std::move(pty->blocked_manager_reads.front());
+        pty->blocked_manager_reads.pop_front();
+        
+        handle_read_reply(pty, blocked_read.size, std::move(blocked_read.reply_right), false);
+    }
+}
+
+void wake_up_subordinate(std::shared_ptr<PtyData> pty)
+{
+    while (!pty->blocked_subordinate_reads.empty() && !pty->subordinate_queue.empty()) {
+        auto blocked_read = std::move(pty->blocked_subordinate_reads.front());
+        pty->blocked_subordinate_reads.pop_front();
+
+        handle_read_reply(pty, blocked_read.size, std::move(blocked_read.reply_right), true);
+    }
+}
+
+void enqueue_packet(PtyData::Packet &packet, std::shared_ptr<PtyData> pty)
+{
+    if (packet.data.empty())
+        return;
+
+    pty->subordinate_queue.push_back(std::move(packet));
+    wake_up_subordinate(pty);
+}
+
+// This was "inspired by" Managarm's implementation
+// managarm/posix/subsystem/src/pts.cpp
+void process_in(char c, PtyData::Packet &packet, std::shared_ptr<PtyData> pty)
+{
+    auto enqueue_out = [&](PtyData::Packet &packet) {
+        if (packet.data.empty())
+            return;
+        pty->manager_queue.push_back(std::move(packet));
+        wake_up_manager(pty);
+    };
+
+    auto is_control_char = [](char c) {
+        return (c >= 0 && c < 0x20) || (c == 0x7F);
+    };
+
+    auto erase_char = [&](bool erase) {
+        if (!packet.data.empty()) {
+            size_t chars = 1;
+            char c = packet.data.back();
+            packet.data.pop_back();
+
+            if (is_control_char(c))
+                chars = 2;
+
+            if ((pty->active_settings.c_lflag & ECHO) && erase) {
+                PtyData::Packet echo_packet;
+                for (size_t i = 0; i < chars; i++) {
+                    echo_packet.data.push_back('\b');
+                    echo_packet.data.push_back(' ');
+                    echo_packet.data.push_back('\b');
+                }
+                enqueue_out(echo_packet);
+            }
+        }
+    };
+
+    if (pty->active_settings.c_lflag & ISTRIP)
+        c &= 0x7F;
+
+    if (c == '\r') {
+        if (pty->active_settings.c_iflag & IGNCR)
+            return;
+
+        if (pty->active_settings.c_iflag & ICRNL)
+            c = '\n';
+    } else if (c == '\n') {
+        if (pty->active_settings.c_iflag & INLCR)
+            c = '\r';
+    }
+
+    if ((pty->active_settings.c_lflag & IUCLC) && (c >= 'A') && (c <= 'Z'))
+        c = c - 'A' + 'a';
+
+    if (pty->active_settings.c_lflag & ISIG) {
+        std::optional<int> signal = std::nullopt;
+
+        if (c == static_cast<char>(pty->active_settings.c_cc[VINTR]))
+            signal = SIGINT;
+        else if (c == static_cast<char>(pty->active_settings.c_cc[VQUIT]))
+            signal = SIGQUIT;
+        else if (c == static_cast<char>(pty->active_settings.c_cc[VSUSP]))
+            signal = SIGTSTP;
+
+        if (signal)
+            pty->issue_signal_to_fg(*signal);
+    }
+
+    if (pty->active_settings.c_lflag & ICANON) {
+        if (c == static_cast<char>(pty->active_settings.c_cc[VKILL])) {
+            while (!packet.data.empty())
+                erase_char(pty->active_settings.c_lflag & ECHOK);
+
+            return;
+        }
+
+        if (c == static_cast<char>(pty->active_settings.c_cc[VERASE])) {
+            erase_char(pty->active_settings.c_lflag & ECHOE);
+            return;
+        }
+
+        if ((pty->active_settings.c_lflag & IEXTEN) && (c == static_cast<char>(pty->active_settings.c_cc[VWERASE]))) {
+            while (!packet.data.empty() && packet.data.back() == ' ')
+                erase_char(pty->active_settings.c_lflag & ECHOE);
+
+            while (!packet.data.empty() && packet.data.back() != ' ')
+                erase_char(pty->active_settings.c_lflag & ECHOE);
+
+            return;
+        }
+
+        if (c == static_cast<char>(pty->active_settings.c_cc[VEOF])) {
+            enqueue_packet(packet, pty);
+            packet = {};
+
+            return;
+        }
+    }
+
+    char echo_char = (pty->active_settings.c_lflag & ECHO) ? c : '\0';
+
+    if ((pty->active_settings.c_lflag & ECHOCTL) && (pty->active_settings.c_lflag & ECHO) && (c < 0x20 && c != '\n' && c != '\t')) {
+        PtyData::Packet echo_packet;
+        echo_packet.data.push_back('^');
+        echo_packet.data.push_back(c + 0x40);
+        enqueue_out(echo_packet);
+        echo_char = '\0';
+    }
+
+    if (pty->active_settings.c_lflag & ICANON) {
+        packet.data.push_back(c);
+
+        if (echo_char) {
+            PtyData::Packet echo_packet;
+            if (is_control_char(c) && c != '\n') {
+                echo_packet.data.push_back('^');
+                echo_packet.data.push_back(('@' + c) % 128);
+            } else {
+                echo_packet.data.push_back(echo_char);
+            }
+            enqueue_out(echo_packet);
+        }
+
+        if (c == '\n' || (c == static_cast<char>(pty->active_settings.c_cc[VEOL])
+            || (c == static_cast<char>(pty->active_settings.c_cc[VEOL2])))) {
+            if (!(pty->active_settings.c_lflag & ECHO) && (pty->active_settings.c_lflag & ECHONL)) {
+                PtyData::Packet echo_packet;
+                echo_packet.data.push_back('\n');
+                enqueue_out(echo_packet);
+            }
+            enqueue_packet(packet, pty);
+            packet = {};
+            return;
+        }
+
+        return;
+    } else if (pty->active_settings.c_lflag & ECHO) {
+        PtyData::Packet echo_packet;
+        echo_packet.data.push_back(c);
+        enqueue_out(echo_packet);
+    }
+
+    packet.data.push_back(c);
+    return;
+}
+
+void manager_handle_write(const char *data, size_t size, std::shared_ptr<PtyData> pty, pmos::Right reply_right)
+{
+    for (size_t i = 0; i < size; i++)
+        process_in(data[i], pty->active_packet, pty);
+
+    if (!(pty->active_settings.c_lflag & ICANON)) {
+        enqueue_packet(pty->active_packet, pty);
+        pty->active_packet = {};
+    }
+
+    IPC_Write_Reply reply = {
+        .type          = IPC_Write_Reply_NUM,
+        .flags         = 0,
+        .result_code   = 0,
+        .bytes_written = static_cast<uint64_t>(size),
+    };
+    if (reply_right) {
+        auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+        if (!result_send)
+            kernelLogger() << "posixd: Error " << result_send.error().first << " sending write reply to port " << reply_right.get() << "\n" << frg::endlog;
+    }
+}
+
 pmos::async::detached_task openpt_manager(pmos::ReceiveRight rr, std::shared_ptr<PtyData> pty, unsigned oflags)
 {
     while (1) {
@@ -238,6 +477,17 @@ pmos::async::detached_task openpt_manager(pmos::ReceiveRight rr, std::shared_ptr
             IPC_Read *read_msg = reinterpret_cast<IPC_Read *>(message.data());
 
             handle_read(pty, read_msg, std::move(reply_right));
+        }
+            break;
+        case IPC_Write_NUM: {
+            if (message.size() < sizeof(IPC_Write)) {
+                kernelLogger() << "posixd: Received IPC_Write that is too small while attending pty subordinate\n" << frg::endlog;
+                break;
+            }
+
+            auto *write_msg = reinterpret_cast<IPC_Write *>(ipc_msg);
+            auto size = message.size() - sizeof(IPC_Write);
+            manager_handle_write(write_msg->data, size, pty, std::move(reply_right));
         }
             break;
         default:
@@ -273,32 +523,6 @@ int ttiocsctty_handle(std::shared_ptr<PtyData> pty, unsigned flags, uint64_t sen
     return 0;
 }
 
-void process_out(const char c, PtyData::Packet &packet, std::shared_ptr<PtyData> pty)
-{
-    if (!(pty->active_settings.c_lflag & OPOST)) {
-        packet.data.push_back(c);
-        return;
-    }
-
-    if (pty->active_settings.c_oflag & ONLCR && c == '\n') {
-        packet.data.push_back('\r');
-        packet.data.push_back('\n');
-        return;
-    }
-
-    packet.data.push_back(c);
-}
-
-void wake_up_manager(std::shared_ptr<PtyData> pty)
-{
-    while (!pty->blocked_manager_reads.empty() && !pty->manager_queue.empty()) {
-        auto blocked_read = std::move(pty->blocked_manager_reads.front());
-        pty->blocked_manager_reads.pop_front();
-        
-        handle_read_reply(pty, blocked_read.size, std::move(blocked_read.reply_right), false);
-    }
-}
-
 void subordinate_handle_write(const char *data, size_t size, std::shared_ptr<PtyData> pty, pmos::Right reply_right)
 {
     PtyData::Packet packet;
@@ -307,10 +531,10 @@ void subordinate_handle_write(const char *data, size_t size, std::shared_ptr<Pty
     }
 
     IPC_Write_Reply reply = {
-        .type        = IPC_Write_Reply_NUM,
-        .flags       = 0,
-        .result_code = 0,
-        .bytes_written        = static_cast<uint64_t>(packet.data.size()),
+        .type          = IPC_Write_Reply_NUM,
+        .flags         = 0,
+        .result_code   = 0,
+        .bytes_written = size,
     };
     if (reply_right) {
         auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
@@ -462,4 +686,9 @@ pmos::async::task<std::expected<pmos::Right, int>> PtyVfs::open_file(std::shared
     pty->subordinate_count++;
 
     co_return std::move(right);
+}
+
+void PtyData::issue_signal_to_fg(int signal)
+{
+    kernelLogger() << "posixd: stub issue_signal_to_fg for signal " << signal << " on pty " << idx << "\n" << frg::endlog;   
 }
