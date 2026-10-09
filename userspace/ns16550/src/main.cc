@@ -561,6 +561,38 @@ void react_interrupt()
     pmos::complete_interrupt(interrupt_right);
 }
 
+pmos::async::task<std::expected<std::vector<std::byte>, int>> read_from_right(pmos_right_t right, size_t size)
+{
+    IPC_Read message = {
+        .type  = IPC_Read_NUM,
+        .flags = 0,
+        .start_offset = 0,
+        .max_size     = size,
+    };
+
+    auto r = send_message_right(right, serial_port.get(), reinterpret_cast<void *>(&message), sizeof(message), nullptr, 0);
+    if (r.result != SUCCESS)
+        co_return std::unexpected(r.result);
+    auto reply_right = pmos::ReceiveRight(r.right, pmos::RightType::SendOnce, serial_port.get());
+
+    auto msg = co_await dispatcher.get_message(reply_right);
+    if (!msg)
+        co_return std::unexpected(msg.error());
+
+    if (msg->data.size() < sizeof(IPC_Read_Reply))
+        co_return std::unexpected(-EIO);
+
+    IPC_Read_Reply *reply = reinterpret_cast<IPC_Read_Reply *>(msg->data.data());
+    if (reply->type != IPC_Read_Reply_NUM)
+        co_return std::unexpected(-EIO);
+
+    if (reply->result_code < 0)
+        co_return std::unexpected(reply->result_code);
+
+    co_return std::vector<std::byte>(msg->data.begin() + sizeof(IPC_Read_Reply), msg->data.end());
+}
+
+
 pmos::async::detached_task start_shell()
 {
     pmos::ipc::EqualsFilter filter("real_root_mounted", "1");
@@ -583,7 +615,33 @@ pmos::async::detached_task start_shell()
     }
     write_str("Forked pty with pid " + std::to_string(pid) + "\n");
 
-    // TODO
+    pmos_right_t io_right;
+    auto result = get_fd_rights(amaster, nullptr, &io_right, nullptr);
+    if (result < 0) {
+        write_str("Failed to get right for pty fd " + std::to_string(result) + " (" + std::string(strerror(-result)) + ")\n");
+        co_return;
+    }
+
+
+    while (true) {
+        auto data = co_await read_from_right(io_right, 0x1000);
+        if (!data) {
+            write_str("Failed to read from pty right " + std::to_string(data.error()) + " (" + std::string(strerror(data.error())) + ")\n");
+            co_return;
+        }
+
+        if (data->size() == 0) {
+            write_str("Pty closed\n");
+            co_return;
+        }
+
+        write_queue.push({
+            std::vector<std::byte>(data->begin(), data->end()),
+            0,
+            data->size(),
+        });
+        check_tx();
+    }
 }
 
 pmos::async::detached_task get_messages()

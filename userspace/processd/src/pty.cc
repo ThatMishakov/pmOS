@@ -96,6 +96,64 @@ std::expected<std::shared_ptr<PtyData>, int> new_pty()
     return pty;
 }
 
+static void read_error_reply(pmos::Right reply_right, int error_code)
+{
+    IPC_Read_Reply reply = {
+        .type        = IPC_Read_Reply_NUM,
+        .flags       = 0,
+        .result_code = static_cast<int16_t>(error_code),
+    };
+
+    auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+    if (!result_send)
+        kernelLogger() << "posixd: Error " << result_send.error().first << " sending read error reply to port " << reply_right.get() << "\n" << frg::endlog;
+}
+
+static void handle_read_reply(std::shared_ptr<PtyData> pty, size_t max_size, pmos::Right reply_right)
+{
+    auto &packet = pty->subordinate_queue.front();
+    size_t available_size = packet.data.size() - packet.offset;
+    size_t to_read = std::min(max_size, available_size);
+
+    std::vector<uint8_t> data(sizeof(IPC_Read_Reply) + to_read);
+    IPC_Read_Reply *reply = reinterpret_cast<IPC_Read_Reply *>(data.data());
+    reply->type = IPC_Read_Reply_NUM;
+    reply->result_code = 0;
+    reply->flags = 0;
+
+    memcpy(data.data() + sizeof(IPC_Read_Reply), packet.data.data() + packet.offset, to_read);
+    auto result_send = pmos::send_message_right(reply_right, std::span(data), {}, true);
+    if (!result_send) {
+        kernelLogger() << "posixd: Error " << result_send.error().first << " sending read reply to port " << reply_right.get() << "\n" << frg::endlog;
+    } else {
+        packet.offset += to_read;
+        if (packet.offset == packet.data.size()) {
+            pty->subordinate_queue.pop_front();
+        }
+    }
+}
+
+static void handle_read(std::shared_ptr<PtyData> pty, IPC_Read *read_msg, pmos::Right reply_right)
+{
+    size_t read_size = read_msg->max_size;
+
+    bool noblock = read_msg->flags & IPC_FLAG_IO_OP_NONBLOCK;
+
+    if (pty->subordinate_queue.empty()) {
+        // TODO: EIO on no subordinates
+
+        if (noblock) {
+            read_error_reply(std::move(reply_right), -EAGAIN);
+            return;
+        }
+            
+        pty->blocked_manager_reads.push_back({std::move(reply_right), read_size});
+        return;
+    }
+
+    handle_read_reply(pty, read_size, std::move(reply_right));
+}
+
 pmos::async::detached_task openpt_manager(pmos::ReceiveRight rr, std::shared_ptr<PtyData> pty, unsigned oflags)
 {
     while (1) {
@@ -152,6 +210,17 @@ pmos::async::detached_task openpt_manager(pmos::ReceiveRight rr, std::shared_ptr
                 kernelLogger() << "posixd: Error " << result_send.error().first << " sending ttyname reply to port " << reply_right.get() << "\n" << frg::endlog;
         }
             break;
+        case IPC_Read_NUM: {
+            if (message.size() < sizeof(IPC_Read)) {
+                kernelLogger() << "posixd: Received IPC_Read that is too small while attending pty\n" << frg::endlog;
+                break;
+            }
+
+            IPC_Read *read_msg = reinterpret_cast<IPC_Read *>(message.data());
+
+            handle_read(pty, read_msg, std::move(reply_right));
+        }
+            break;
         default:
             kernelLogger() << "posixd: Unknown message type " << ipc_msg->type << " while attending pty\n" << frg::endlog;
             break;
@@ -203,7 +272,12 @@ void process_out(const char c, PtyData::Packet &packet, std::shared_ptr<PtyData>
 
 void wake_up_manager(std::shared_ptr<PtyData> pty)
 {
-    // TODO
+    while (!pty->blocked_manager_reads.empty() && !pty->subordinate_queue.empty()) {
+        auto blocked_read = std::move(pty->blocked_manager_reads.front());
+        pty->blocked_manager_reads.pop_front();
+        
+        handle_read_reply(pty, blocked_read.size, std::move(blocked_read.reply_right));
+    }
 }
 
 void subordinate_handle_write(const char *data, size_t size, std::shared_ptr<PtyData> pty, pmos::Right reply_right)

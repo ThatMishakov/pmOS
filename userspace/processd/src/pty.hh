@@ -3,6 +3,7 @@
 #include <string>
 #include <memory>
 #include <deque>
+#include <list>
 #include <termios.h>
 
 void init_pty_filesystem();
@@ -39,6 +40,13 @@ struct PtyData {
 
     std::deque<Packet> manager_queue;
     std::deque<Packet> subordinate_queue;
+
+    struct BlockedRead {
+        pmos::Right reply_right;
+        size_t size;
+    };
+
+    std::list<BlockedRead> blocked_manager_reads;
 
     ~PtyData();
 };
