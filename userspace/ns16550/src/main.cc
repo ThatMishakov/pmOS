@@ -235,6 +235,8 @@ void set_up_interrupt()
     have_interrupts = true;
 }
 
+void set_interrupts();
+
 pmos::ReceiveRight timer_right;
 
 void ns16550_init()
@@ -364,7 +366,7 @@ void ns16550_init()
 
     if (have_interrupts) {
         // Enable interrupts
-        set_register(IER, IER_RLS | IER_RX_DATA);
+        set_interrupts();
     } else {
         timer_right = create_timer_right(serial_port);
         poll();
@@ -379,6 +381,19 @@ int buff_length             = 0;
 constexpr int buff_capacity = 16;
 
 bool writing = false;
+bool reading = false;
+
+void set_interrupts()
+{
+    u8 mask = IER_RLS;
+    if (reading)
+        mask |= IER_RX_DATA;
+    if (writing)
+        mask |= IER_TX_EMPTY;
+
+    set_register(IER, mask);
+}
+
 struct buffer {
     std::vector<std::byte> data;
     size_t pos;
@@ -421,7 +436,7 @@ void check_tx()
     if ((io_rw->read_register(LSR) & LSR_TX_EMPTY) == 0) {
         if (have_interrupts && !writing && !active_buffer.data.empty()) {
             writing = true;
-            set_register(IER, IER_RX_DATA | IER_RLS | IER_TX_EMPTY);
+            set_interrupts();
         }
         return;
     }
@@ -441,11 +456,11 @@ void check_tx()
         if (!active_buffer.data.empty() && !writing) {
             writing = true;
             if (have_interrupts)
-                set_register(IER, IER_RX_DATA | IER_RLS | IER_TX_EMPTY);
+                set_interrupts();
         } else if (active_buffer.data.empty() && writing) {
             writing = false;
             if (have_interrupts)
-                set_register(IER, IER_RX_DATA | IER_RLS);
+                set_interrupts();
         }
     }
 }
@@ -468,24 +483,44 @@ void write_interrupt()
             active_buffer = {};
     } else {
         writing = false;
-        set_register(IER, IER_RX_DATA | IER_RLS);
+        set_interrupts();
         io_rw->read_register(ISR);
     }
 }
 
+pmos_right_t tty_right;
+
 void check_rx()
 {
+    if (!reading)
+        return;
+
+    std::vector<std::byte> data;
+
     while ((io_rw->read_register(LSR) & LSR_DATA_READY) != 0) {
         auto t = io_rw->read_register(THR);
 
-        // putc(t, stdout);
-        printf("\033[1;36m"
-               "ns16550: Received letter %c"
-               "\033[0m"
-               "\n",
-               t);
+        data.push_back(static_cast<std::byte>(t));
     }
-    fflush(stdout);
+
+    if (data.empty())
+        return;
+
+    std::vector<std::byte> msg;
+    struct IPC_Write str = {
+        .type   = IPC_Write_NUM,
+        .flags  = 0,
+        .offset = IPC_FLAG_IO_OP_APPEND,
+        .data   = {},
+    };
+
+    msg.insert(msg.end(), reinterpret_cast<std::byte *>(&str), reinterpret_cast<std::byte *>(&str) + sizeof(str));
+    msg.insert(msg.end(), data.begin(), data.end());
+
+    auto r = send_message_right(tty_right, 0, msg.data(), msg.size(), nullptr, 0);
+    if (r.result != SUCCESS) {
+        write_str("Failed to send message to tty right " + std::to_string(r.result) + " (" + std::string(strerror(r.result)) + ")\n");
+    }
 }
 
 void check_buffers()
@@ -622,6 +657,10 @@ pmos::async::detached_task start_shell()
         co_return;
     }
 
+    tty_right = io_right;
+    reading = true;
+    if (have_interrupts)
+        set_interrupts();
 
     while (true) {
         auto data = co_await read_from_right(io_right, 0x1000);
