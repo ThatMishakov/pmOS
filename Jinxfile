@@ -12,7 +12,7 @@ BOOT_SERVICES="ahcid devicesd logd processd terminald blockd ps2d tests ns16550 
 if [ "$JINX_ARCH" = "x86_64" ] || [ "$JINX_ARCH" = "i686" ]; then
     BOOT_SERVICES="$BOOT_SERVICES i8042"
 fi
-PKGS="zsh ncurses"
+PKGS="bash ncurses"
 
 # C_COMPILER="$JINX_ARCH-pmos-gcc"
 # CXX_COMPILER="$JINX_ARCH-pmos-g++"

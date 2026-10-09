@@ -8,6 +8,7 @@
 #include "devfs.hh"
 #include "process.hh"
 #include <termios.h>
+#include <pmos/fs-data.h>
 
 struct PtyVfs final: public Filesystem {
     std::expected<std::shared_ptr<VNode>, int> resolve_child(std::shared_ptr<VNode> parent, const std::string &name) override
@@ -184,6 +185,50 @@ int ttiocsctty_handle(std::shared_ptr<PtyData> pty, unsigned flags, uint64_t sen
     return 0;
 }
 
+void process_out(const char c, PtyData::Packet &packet, std::shared_ptr<PtyData> pty)
+{
+    if (!(pty->active_settings.c_lflag & OPOST)) {
+        packet.data.push_back(c);
+        return;
+    }
+
+    if (pty->active_settings.c_oflag & ONLCR && c == '\n') {
+        packet.data.push_back('\r');
+        packet.data.push_back('\n');
+        return;
+    }
+
+    packet.data.push_back(c);
+}
+
+void wake_up_manager(std::shared_ptr<PtyData> pty)
+{
+    // TODO
+}
+
+void subordinate_handle_write(const char *data, size_t size, std::shared_ptr<PtyData> pty, pmos::Right reply_right)
+{
+    PtyData::Packet packet;
+    for (size_t i = 0; i < size; i++) {
+        process_out(data[i], packet, pty);
+    }
+
+    IPC_Write_Reply reply = {
+        .type        = IPC_Write_Reply_NUM,
+        .flags       = 0,
+        .result_code = 0,
+        .bytes_written        = static_cast<uint64_t>(packet.data.size()),
+    };
+    if (reply_right) {
+        auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+        if (!result_send)
+            kernelLogger() << "posixd: Error " << result_send.error().first << " sending write reply to port " << reply_right.get() << "\n" << frg::endlog;
+    }
+
+    pty->manager_queue.push_back(std::move(packet));
+    wake_up_manager(pty);
+}
+
 pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared_ptr<PtyData> pty, unsigned oflags, std::shared_ptr<Process> process)
 {
     while (1) {
@@ -226,6 +271,17 @@ pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared
             auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
             if (!result_send)
                 kernelLogger() << "posixd: Error " << result_send.error().first << " sending ioctl reply to port " << reply_right.get() << "\n" << frg::endlog;
+        }
+            break;
+        case IPC_Write_NUM: {
+            if (message.size() < sizeof(IPC_Write)) {
+                kernelLogger() << "posixd: Received IPC_Write that is too small while attending pty subordinate\n" << frg::endlog;
+                break;
+            }
+
+            auto *write_msg = reinterpret_cast<IPC_Write *>(ipc_msg);
+            auto size = message.size() - sizeof(IPC_Write);
+            subordinate_handle_write(write_msg->data, size, pty, std::move(reply_right));
         }
             break;
         default:
@@ -271,7 +327,7 @@ void openpt_handle(pmos::Right reply_right, unsigned oflags)
     auto op_right = std::move(right.value().first);
     auto io_right = op_right.clone();
 
-    uint16_t flags = O_RDWR | (oflags & O_NONBLOCK);
+    uint16_t flags = O_RDWR | (oflags & O_NONBLOCK) | FLAG_ISATTY;
 
     IPC_Open_Reply reply = {
         .type        = IPC_Open_Reply_NUM,

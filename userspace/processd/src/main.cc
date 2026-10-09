@@ -443,19 +443,26 @@ struct OpenFileIpc {
     uint64_t flags;
 };
 
+struct PmosFsDataHeader {
+    uint64_t total_size;
+    uint64_t array_size;
+};
+
 std::expected<void, int> pass_filesystem(pmos::Right fs_object_right, pmos::Right task_group_right, uint64_t task_group, uint64_t page_table, pmos::utility::ElFAuxvecBuilder &auxvec)
 {
+    constexpr size_t max_entries = 256;
+    constexpr size_t entry_size = sizeof(OpenFileIpc);
+
     auto size = get_mem_object_size(fs_object_right.get(), 0);
     if (size.result)
         return std::unexpected((int)size.result);
-    
-    auto table_size = sizeof(OpenFileIpc) * 512;
 
-    if (size.value < table_size)
+    if (size.value == 0 || size.value > 64*1024)
         return std::unexpected(-EINVAL);
 
-    if (size.value > 64*1024) // Unrasonably large size
-        return std::unexpected(-EINVAL);
+    size_t src_count = size.value / entry_size;
+    if (src_count > max_entries)
+        src_count = max_entries;
 
     map_mem_object_param_t map_params = {
         .page_table_id = 0,
@@ -482,7 +489,8 @@ std::expected<void, int> pass_filesystem(pmos::Right fs_object_right, pmos::Righ
     });
 
     auto page_size = getpagesize();
-    auto map_size = (table_size + page_size - 1) & ~(page_size - 1);
+    auto dest_data_size = sizeof(PmosFsDataHeader) + max_entries * entry_size;
+    auto map_size = (dest_data_size + page_size - 1) & ~(page_size - 1);
     auto new_map_result = create_normal_region(0, nullptr, map_size, PROT_READ | PROT_WRITE);
     if (new_map_result.result)
         return std::unexpected((int)new_map_result.result);
@@ -498,9 +506,15 @@ std::expected<void, int> pass_filesystem(pmos::Right fs_object_right, pmos::Righ
             set_namespace(namespace_result.value, NAMESPACE_RIGHTS);
         });
 
-        for (size_t i = 0; i < 512; ++i) {
+        auto *header = reinterpret_cast<PmosFsDataHeader *>(new_map_result.virt_addr);
+        header->total_size = map_size;
+        header->array_size = max_entries;
+
+        auto dest_start = reinterpret_cast<std::byte *>(new_map_result.virt_addr) + sizeof(PmosFsDataHeader);
+
+        for (size_t i = 0; i < src_count; ++i) {
             OpenFileIpc *entry = reinterpret_cast<OpenFileIpc *>(map_result.virt_addr) + i;
-            OpenFileIpc *dest = reinterpret_cast<OpenFileIpc *>(new_map_result.virt_addr) + i;
+            OpenFileIpc *dest = reinterpret_cast<OpenFileIpc *>(dest_start) + i;
             if (entry->io_right == 0)
                 continue;
 
@@ -508,11 +522,16 @@ std::expected<void, int> pass_filesystem(pmos::Right fs_object_right, pmos::Righ
                 continue;
 
             auto dup_result = dup_right(entry->io_right);
-            if (dup_result.result)
+            if (dup_result.result) {
+                kernelLogger() << "processd: pass_filesystem: failed to dup io right " << entry->io_right
+                               << " for fd " << i << ": " << (int)dup_result.result << "\n" << frg::endlog;
                 return std::unexpected((int)dup_result.result);
-            
+            }
+
             auto transfer_result = transfer_right(task_group, dup_result.right, 0);
             if (transfer_result.result) {
+                kernelLogger() << "processd: pass_filesystem: failed to transfer io right for fd " << i
+                               << ": " << (int)transfer_result.result << "\n" << frg::endlog;
                 delete_right(dup_result.right);
                 return std::unexpected((int)transfer_result.result);
             }
@@ -520,11 +539,16 @@ std::expected<void, int> pass_filesystem(pmos::Right fs_object_right, pmos::Righ
             dest->io_right = transfer_result.right;
 
             dup_result = dup_right(entry->op_right);
-            if (dup_result.result)
+            if (dup_result.result) {
+                kernelLogger() << "processd: pass_filesystem: failed to dup op right " << entry->op_right
+                               << " for fd " << i << ": " << (int)dup_result.result << "\n" << frg::endlog;
                 return std::unexpected((int)dup_result.result);
-            
+            }
+
             transfer_result = transfer_right(task_group, dup_result.right, 0);
             if (transfer_result.result) {
+                kernelLogger() << "processd: pass_filesystem: failed to transfer op right for fd " << i
+                               << ": " << (int)transfer_result.result << "\n" << frg::endlog;
                 delete_right(dup_result.right);
                 return std::unexpected((int)transfer_result.result);
             }
@@ -545,7 +569,7 @@ std::expected<void, int> pass_filesystem(pmos::Right fs_object_right, pmos::Righ
     return {};
 }
 
-pmos::async::task<std::expected<uint64_t, int>> load_executable(uint64_t task_id, pmos::Right &file_handle, std::shared_ptr<Process> process, std::vector<std::string> args, std::vector<std::string> envs, pmos::Right posix_right)
+pmos::async::task<std::expected<uint64_t, int>> load_executable(uint64_t task_id, pmos::Right &file_handle, std::shared_ptr<Process> process, std::vector<std::string> args, std::vector<std::string> envs, pmos::Right posix_right, pmos::Right fs_object_right, pmos::Right task_group_right)
 {
     Elf32_Ehdr ehdr;
 
@@ -757,6 +781,12 @@ pmos::async::task<std::expected<uint64_t, int>> load_executable(uint64_t task_id
             throw std::bad_alloc();
     }
 
+    if (fs_object_right) {
+        auto fs_result = pass_filesystem(std::move(fs_object_right), std::move(task_group_right), group_id, page_table_id, auxvec_builder);
+        if (!fs_result)
+            co_return std::unexpected(fs_result.error());
+    }
+
     auto s_reg = create_normal_region(PAGE_TABLE_SELF, NULL, stack_size, PROT_READ | PROT_WRITE | CREATE_FLAG_COW);
     if (s_reg.result)
         co_return std::unexpected((int)s_reg.result);
@@ -870,7 +900,7 @@ pmos::async::detached_task execve_handle(std::shared_ptr<Process> process, std::
     auto right = main_port.create_right(pmos::RightType::SendMany);
     auto [send_right, receive_right] = std::move(right.value());
 
-    auto exec_result = co_await load_executable(new_task.value, file_handle.value(), process, std::move(args), std::move(envs), std::move(send_right));
+    auto exec_result = co_await load_executable(new_task.value, file_handle.value(), process, std::move(args), std::move(envs), std::move(send_right), std::move(fs_right), std::move(task_group_right));
     if (!exec_result) {
         execve_reply(std::move(reply_right), exec_result.error());
         co_return;
