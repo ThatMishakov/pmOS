@@ -15,6 +15,7 @@
 #include "log.hh"
 #include <fcntl.h>
 #include "devfs.hh"
+#include <pmos/fs-data.h>
 
 extern pmos::Port main_port;
 extern pmos::PortDispatcher dispatcher;
@@ -429,10 +430,14 @@ pmos::async::detached_task open_file(pmos::Right reply_right, std::string path, 
 
     auto file_right = create_file_right(vnode);
 
+    uint16_t flags = 0;
+    if (vnode->is_tty)
+        flags |= FLAG_ISATTY;
+
     IPC_Open_Reply reply = {
         .type        = IPC_Open_Reply_NUM,
         .result_code = 0,
-        .fs_flags    = 0,
+        .fs_flags    = flags,
     };
 
     auto send_result = pmos::send_message_right_one(reply_right, reply, {}, true, std::move(file_right), std::move(fs_right).value());

@@ -385,7 +385,7 @@ pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared
 
             IPC_Read *read_msg = reinterpret_cast<IPC_Read *>(message.data());
 
-            handle_read(pty, read_msg, std::move(reply_right));
+            handle_read_subordinate(pty, read_msg, std::move(reply_right));
         }
             break;
         default:

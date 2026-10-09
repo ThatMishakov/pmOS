@@ -922,6 +922,7 @@ pmos::async::detached_task execve_handle(std::shared_ptr<Process> process, std::
     kernelLogger() << "processd: execve_handle: starting new task " << new_task.value << " for process " << process->pid << "\n" << frg::endlog;
 
     process->running_exec = false;
+    process->ran_exec = true;
     exec_guard.release();
 
     handle_process_messages(std::move(receive_right), process);
@@ -1087,6 +1088,16 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
 
             // IPC_Setsid *m = reinterpret_cast<IPC_Setsid *>(ipc_msg);
             setsid_handle(process, std::move(reply_right));
+            break;
+        }
+        case IPC_Setpgid_NUM: {
+            if (msg.size < sizeof(IPC_Setpgid)) {
+                kernelLogger() << "processd: Received IPC_Setpgid that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            IPC_Setpgid *m = reinterpret_cast<IPC_Setpgid *>(ipc_msg);
+            setpgid_handle(process, std::move(reply_right), m->pid, m->pgid);
             break;
         }
         case IPC_Execve_NUM: {

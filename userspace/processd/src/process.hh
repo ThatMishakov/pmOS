@@ -25,10 +25,14 @@ struct Process {
     std::shared_ptr<Process> parent;
     std::shared_ptr<ProcessGroup> process_group;
 
+    std::map<int32_t, std::shared_ptr<Process>> children;
+
     pmos::Right process_right;
     uint64_t kernel_process_id = 0;
     uint64_t receive_right_id = 0;
     bool running_exec = false;
+    bool ran_exec = false;
+    bool zombie = false;
 
     uint32_t uid = 0;
     uint32_t gid = 0;
@@ -58,3 +62,4 @@ std::shared_ptr<Process> process_for_pid(int32_t pid);
 
 void delete_process(std::shared_ptr<Process> process);
 void setsid_handle(std::shared_ptr<Process> process, pmos::Right reply_right);
+void setpgid_handle(std::shared_ptr<Process> process, pmos::Right reply_right, pid_t pid, pid_t pgid);

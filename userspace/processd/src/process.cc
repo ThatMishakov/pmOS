@@ -69,6 +69,8 @@ std::shared_ptr<Process> create_process(std::shared_ptr<Process> parent, pmos::R
     process->euid = parent->euid;
     process->egid = parent->egid;
 
+    parent->children[process->pid] = process;
+
     return process;
 }
 
@@ -110,6 +112,8 @@ void delete_process(std::shared_ptr<Process> process)
     if (!process)
         return;
 
+    process->zombie = true;
+
     remove_process_from_group(process->process_group, process);
     processes.erase(process->pid);
     processes_by_kernel_id.erase(process->kernel_process_id);
@@ -124,15 +128,15 @@ std::shared_ptr<Process> get_process_kernel_id(uint64_t kernel_process_id)
     return it->second;
 }
 
-void setsid_reply(pmos::Right &reply_right, int32_t result_sid)
+void setid_reply(pmos::Right &reply_right, int32_t result_id)
 {
     if (!reply_right)
         return;
 
-    IPC_Setsid_Reply reply = {
-        .type = IPC_Setsid_Reply_NUM,
+    IPC_Setid_Reply reply = {
+        .type = IPC_Setid_Reply_NUM,
         .flags = 0,
-        .result_sid = result_sid,
+        .result_id = result_id,
     };
 
     auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
@@ -146,11 +150,11 @@ void setsid_handle(std::shared_ptr<Process> process, pmos::Right reply_right)
     assert(process->process_group);
 
     if (process->process_group->pgid == process->pid) {
-        setsid_reply(reply_right, -EPERM);
+        setid_reply(reply_right, -EPERM);
         return;
     }
     if (process_groups.find(process->pid) != process_groups.end()) {
-        setsid_reply(reply_right, -EPERM);
+        setid_reply(reply_right, -EPERM);
         return;
     }
 
@@ -159,5 +163,83 @@ void setsid_handle(std::shared_ptr<Process> process, pmos::Right reply_right)
     process->process_group = new_group;
     new_group->processes[process->pid] = process;
 
-    setsid_reply(reply_right, new_group->pgid);
+    setid_reply(reply_right, new_group->pgid);
 }
+
+void setpgid_handle(std::shared_ptr<Process> process, pmos::Right reply_right, pid_t pid, pid_t pgid)
+{
+    assert(process);
+
+    if (pgid < 0) {
+        setid_reply(reply_right, -EINVAL);
+        return;
+    }
+    if (pid < 0) {
+        setid_reply(reply_right, -ESRCH);
+        return;
+    }
+
+    if (pid == 0)
+        pid = process->pid;
+    if (pgid == 0)
+        pgid = pid;
+
+    auto target_process = process_for_pid(pid);
+    if (!target_process) {
+        setid_reply(reply_right, -ESRCH);
+        return;
+    }
+
+    if (target_process->parent != process && target_process != process) {
+        setid_reply(reply_right, -ESRCH);
+        return;
+    }
+
+    if (target_process != process && target_process->ran_exec) {
+        setid_reply(reply_right, -EACCES);
+        return;
+    }
+
+    if (target_process->process_group->session != process->process_group->session) {
+        setid_reply(reply_right, -EPERM);
+        return;
+    }
+
+    if (target_process->process_group->session->sid == target_process->pid) {
+        setid_reply(reply_right, -EPERM);
+        return;
+    }
+
+    auto new_group_it = process_groups.find(pgid);
+    if (new_group_it == process_groups.end()) {
+        if (pgid != target_process->pid) {
+            setid_reply(reply_right, -EPERM);
+            return;
+        }
+
+        auto new_group = create_process_group(pgid, target_process->process_group->session);
+        remove_process_from_group(target_process->process_group, target_process);
+        target_process->process_group = new_group;
+        new_group->processes[target_process->pid] = target_process;
+
+        setid_reply(reply_right, new_group->pgid);
+        return;
+    }
+
+    auto new_group = new_group_it->second;
+    if (new_group->session != target_process->process_group->session) {
+        setid_reply(reply_right, -EPERM);
+        return;
+    }
+
+    if (target_process->process_group == new_group) {
+        setid_reply(reply_right, new_group->pgid);
+        return;
+    }
+
+    remove_process_from_group(target_process->process_group, target_process);
+    target_process->process_group = new_group;
+    new_group->processes[target_process->pid] = target_process;
+    setid_reply(reply_right, new_group->pgid);
+}
+    
