@@ -36,6 +36,11 @@ struct Filesystem {
         (void)vnode;
         co_return std::unexpected(-ENOSYS);
     }
+    virtual pmos::async::task<std::expected<void, int>> unlockpt(std::shared_ptr<VNode> vnode)
+    {
+        (void)vnode;
+        co_return std::unexpected(-ENOSYS);
+    }
 
     virtual ~Filesystem() = default;
 };
@@ -112,6 +117,8 @@ struct VNode: public std::enable_shared_from_this<VNode> {
     pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> resolve_child(const std::string &name);
 
     std::string path() const;
+
+    bool is_tty = false;
 };
 
 extern std::vector<std::shared_ptr<Filesystem>> filesystems;
@@ -145,3 +152,5 @@ pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right
 pmos::async::detached_task stat_handle(std::shared_ptr<VNode> vnode, pmos::Right reply_right, unsigned flags, std::string path);
 
 pmos::async::task<std::expected<pmos::Right /* io_right */, int>> get_file_handle(std::string path, std::shared_ptr<Process> process);
+
+pmos::async::detached_task attend_open_file(std::shared_ptr<VNode> vnode, pmos::ReceiveRight right);

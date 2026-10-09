@@ -286,6 +286,43 @@ void open_file_error_reply(pmos::Right &reply_right, int result)
         kernelLogger() << "posixd: Error " << result_send.error().first << " sending open file reply to port " << reply_right.get() << "\n" << frg::endlog;
 }
 
+void handle_ttyname(std::shared_ptr<VNode> vnode, pmos::Right reply_right)
+{
+    if (!reply_right)
+        return;
+
+    if (!vnode->is_tty) {
+        IPC_Ttyname_Reply reply = {
+            .type        = IPC_Ttyname_Reply_NUM,
+            .result_code = -ENOTTY,
+            .flags       = 0,
+            .tty_name    = {},
+        };
+
+        auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+        if (!result_send)
+            kernelLogger() << "posixd: Error " << result_send.error().first << " sending ttyname reply to port " << reply_right.get() << "\n" << frg::endlog;
+        return;
+    }
+
+    auto path = vnode->path();
+    size_t path_length = path.size();
+
+    size_t reply_size = sizeof(IPC_Ttyname_Reply) + path_length;
+    std::unique_ptr<char[]> reply_data(new char[reply_size]);
+    auto *reply = reinterpret_cast<IPC_Ttyname_Reply *>(reply_data.get());
+    reply->type = IPC_Ttyname_Reply_NUM;
+    reply->result_code = 0;
+    reply->flags = 0;
+    memcpy(reply->tty_name, path.c_str(), path_length);
+
+    auto span = std::span(reply_data.get(), reply_size);
+    auto result_send = pmos::send_message_right(
+        reply_right, span, std::pair<pmos::Port const *, pmos::RightType>{nullptr, pmos::RightType::SendOnce}, true);
+    if (!result_send)
+        kernelLogger() << "posixd: Error " << result_send.error().first << " sending ttyname reply to port " << reply_right.get() << "\n" << frg::endlog;
+}
+
 pmos::async::detached_task attend_open_file(std::shared_ptr<VNode> vnode, pmos::ReceiveRight right)
 {
     while (1) {
@@ -312,6 +349,33 @@ pmos::async::detached_task attend_open_file(std::shared_ptr<VNode> vnode, pmos::
             stat_handle(vnode, std::move(reply_right), stat_msg->flags, std::move(stat_msg_path));
         }
             break;
+        case IPC_Ttyname_NUM: {
+            if (message.size() < sizeof(IPC_Ttyname)) {
+                kernelLogger() << "posixd: Received IPC_Ttyname that is too small while attending pty\n" << frg::endlog;
+                break;
+            }
+
+            handle_ttyname(vnode, std::move(reply_right));
+        }
+            break;
+        case IPC_Unlockpt_NUM: {
+            if (message.size() < sizeof(IPC_Unlockpt)) {
+                kernelLogger() << "posixd: Received IPC_Unlockpt that is too small while attending pty\n" << frg::endlog;
+                break;
+            }
+
+            auto result = co_await vnode->parent_fs->unlockpt(vnode);
+
+            IPC_Unlockpt_Reply reply = {
+                .type        = IPC_Unlockpt_Reply_NUM,
+                .result_code = static_cast<int16_t>(result.error_or(0)),
+                .flags       = 0,
+            };
+
+            auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+            if (!result_send)
+                kernelLogger() << "posixd: Error " << result_send.error().first << " sending unlockpt reply to port " << reply_right.get() << "\n" << frg::endlog;
+        } break;
         default:
             kernelLogger() << "posixd: Unknown message type " << ipc_msg->type << " while attending file\n" << frg::endlog;
             break;
