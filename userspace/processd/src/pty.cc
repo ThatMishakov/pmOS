@@ -23,8 +23,23 @@ struct PtyVfs final: public Filesystem {
 
     pmos::async::task<std::expected<StatData, int>> get_file_stat_dynamic(std::shared_ptr<VNode> vnode)
     {
-        kernelLogger() << "posixd: Attempted to get file stat on the pty filesystem\n" << frg::endlog;
-        co_return std::unexpected(-ENOSYS); // TODO
+        if (vnode->type == FileType::Directory) {
+            co_return StatData{
+                .st_size = 0,
+                .st_nlink = 2,
+                .st_atim_tv_nsec = 0, .st_mtim_tv_nsec = 0,
+                .st_ctim_tv_nsec = 0, .st_btim_tv_nsec = 0,
+                .st_blocks = 0,
+            };
+        }
+
+        co_return StatData{
+            .st_size = 0,
+            .st_nlink = 1,
+            .st_atim_tv_nsec = 0, .st_mtim_tv_nsec = 0,
+            .st_ctim_tv_nsec = 0, .st_btim_tv_nsec = 0,
+            .st_blocks = 0,
+        };
     }
 
     pmos::async::task<std::expected<void, int>> unlockpt(std::shared_ptr<VNode> vnode) override;
@@ -48,6 +63,7 @@ void init_pty_filesystem()
     pty_root_vnode->parent_fs = pty_fs;
     pty_fs->root = pty_root_vnode;
     pty_root_vnode->name = "pts";
+    pty_root_vnode->st_mode = S_IFDIR | 0755;
 
     assert(devfs_root_vnode);
     devfs_root_vnode->children_cache[pty_root_vnode->name] = pty_root_vnode;
@@ -83,6 +99,7 @@ std::shared_ptr<VNode> create_pty_vnode(std::shared_ptr<PtyData> pty)
     vnode->inode = pty->idx;
     vnode->is_tty = true;
     pty->vnode = vnode;
+    vnode->st_mode = S_IFCHR | 0620;
 
     pty_root_vnode->children_cache[vnode->name] = vnode;
     vnode->parent = pty_root_vnode;
@@ -132,9 +149,11 @@ static void read_error_reply(pmos::Right reply_right, int error_code)
         kernelLogger() << "posixd: Error " << result_send.error().first << " sending read error reply to port " << reply_right.get() << "\n" << frg::endlog;
 }
 
-static void handle_read_reply(std::shared_ptr<PtyData> pty, size_t max_size, pmos::Right reply_right)
+static void handle_read_reply(std::shared_ptr<PtyData> pty, size_t max_size, pmos::Right reply_right, bool subordinate)
 {
-    auto &packet = pty->manager_queue.front();
+    auto &queue = subordinate ? pty->subordinate_queue : pty->manager_queue;
+    assert(!queue.empty());
+    auto &packet = queue.front();
     size_t available_size = packet.data.size() - packet.offset;
     size_t to_read = std::min(max_size, available_size);
 
@@ -151,7 +170,7 @@ static void handle_read_reply(std::shared_ptr<PtyData> pty, size_t max_size, pmo
     } else {
         packet.offset += to_read;
         if (packet.offset == packet.data.size()) {
-            pty->manager_queue.pop_front();
+            queue.pop_front();
         }
     }
 }
@@ -174,7 +193,26 @@ static void handle_read(std::shared_ptr<PtyData> pty, IPC_Read *read_msg, pmos::
         return;
     }
 
-    handle_read_reply(pty, read_size, std::move(reply_right));
+    handle_read_reply(pty, read_size, std::move(reply_right), false);
+}
+
+static void handle_read_subordinate(std::shared_ptr<PtyData> pty, IPC_Read *read_msg, pmos::Right reply_right)
+{
+    size_t read_size = read_msg->max_size;
+
+    bool noblock = read_msg->flags & IPC_FLAG_IO_OP_NONBLOCK;
+
+    if (pty->subordinate_queue.empty()) {
+        if (noblock) {
+            read_error_reply(std::move(reply_right), -EAGAIN);
+            return;
+        }
+
+        pty->blocked_subordinate_reads.push_back({std::move(reply_right), read_size});
+        return;
+    }
+
+    handle_read_reply(pty, read_size, std::move(reply_right), true);
 }
 
 pmos::async::detached_task openpt_manager(pmos::ReceiveRight rr, std::shared_ptr<PtyData> pty, unsigned oflags)
@@ -257,7 +295,7 @@ void wake_up_manager(std::shared_ptr<PtyData> pty)
         auto blocked_read = std::move(pty->blocked_manager_reads.front());
         pty->blocked_manager_reads.pop_front();
         
-        handle_read_reply(pty, blocked_read.size, std::move(blocked_read.reply_right));
+        handle_read_reply(pty, blocked_read.size, std::move(blocked_read.reply_right), false);
     }
 }
 
@@ -337,6 +375,17 @@ pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared
             auto *write_msg = reinterpret_cast<IPC_Write *>(ipc_msg);
             auto size = message.size() - sizeof(IPC_Write);
             subordinate_handle_write(write_msg->data, size, pty, std::move(reply_right));
+        }
+            break;
+        case IPC_Read_NUM: {
+            if (message.size() < sizeof(IPC_Read)) {
+                kernelLogger() << "posixd: Received IPC_Read that is too small while attending pty subordinate\n" << frg::endlog;
+                break;
+            }
+
+            IPC_Read *read_msg = reinterpret_cast<IPC_Read *>(message.data());
+
+            handle_read(pty, read_msg, std::move(reply_right));
         }
             break;
         default:

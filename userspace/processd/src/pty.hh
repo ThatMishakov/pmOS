@@ -47,6 +47,7 @@ struct PtyData {
     };
 
     std::list<BlockedRead> blocked_manager_reads;
+    std::list<BlockedRead> blocked_subordinate_reads;
 
     ~PtyData();
 };
