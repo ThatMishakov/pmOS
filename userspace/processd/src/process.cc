@@ -72,6 +72,14 @@ std::shared_ptr<Process> create_process(std::shared_ptr<Process> parent, pmos::R
     return process;
 }
 
+std::shared_ptr<Process> process_for_pid(int32_t pid)
+{
+    auto it = processes.find(pid);
+    if (it == processes.end())
+        return nullptr;
+    return it->second;
+}
+
 void remove_process_group_from_session(std::shared_ptr<Session> session, std::shared_ptr<ProcessGroup> group)
 {
     assert(session);

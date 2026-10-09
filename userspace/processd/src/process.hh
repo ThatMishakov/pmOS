@@ -54,6 +54,7 @@ struct Session {
 
 std::shared_ptr<Process> create_first_process();
 std::shared_ptr<Process> create_process(std::shared_ptr<Process> parent, pmos::Right process_right, uint64_t kernel_process_id);
+std::shared_ptr<Process> process_for_pid(int32_t pid);
 
 void delete_process(std::shared_ptr<Process> process);
 void setsid_handle(std::shared_ptr<Process> process, pmos::Right reply_right);

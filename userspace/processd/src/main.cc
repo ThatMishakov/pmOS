@@ -456,7 +456,6 @@ std::expected<void, int> pass_filesystem(pmos::Right fs_object_right, pmos::Righ
     auto size = get_mem_object_size(fs_object_right.get(), 0);
     if (size.result)
         return std::unexpected((int)size.result);
-
     if (size.value == 0 || size.value > 64*1024)
         return std::unexpected(-EINVAL);
 
@@ -515,6 +514,7 @@ std::expected<void, int> pass_filesystem(pmos::Right fs_object_right, pmos::Righ
         for (size_t i = 0; i < src_count; ++i) {
             OpenFileIpc *entry = reinterpret_cast<OpenFileIpc *>(map_result.virt_addr) + i;
             OpenFileIpc *dest = reinterpret_cast<OpenFileIpc *>(dest_start) + i;
+
             if (entry->io_right == 0)
                 continue;
 
@@ -929,6 +929,19 @@ pmos::async::detached_task execve_handle(std::shared_ptr<Process> process, std::
     co_return;
 }
 
+void get_id_reply(pmos::Right reply_right, int result, uint32_t id)
+{
+    IPC_Get_ID_Reply reply = {
+        .type = IPC_Get_ID_Reply_NUM,
+        .flags = 0,
+        .result = static_cast<int16_t>(result),
+        .id = id,
+    };
+    auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+    if (!result_send)
+        kernelLogger() << "processd: get_id_reply: Failed to send reply message\n" << frg::endlog;
+}
+
 void get_id_handle(std::shared_ptr<Process> process, pmos::Right reply_right, short type)
 {
     uint32_t id = 0;
@@ -962,15 +975,46 @@ void get_id_handle(std::shared_ptr<Process> process, pmos::Right reply_right, sh
         break;
     }
 
-    IPC_Get_ID_Reply reply = {
-        .type = IPC_Get_ID_Reply_NUM,
-        .flags = 0,
-        .result = static_cast<int16_t>(invalid_type ? -EINVAL : 0),
-        .id = invalid_type ? 0 : id,
-    };
-        auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
-    if (!result_send)
-        kernelLogger() << "processd: get_id_handle: Failed to send reply message\n" << frg::endlog;
+    get_id_reply(std::move(reply_right), invalid_type ? -ENOSYS : 0, id);
+}
+
+void get_id_for_handle(const std::shared_ptr<Process> &process, pmos::Right reply_right, short type, pid_t pid)
+{
+    uint32_t id = 0;
+    int error = 0;
+
+    if (pid < 0) {
+        get_id_reply(std::move(reply_right), -EINVAL, 0);
+        return;
+    }
+
+    std::shared_ptr<Process> target_process;
+    if (pid == 0)
+        target_process = process;
+    else
+        target_process = process_for_pid(pid);
+
+    if (!target_process) {
+        get_id_reply(std::move(reply_right), -ESRCH, 0);
+        return;
+    }
+
+    if (target_process->process_group->session != process->process_group->session) {
+        get_id_reply(std::move(reply_right), -EPERM, 0);
+        return;
+    }
+
+    switch (type) {
+    case IPC_GET_ID_FOR_TYPE_PGID:
+        id = target_process->process_group->pgid;
+        break;
+    default:
+        error = -ENOSYS;
+        kernelLogger() << "processd: get_id_handle: Unknown type " << type << "\n" << frg::endlog;
+        break;
+    }
+
+    get_id_reply(std::move(reply_right), error, id);
 }
 
 pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::shared_ptr<Process> process)
@@ -1063,6 +1107,17 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
             IPC_Get_ID *m = reinterpret_cast<IPC_Get_ID *>(ipc_msg);
 
             get_id_handle(process, std::move(reply_right), m->id_type);
+            break;
+        }
+        case IPC_Get_ID_For_NUM: {
+            if (msg.size < sizeof(IPC_Get_ID_For)) {
+                kernelLogger() << "processd: Received IPC_Get_ID_For that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            IPC_Get_ID_For *m = reinterpret_cast<IPC_Get_ID_For *>(ipc_msg);
+
+            get_id_for_handle(process, std::move(reply_right), m->id_type, m->pid);
             break;
         }
         case IPC_Pipe_Open_NUM: {
