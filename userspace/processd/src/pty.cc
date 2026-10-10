@@ -11,6 +11,8 @@
 #include <pmos/fs-data.h>
 #include <signal.h>
 #include <poll.h>
+#include <sys/ioctl.h>
+#include <span>
 
 struct PtyVfs final: public Filesystem {
     std::expected<std::shared_ptr<VNode>, int> resolve_child(std::shared_ptr<VNode> parent, const std::string &name) override
@@ -614,6 +616,45 @@ static void handle_poll(std::shared_ptr<PtyData> pty, uint16_t flags, uint16_t m
     }
 }
 
+void handle_ioctl(std::shared_ptr<PtyData> pty, unsigned request, unsigned flags, std::span<std::byte> data, pmos::Right reply_right, uint64_t sender_process_id)
+{
+    int result_code = 0;
+
+    switch (request) {
+    case TCSETS:
+    // The next two are a TODO!!
+    case TCSETSW:
+    case TCSETSF: {
+        if (data.size() < sizeof(struct termios)) {
+            result_code = -EINVAL;
+            break;
+        }
+        struct termios *new_settings = reinterpret_cast<struct termios *>(data.data());
+        pty->active_settings = *new_settings;
+    
+        result_code = 0;
+    }
+        break;
+    case TIOCSCTTY:
+        result_code = ttiocsctty_handle(pty, flags, sender_process_id);
+        break;
+    default:
+        kernelLogger() << "posixd: Unknown ioctl request " << request << " while attending pty\n" << frg::endlog;
+        result_code = -ENOTTY;
+        break;
+    }
+
+    IPC_Ioctl_Reply reply = {
+        .type         = IPC_Ioctl_Reply_NUM,
+        .flags        = 0,
+        .result_code  = static_cast<int16_t>(result_code),
+        .data = {},
+    };
+    auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+    if (!result_send)
+        kernelLogger() << "posixd: Error " << result_send.error().first << " sending ioctl reply to port " << reply_right.get() << "\n" << frg::endlog;
+}
+
 pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared_ptr<PtyData> pty, unsigned oflags, std::shared_ptr<Process> process)
 {
     while (1) {
@@ -627,36 +668,6 @@ pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared
         auto *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(message.data());
         switch (ipc_msg->type) {
         case IPC_Kernel_Receive_Right_Destroyed_NUM:
-            break;
-        case IPC_Ioctl_NUM: {
-            if (message.size() < sizeof(IPC_Ioctl)) {
-                kernelLogger() << "posixd: Received IPC_Ioctl that is too small while attending pty subordinate\n" << frg::endlog;
-                break;
-            }
-
-            auto *ioctl_msg = reinterpret_cast<IPC_Ioctl *>(ipc_msg);
-            int result_code = 0;
-
-            switch (ioctl_msg->request) {
-            case TIOCSCTTY:
-                result_code = ttiocsctty_handle(pty, ioctl_msg->flags, msg.sender_process);
-                break;
-            default:
-                result_code = -ENOTTY;
-                break;
-            }
-
-            IPC_Ioctl_Reply reply = {
-                .type         = IPC_Ioctl_Reply_NUM,
-                .flags        = 0,
-                .result_code  = static_cast<int16_t>(result_code),
-                .ioctl_result = 0,
-            };
-
-            auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
-            if (!result_send)
-                kernelLogger() << "posixd: Error " << result_send.error().first << " sending ioctl reply to port " << reply_right.get() << "\n" << frg::endlog;
-        }
             break;
         case IPC_Write_NUM: {
             if (message.size() < sizeof(IPC_Write)) {
@@ -700,6 +711,18 @@ pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared
 
             IPC_Poll *poll_msg = reinterpret_cast<IPC_Poll *>(message.data());
             handle_poll(pty, poll_msg->flags, poll_msg->events, std::move(reply_right), true);
+        }
+            break;
+        case IPC_Ioctl_NUM: {
+            if (message.size() < sizeof(IPC_Ioctl)) {
+                kernelLogger() << "posixd: Received IPC_Ioctl that is too small while attending pty subordinate\n" << frg::endlog;
+                break;
+            }
+            IPC_Ioctl *ioctl_msg = reinterpret_cast<IPC_Ioctl *>(message.data());
+
+            auto span = std::span(message.data(), message.size());
+            span = span.subspan(sizeof(IPC_Ioctl));
+            handle_ioctl(pty, ioctl_msg->request, ioctl_msg->flags, span, std::move(reply_right), msg.sender_process);
         }
             break;
         default:
