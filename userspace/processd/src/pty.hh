@@ -37,6 +37,7 @@ struct PtyData {
     };
 
     struct termios active_settings = {};
+    struct winsize active_window_size = {};
 
     std::deque<Packet> manager_queue;
     std::deque<Packet> subordinate_queue;

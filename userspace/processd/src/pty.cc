@@ -619,6 +619,7 @@ static void handle_poll(std::shared_ptr<PtyData> pty, uint16_t flags, uint16_t m
 void handle_ioctl(std::shared_ptr<PtyData> pty, unsigned request, unsigned flags, std::span<std::byte> data, pmos::Right reply_right, uint64_t sender_process_id)
 {
     int result_code = 0;
+    std::vector<std::byte> reply_data{};
 
     switch (request) {
     case TCSETS:
@@ -638,6 +639,14 @@ void handle_ioctl(std::shared_ptr<PtyData> pty, unsigned request, unsigned flags
     case TIOCSCTTY:
         result_code = ttiocsctty_handle(pty, flags, sender_process_id);
         break;
+    case TIOCGWINSZ: {
+        if (data.size() < sizeof(struct winsize)) {
+            result_code = -EINVAL;
+            break;
+        }
+        reply_data.insert(reply_data.end(), reinterpret_cast<std::byte *>(&pty->active_window_size), reinterpret_cast<std::byte *>(&pty->active_window_size) + sizeof(struct winsize));
+    }
+        break;
     default:
         kernelLogger() << "posixd: Unknown ioctl request " << request << " while attending pty\n" << frg::endlog;
         result_code = -ENOTTY;
@@ -650,7 +659,12 @@ void handle_ioctl(std::shared_ptr<PtyData> pty, unsigned request, unsigned flags
         .result_code  = static_cast<int16_t>(result_code),
         .data = {},
     };
-    auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+
+    std::vector<std::byte> reply_buffer;
+    reply_buffer.insert(reply_buffer.end(), reinterpret_cast<std::byte *>(&reply), reinterpret_cast<std::byte *>(&reply) + sizeof(reply));
+    reply_buffer.insert(reply_buffer.end(), reply_data.begin(), reply_data.end());
+
+    auto result_send = pmos::send_message_right(reply_right, std::span(reply_buffer), {}, true);
     if (!result_send)
         kernelLogger() << "posixd: Error " << result_send.error().first << " sending ioctl reply to port " << reply_right.get() << "\n" << frg::endlog;
 }
