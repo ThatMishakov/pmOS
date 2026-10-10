@@ -22,7 +22,7 @@ struct PtyVfs final: public Filesystem {
 
     pmos::async::task<std::expected<pmos::Right, int>> open_file(std::shared_ptr<VNode> vnode, std::shared_ptr<Process> process) override;
 
-    pmos::async::task<std::expected<StatData, int>> get_file_stat_dynamic(std::shared_ptr<VNode> vnode)
+    pmos::async::task<std::expected<StatData, int>> get_file_stat_dynamic(std::shared_ptr<VNode> vnode) override
     {
         if (vnode->type == FileType::Directory) {
             co_return StatData{
@@ -610,6 +610,18 @@ pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared
             IPC_Read *read_msg = reinterpret_cast<IPC_Read *>(message.data());
 
             handle_read_subordinate(pty, read_msg, std::move(reply_right));
+        }
+            break;
+        case IPC_Tcgetattr_NUM: {
+            IPC_Tcgetattr_Reply reply = {
+                .type = IPC_Tcgetattr_Reply_NUM,
+                .result_code = 0,
+                .termios = pty->active_settings,
+            };
+
+            auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+            if (!result_send)
+                kernelLogger() << "posixd: Error " << result_send.error().first << " sending termios getattr reply to port " << reply_right.get() << "\n" << frg::endlog;
         }
             break;
         default:

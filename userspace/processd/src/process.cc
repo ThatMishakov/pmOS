@@ -4,6 +4,8 @@
 #include <pmos/ipc.h>
 #include "log.hh"
 #include <unordered_map>
+#include <sys/wait.h>
+#include "vfs.hh"
 
 int32_t allocate_pid()
 {
@@ -107,6 +109,19 @@ void remove_process_from_group(std::shared_ptr<ProcessGroup> group, std::shared_
     }
 }
 
+void waitpid_handle(std::shared_ptr<Process> process)
+{
+    assert(process);
+    auto parent = process->parent;
+    if (!parent)
+        return;
+
+    auto list = std::move(parent->waitpid_requests);
+
+    for (auto &request : list)
+        waitpid_handle(parent, std::move(request.reply_right), request.pid, request.options);
+}
+
 void delete_process(std::shared_ptr<Process> process)
 {
     if (!process)
@@ -117,8 +132,46 @@ void delete_process(std::shared_ptr<Process> process)
     remove_process_from_group(process->process_group, process);
     processes.erase(process->pid);
     processes_by_kernel_id.erase(process->kernel_process_id);
+
+    auto parent = process->parent;
+    if (parent)
+        parent->zombies.push_back(process);
+
+    while (!process->children.empty()) {
+        auto it = process->children.begin();
+        auto c = it->second;
+        process->children.erase(it);
+
+        c->parent = parent;
+
+        if (parent) {
+            parent->children[c->pid] = c;
+            if (c->zombie)
+                parent->zombies.push_back(c);
+        }
+    }
+
+    waitpid_handle(process);
     // TODO
 }
+void release_zombie(std::shared_ptr<Process> process)
+{
+    assert(process);
+    assert(process->zombie);
+
+    auto parent = process->parent;
+    if (parent) {
+        auto it = std::find(parent->zombies.begin(), parent->zombies.end(), process);
+        if (it != parent->zombies.end())
+            parent->zombies.erase(it);
+        parent->children.erase(process->pid);        
+    }
+    process->zombie = false;
+    process->parent = nullptr;
+    assert(process->zombies.empty());
+    assert(process->children.empty());
+}
+    
 
 std::shared_ptr<Process> get_process_kernel_id(uint64_t kernel_process_id)
 {
@@ -242,4 +295,184 @@ void setpgid_handle(std::shared_ptr<Process> process, pmos::Right reply_right, p
     new_group->processes[target_process->pid] = target_process;
     setid_reply(reply_right, new_group->pgid);
 }
-    
+
+void waitpid_push(std::shared_ptr<Process> process, pmos::Right reply_right, pid_t pid, int options)
+{
+    assert(process);
+
+    Process::WaitpidRequest request = {
+        .reply_right = std::move(reply_right),
+        .pid = pid,
+        .options = options,
+    };
+
+    process->waitpid_requests.push_back(std::move(request));
+}
+
+void waitpid_handle(std::shared_ptr<Process> process, pmos::Right reply_right, pid_t pid, int options)
+{
+    if (!reply_right) {
+        kernelLogger() << "processd: waitpid_handle: Invalid reply right\n" << frg::endlog;
+        return;
+    }
+
+    if (pid == -1) {
+        if (process->zombies.empty()) {
+            if (process->children.empty()) {
+                IPC_Waitpid_Reply reply = {
+                    .type = IPC_Waitpid_Reply_NUM,
+                    .result_code = -ECHILD,
+                    .child_pid = 0,
+                    .status = 0,
+                    .rusage = {},
+                };
+                auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+                if (!result_send)
+                    kernelLogger() << "processd: Error " << result_send.error().first << " sending waitpid reply to port " << reply_right.get() << "\n" << frg::endlog;
+                return;
+            }
+
+            if (options & WNOHANG) {
+                IPC_Waitpid_Reply reply = {
+                    .type = IPC_Waitpid_Reply_NUM,
+                    .result_code = 0,
+                    .child_pid = 0,
+                    .status = 0,
+                    .rusage = {},
+                };
+                auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+                if (!result_send)
+                    kernelLogger() << "processd: Error " << result_send.error().first << " sending waitpid reply to port " << reply_right.get() << "\n" << frg::endlog;
+                return;
+            } else {
+                waitpid_push(process, std::move(reply_right), pid, options);
+                return;
+            }
+        }
+
+        auto zombie = process->zombies.front();
+
+        IPC_Waitpid_Reply reply = {
+            .type = IPC_Waitpid_Reply_NUM,
+            .result_code = 0,
+            .child_pid = zombie->pid,
+            .status = zombie->exit_code,
+            .rusage = {},
+        };
+        auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+        if (!result_send) {
+            kernelLogger() << "processd: Error " << result_send.error().first << " sending waitpid reply to port " << reply_right.get() << "\n" << frg::endlog;
+            return;
+        }
+
+        release_zombie(zombie);
+        return;
+    }
+
+    if (pid <= 0) {
+        auto pgid = -pid;
+        if (pgid == 0)
+            pgid = process->process_group->pgid;
+        bool have_children = false;
+
+        for (auto &c : process->children) {
+            auto child = c.second;
+            if (child->process_group->pgid == pgid) {
+                if (!child->zombie) {
+                    have_children = true;
+                    continue;
+                }
+
+                IPC_Waitpid_Reply reply = {
+                    .type = IPC_Waitpid_Reply_NUM,
+                    .result_code = 0,
+                    .child_pid = child->pid,
+                    .status = child->exit_code,
+                    .rusage = {},
+                };
+                auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+                if (!result_send) {
+                    kernelLogger() << "processd: Error " << result_send.error().first << " sending waitpid reply to port " << reply_right.get() << "\n" << frg::endlog;
+                    return;
+                }
+
+                release_zombie(child);
+                return;
+            }
+        }
+
+        if (options & WNOHANG || !have_children) {
+            IPC_Waitpid_Reply reply = {
+                .type = IPC_Waitpid_Reply_NUM,
+                .result_code = have_children ? 0 : -ECHILD,
+                .child_pid = 0,
+                .status = 0,
+                .rusage = {},
+            };
+            auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+            if (!result_send)
+                kernelLogger() << "processd: Error " << result_send.error().first << " sending waitpid reply to port " << reply_right.get() << "\n" << frg::endlog;
+            return;
+        } else {
+            waitpid_push(process, std::move(reply_right), pid, options);
+            return;
+        }
+    }
+
+    auto it = process->children.find(pid);
+    auto child = it != process->children.end() ? it->second : nullptr;
+
+    if (!child || child->parent != process) {
+        IPC_Waitpid_Reply reply = {
+            .type = IPC_Waitpid_Reply_NUM,
+            .result_code = -ECHILD,
+            .child_pid = 0,
+            .status = 0,
+            .rusage = {},
+        };
+        auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+        if (!result_send)
+            kernelLogger() << "processd: Error " << result_send.error().first << " sending waitpid reply to port " << reply_right.get() << "\n" << frg::endlog;
+        return;
+    }
+
+    if (!child->zombie) {
+        if (options & WNOHANG) {
+            IPC_Waitpid_Reply reply = {
+                .type = IPC_Waitpid_Reply_NUM,
+                .result_code = 0,
+                .child_pid = 0,
+                .status = 0,
+                .rusage = {},
+            };
+            auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+            if (!result_send)
+                kernelLogger() << "processd: Error " << result_send.error().first << " sending waitpid reply to port " << reply_right.get() << "\n" << frg::endlog;
+            return;
+        } else {
+            waitpid_push(process, std::move(reply_right), pid, options);
+            return;
+        }
+    }
+
+    IPC_Waitpid_Reply reply = {
+        .type = IPC_Waitpid_Reply_NUM,
+        .result_code = 0,
+        .child_pid = child->pid,
+        .status = child->exit_code,
+        .rusage = {},
+    };
+    auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+    if (!result_send) {
+        kernelLogger() << "processd: Error " << result_send.error().first << " sending waitpid reply to port " << reply_right.get() << "\n" << frg::endlog;
+        return;
+    }   
+    release_zombie(child);
+}
+
+std::string Process::get_cwd() const
+{
+    if (!cwd_vnode)
+        return "/";
+    return cwd_vnode->path();
+}

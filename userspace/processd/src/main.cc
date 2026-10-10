@@ -1018,6 +1018,24 @@ void get_id_for_handle(const std::shared_ptr<Process> &process, pmos::Right repl
     get_id_reply(std::move(reply_right), error, id);
 }
 
+void getcwd_handle(std::shared_ptr<Process> process, pmos::Right reply_right)
+{
+    std::string cwd = process->get_cwd();
+
+    IPC_Getcwd_Reply reply = {
+        .type = IPC_Getcwd_Reply_NUM,
+        .flags = 0,
+        .result_code = 0,
+    };
+    std::vector<std::byte> msg_bytes{};
+    msg_bytes.insert(msg_bytes.end(), reinterpret_cast<const std::byte *>(&reply), reinterpret_cast<const std::byte *>(&reply) + sizeof(reply));
+    msg_bytes.insert(msg_bytes.end(), reinterpret_cast<const std::byte *>(cwd.c_str()), reinterpret_cast<const std::byte *>(cwd.c_str()) + cwd.size());
+
+    auto result_send = pmos::send_message_right(reply_right, std::span(msg_bytes), {}, true);
+    if (!result_send)
+        kernelLogger() << "processd: getcwd_handle: Failed to send reply message\n" << frg::endlog;
+}
+
 pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::shared_ptr<Process> process)
 {
     process->receive_right_id = rr.get();
@@ -1139,6 +1157,25 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
 
             IPC_Pipe_Open *m = reinterpret_cast<IPC_Pipe_Open *>(ipc_msg);
             pipe_open(*m, std::move(reply_right));
+            break;
+        }
+        case IPC_Waitpid_NUM: {
+            if (msg.size < sizeof(IPC_Waitpid)) {
+                kernelLogger() << "processd: Received IPC_Waitpid that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            IPC_Waitpid *m = reinterpret_cast<IPC_Waitpid *>(ipc_msg);
+            waitpid_handle(process, std::move(reply_right), m->pid, m->flags);
+            break;
+        }
+        case IPC_Getcwd_NUM: {
+            if (msg.size < sizeof(IPC_Getcwd)) {
+                kernelLogger() << "processd: Received IPC_Getcwd that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            getcwd_handle(process, std::move(reply_right));
             break;
         }
 
