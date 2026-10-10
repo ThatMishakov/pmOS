@@ -41,9 +41,12 @@ struct Process {
     int exit_code = 0;
 
     uint32_t uid = 0;
-    uint32_t gid = 0;
     uint32_t euid = 0;
+    uint32_t suid = 0;
+
+    uint32_t gid = 0;
     uint32_t egid = 0;
+    uint32_t sgid = 0;
 
     struct WaitpidRequest {
         pmos::Right reply_right;

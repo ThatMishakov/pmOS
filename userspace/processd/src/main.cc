@@ -949,17 +949,23 @@ void get_id_handle(std::shared_ptr<Process> process, pmos::Right reply_right, sh
     bool invalid_type = false;
 
     switch (type) {
-    case IPC_GET_ID_TYPE_UID:
+    case IPC_GET_ID_TYPE_RUID:
         id = process->uid;
         break;
     case IPC_GET_ID_TYPE_EUID:
         id = process->euid;
         break;
-    case IPC_GET_ID_TYPE_GID:
+    case IPC_GET_ID_TYPE_SUID:
+        id = process->suid;
+        break;
+    case IPC_GET_ID_TYPE_RGID:
         id = process->gid;
         break;
     case IPC_GET_ID_TYPE_EGID:
         id = process->egid;
+        break;
+    case IPC_GET_ID_TYPE_SGID:
+        id = process->sgid;
         break;
     case IPC_GET_ID_TYPE_PID:
         id = process->pid;

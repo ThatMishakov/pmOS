@@ -67,9 +67,14 @@ std::shared_ptr<Process> create_process(std::shared_ptr<Process> parent, pmos::R
     processes_by_kernel_id[kernel_process_id] = process;
 
     process->uid = parent->uid;
-    process->gid = parent->gid;
     process->euid = parent->euid;
+    process->suid = parent->suid;
+
+    process->gid = parent->gid;
     process->egid = parent->egid;
+    process->sgid = parent->sgid;
+
+    process->cwd_vnode = parent->cwd_vnode;
 
     parent->children[process->pid] = process;
 
