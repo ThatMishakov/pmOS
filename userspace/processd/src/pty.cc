@@ -289,12 +289,12 @@ static void handle_read_subordinate(std::shared_ptr<PtyData> pty, IPC_Read *read
 
 void process_out(const char c, PtyData::Packet &packet, std::shared_ptr<PtyData> pty)
 {
-    if (!(pty->active_settings.c_lflag & OPOST)) {
+    if (!(pty->active_settings.c_oflag & OPOST)) {
         packet.data.push_back(c);
         return;
     }
 
-    if (pty->active_settings.c_oflag & ONLCR && c == '\n') {
+    if ((pty->active_settings.c_oflag & ONLCR) && c == '\n') {
         packet.data.push_back('\r');
         packet.data.push_back('\n');
         return;
