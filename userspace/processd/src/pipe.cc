@@ -8,6 +8,7 @@
 
 #include <pmos/async/coroutines.hh>
 #include <pmos/containers/ring_buffer.hh>
+#include <pmos/fs-data.h>
 
 #include <poll.h>
 
@@ -465,7 +466,7 @@ void pipe_thread(IPC_Pipe_Open msg, pmos::Right reply_right)
 
     IPC_Pipe_Open_Reply reply = {
         .type        = IPC_Pipe_Open_Reply_NUM,
-        .flags       = 0,
+        .flags       = FLAG_ISPIPE,
         .result_code = 0,
     };
 
