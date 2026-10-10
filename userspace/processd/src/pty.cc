@@ -10,6 +10,7 @@
 #include <termios.h>
 #include <pmos/fs-data.h>
 #include <signal.h>
+#include <poll.h>
 
 struct PtyVfs final: public Filesystem {
     std::expected<std::shared_ptr<VNode>, int> resolve_child(std::shared_ptr<VNode> parent, const std::string &name) override
@@ -162,6 +163,49 @@ std::expected<std::shared_ptr<PtyData>, int> new_pty()
     return pty;
 }
 
+static unsigned poll_events(const std::shared_ptr<PtyData> &pty, bool subordinate)
+{
+    unsigned events = 0;
+
+    events |= POLLIN | POLLRDNORM;
+
+    auto &queue = subordinate ? pty->subordinate_queue : pty->manager_queue;
+    if (!queue.empty())
+        events |= POLLOUT | POLLWRNORM;
+
+    return events;
+}
+
+static void wakeup_polls(const std::shared_ptr<PtyData> &pty, bool subordinate)
+{
+    uint16_t events = poll_events(pty, subordinate);
+    auto &queue = subordinate ? pty->subordinate_polls : pty->manager_polls;
+
+    auto it = queue.begin();
+    while (it != queue.end()) {
+        auto &pending_poll = *it;
+        uint16_t poll_events = events & pending_poll.mask;
+
+        if (poll_events != 0) {
+            IPC_Poll_Reply reply = {
+                .type        = IPC_Poll_Reply_NUM,
+                .flags       = 0,
+                .result_code = 0,
+                .events      = poll_events,
+            };
+
+            auto send_result = pmos::send_message_right_one(pending_poll.reply_right, reply, {}, true);
+            if (!send_result) {
+                kernelLogger() << "posix: Error " << send_result.error().first << " sending message to port " << pending_poll.reply_right.get() << " for pipe_poll\n" << frg::endlog;
+            }
+
+            it = queue.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 static void read_error_reply(pmos::Right reply_right, int error_code)
 {
     IPC_Read_Reply reply = {
@@ -275,6 +319,8 @@ void wake_up_subordinate(std::shared_ptr<PtyData> pty)
 
         handle_read_reply(pty, blocked_read.size, std::move(blocked_read.reply_right), true);
     }
+
+    wakeup_polls(pty, true);
 }
 
 void enqueue_packet(PtyData::Packet &packet, std::shared_ptr<PtyData> pty)
@@ -546,6 +592,28 @@ void subordinate_handle_write(const char *data, size_t size, std::shared_ptr<Pty
     wake_up_manager(pty);
 }
 
+static void handle_poll(std::shared_ptr<PtyData> pty, uint16_t flags, uint16_t mask, pmos::Right reply_right, bool subordinate)
+{
+    uint16_t events = poll_events(pty, subordinate);
+    uint16_t poll_events = events & mask;
+
+    if (poll_events != 0 || (flags & IPC_FLAG_IO_OP_NONBLOCK)) {
+        IPC_Poll_Reply reply = {
+            .type        = IPC_Poll_Reply_NUM,
+            .flags       = 0,
+            .result_code = 0,
+            .events      = poll_events,
+        };
+
+        auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+        if (!result_send)
+            kernelLogger() << "posixd: Error " << result_send.error().first << " sending poll reply to port " << reply_right.get() << "\n" << frg::endlog;
+    } else {
+        auto &queue = subordinate ? pty->subordinate_polls : pty->manager_polls;
+        queue.push_back({std::move(reply_right), mask});
+    }
+}
+
 pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared_ptr<PtyData> pty, unsigned oflags, std::shared_ptr<Process> process)
 {
     while (1) {
@@ -622,6 +690,16 @@ pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared
             auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
             if (!result_send)
                 kernelLogger() << "posixd: Error " << result_send.error().first << " sending termios getattr reply to port " << reply_right.get() << "\n" << frg::endlog;
+        }
+            break;
+        case IPC_Poll_NUM: {
+            if (message.size() < sizeof(IPC_Poll)) {
+                kernelLogger() << "posixd: Received IPC_Poll that is too small while attending pty subordinate\n" << frg::endlog;
+                break;
+            }
+
+            IPC_Poll *poll_msg = reinterpret_cast<IPC_Poll *>(message.data());
+            handle_poll(pty, poll_msg->flags, poll_msg->events, std::move(reply_right), true);
         }
             break;
         default:

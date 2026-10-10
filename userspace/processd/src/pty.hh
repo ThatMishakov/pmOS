@@ -48,6 +48,16 @@ struct PtyData {
         size_t size;
     };
 
+    struct PollRequest {
+        pmos::Right reply_right;
+        uint16_t mask;
+    };
+
+    using poll_list = std::list<PollRequest>;
+
+    poll_list subordinate_polls;
+    poll_list manager_polls;
+
     std::list<BlockedRead> blocked_manager_reads;
     std::list<BlockedRead> blocked_subordinate_reads;
 
