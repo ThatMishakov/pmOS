@@ -1052,7 +1052,7 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
         IPC_Generic_Msg *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(message.data());
         switch (ipc_msg->type) {
         case IPC_Kernel_Receive_Right_Destroyed_NUM:
-            co_return;
+            goto finish;
 
         case IPC_Open_NUM: {
             if (message.size() < sizeof(IPC_Open)) {
@@ -1184,6 +1184,7 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
             break;
         }
     }
+finish:
 
     if (process->receive_right_id == saved_right_id) {
         process->receive_right_id = 0;
