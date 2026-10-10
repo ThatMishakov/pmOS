@@ -1,0 +1,24 @@
+version=9.12
+revision=1
+source_method=tarball
+tarball_url="https://ftpmirror.gnu.org/coreutils/coreutils-9.12.tar.xz"
+tarball_sha256="a480198559733e9b3da999e90543ac6f888a2caa544d8d664c5a1f17e528e210"
+
+imagedeps="build-essential"
+deps="mlibc $CXX_DEPS"
+hostdeps="$TOOLCHAIN_DEPS"
+
+configure() {
+	CC="clang --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot}" \
+	CXX="clang++ --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot}" \
+	CPP="clang --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot} -E" \
+	${source_dir}/configure --build=$(uname -m)-pc-linux-gnu --host=$JINX_ARCH-pmos --prefix=${prefix}
+}
+
+build() {
+	make -j ${parallelism}
+}
+
+package() {
+	make install DESTDIR=${dest_dir}
+}

@@ -1,0 +1,31 @@
+--- a/src/stat.c
++++ b/src/stat.c
+@@ -22,7 +22,8 @@
+    ../m4/stat-prog.m4.  */
+ #if ((STAT_STATVFS || STAT_STATVFS64)                                       \
+      && (HAVE_STRUCT_STATVFS_F_BASETYPE || HAVE_STRUCT_STATVFS_F_FSTYPENAME \
+-         || (! HAVE_STRUCT_STATFS_F_FSTYPENAME && HAVE_STRUCT_STATVFS_F_TYPE)))
++         || (! HAVE_STRUCT_STATFS_F_FSTYPENAME && HAVE_STRUCT_STATVFS_F_TYPE) \
++         || defined __pmos__))
+ # define USE_STATVFS 1
+ #else
+ # define USE_STATVFS 0
+@@ -255,7 +256,7 @@
+ {
+ #ifdef STATXFS_FILE_SYSTEM_TYPE_MEMBER_NAME
+   return statfsbuf->STATXFS_FILE_SYSTEM_TYPE_MEMBER_NAME;
+-#else
++#elif HAVE_STRUCT_STATXFS_F_TYPE
+   switch (statfsbuf->f_type)
+     {
+ # if defined __linux__ || defined __ANDROID__
+@@ -632,6 +633,9 @@
+         return buf;
+       }
+     }
++#else
++  (void) statfsbuf;
++  return "unknown";
+ #endif
+ }
+ 

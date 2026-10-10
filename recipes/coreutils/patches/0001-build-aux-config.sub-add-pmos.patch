@@ -1,0 +1,18 @@
+--- a/build-aux/config.sub
++++ b/build-aux/config.sub
+@@ -151,6 +151,7 @@
+ 			| netbsd*-gnu* \
+ 			| nto-qnx* \
+ 			| os2-emx* \
++			| pmos-* \
+ 			| rtmk-nova* \
+ 			| storm-chaos* \
+ 			| uclinux-gnu* \
+@@ -2090,6 +2091,7 @@
+ 	| palmos* \
+ 	| phoenix* \
+ 	| plan9* \
++	| pmos* \
+ 	| powermax* \
+ 	| powerunix* \
+ 	| proelf* \
