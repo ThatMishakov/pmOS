@@ -530,7 +530,7 @@ pmos::async::detached_task stat_handle(std::shared_ptr<VNode> vnode, pmos::Right
     bool empty_path = flags & AT_EMPTY_PATH;
 
     // TODO: Handle symlinks here, and AT_SYMLINK_NOFOLLOW
-    if (!vnode && !empty_path) {
+    if (!vnode && empty_path) {
         stat_handle_error_reply(reply_right, -EINVAL);
         co_return;
     }

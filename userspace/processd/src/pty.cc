@@ -368,7 +368,7 @@ void process_in(char c, PtyData::Packet &packet, std::shared_ptr<PtyData> pty)
         }
     };
 
-    if (pty->active_settings.c_lflag & ISTRIP)
+    if (pty->active_settings.c_iflag & ISTRIP)
         c &= 0x7F;
 
     if (c == '\r') {
@@ -382,7 +382,7 @@ void process_in(char c, PtyData::Packet &packet, std::shared_ptr<PtyData> pty)
             c = '\r';
     }
 
-    if ((pty->active_settings.c_lflag & IUCLC) && (c >= 'A') && (c <= 'Z'))
+    if ((pty->active_settings.c_iflag & IUCLC) && (c >= 'A') && (c <= 'Z'))
         c = c - 'A' + 'a';
 
     if (pty->active_settings.c_lflag & ISIG) {

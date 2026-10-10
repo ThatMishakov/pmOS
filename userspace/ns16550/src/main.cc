@@ -635,6 +635,8 @@ pmos::async::detached_task start_shell()
     auto shell_right = co_await pmbus_helper.get_object(filter);
     write_str("Found real root object\n");
 
+    setenv("PATH", "/bin:/usr/bin", 1);
+
     int amaster;
     pid_t pid = forkpty(&amaster, NULL, NULL, NULL);
     if (pid < 0) {
