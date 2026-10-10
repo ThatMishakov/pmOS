@@ -169,11 +169,11 @@ static unsigned poll_events(const std::shared_ptr<PtyData> &pty, bool subordinat
 {
     unsigned events = 0;
 
-    events |= POLLIN | POLLRDNORM;
-
     auto &queue = subordinate ? pty->subordinate_queue : pty->manager_queue;
     if (!queue.empty())
-        events |= POLLOUT | POLLWRNORM;
+        events |= POLLIN | POLLRDNORM;
+
+    events |= POLLOUT | POLLWRNORM;
 
     return events;
 }
@@ -599,7 +599,7 @@ static void handle_poll(std::shared_ptr<PtyData> pty, uint16_t flags, uint16_t m
     uint16_t events = poll_events(pty, subordinate);
     uint16_t poll_events = events & mask;
 
-    if (poll_events != 0 || (flags & IPC_FLAG_IO_OP_NONBLOCK)) {
+    if (poll_events != 0 || (flags & IPC_POLL_FLAG_NONBLOCK)) {
         IPC_Poll_Reply reply = {
             .type        = IPC_Poll_Reply_NUM,
             .flags       = 0,
