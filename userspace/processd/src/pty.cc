@@ -665,7 +665,7 @@ void handle_ioctl(std::shared_ptr<PtyData> pty, unsigned request, unsigned flags
     IPC_Ioctl_Reply reply = {
         .type         = IPC_Ioctl_Reply_NUM,
         .flags        = 0,
-        .result_code  = static_cast<int16_t>(result_code),
+        .result_code  = result_code,
         .data = {},
     };
 
