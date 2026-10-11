@@ -154,6 +154,57 @@ pub struct IPCRead {
     pub max_size: u64,
 }
 
+pub const IPC_READDIR_NUM: u32 = 0x32;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCReaddir {
+    msg_type: u32,
+    pub flags: u32,
+}
+
+impl IPCReaddir {
+    pub fn new(flags: u32) -> Self {
+        IPCReaddir {
+            msg_type: IPC_READDIR_NUM,
+            flags,
+        }
+    }
+}
+
+pub const IPC_READDIR_REPLY_NUM: u32 = 0x33;
+pub struct IPCReaddirReply<'a> {
+    pub result: i16,
+    pub file_type: u16,
+    pub inode: u64,
+    pub next_offset: u64,
+    pub name: &'a [u8],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+struct IPCReaddirReplyHdr {
+    msg_type: u32,
+    result: i16,
+    file_type: u16,
+    inode: u64,
+    next_offset: u64,
+}
+
+impl Serializable for IPCReaddirReply<'_> {
+    fn serialize(&self) -> Cow<'_, [u8]> {
+        let mut out = Vec::with_capacity(core::mem::size_of::<IPCReaddirReplyHdr>() + self.name.len());
+        out.extend_from_slice(bytemuck::bytes_of(&IPCReaddirReplyHdr {
+            msg_type: IPC_READDIR_REPLY_NUM,
+            result: self.result,
+            file_type: self.file_type,
+            inode: self.inode,
+            next_offset: self.next_offset,
+        }));
+        out.extend_from_slice(self.name);
+        Cow::<[u8]>::from(out)
+    }
+}
+
 pub const IPC_SEEK_NUM: u32 = 0x43;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
@@ -777,6 +828,7 @@ pub enum Message<'a> {
     IPCKernelRightDestroyed(IPCKernelRightDestroyed),
     IPCNamedRightNotification(IPCNamedRightNotification),
     IPCRead(IPCRead),
+    IPCReaddir(IPCReaddir),
     IPCSeek(IPCSeek),
     IPCGetObject(IPCGetObject),
     IPCFSOpen(IPCFSOpen),
@@ -884,6 +936,8 @@ impl super::ipc::Message {
                     try_from_bytes::<IPCFSReadlink>(data).map(|data| Message::IPCFSReadlink(data.clone())).unwrap_or(Message::Unknown),
                 IPC_READ_NUM =>
                     try_from_bytes::<IPCRead>(data).map(|data| Message::IPCRead(data.clone())).unwrap_or(Message::Unknown),
+                IPC_READDIR_NUM =>
+                    try_from_bytes::<IPCReaddir>(data).map(|data| Message::IPCReaddir(data.clone())).unwrap_or(Message::Unknown),
                 IPC_SEEK_NUM =>
                     try_from_bytes::<IPCSeek>(data).map(|data| Message::IPCSeek(data.clone())).unwrap_or(Message::Unknown),
                 IPC_GET_OBJECT_NUM =>
