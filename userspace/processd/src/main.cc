@@ -56,6 +56,7 @@
 #include <sys/mman.h>
 #include <pmos/utility/auxvec_builder.hh>
 #include <fcntl.h>
+#include <set>
 
 void KernelSink::operator()(const char *message)
 {
@@ -907,7 +908,7 @@ pmos::async::detached_task execve_handle(std::shared_ptr<Process> process, std::
     }
     auto entry_point = exec_result.value();
 
-    terminate_process(process->process_right.get());
+    terminate_process(process->process_right.get(), 0);
     process->process_right = std::move(process_right);
 
     auto start_result = syscall_start_task(new_task.value, entry_point, 0, 0, 0);
@@ -1040,6 +1041,79 @@ void getcwd_handle(std::shared_ptr<Process> process, pmos::Right reply_right)
     auto result_send = pmos::send_message_right(reply_right, std::span(msg_bytes), {}, true);
     if (!result_send)
         kernelLogger() << "processd: getcwd_handle: Failed to send reply message\n" << frg::endlog;
+}
+
+void kill_reply(pmos::Right reply_right, int result)
+{
+    IPC_Kill_Reply reply = {
+        .type = IPC_Kill_Reply_NUM,
+        .flags = 0,
+        .result = result,
+    };
+    auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+    if (!result_send)
+        kernelLogger() << "processd: kill_reply: Failed to send reply message\n" << frg::endlog;
+}
+
+void kill_handle(std::shared_ptr<Process> process, pmos::Right reply_right, pid_t pid, int sig)
+{
+    if (sig < 0 || sig >= NSIG) {
+        kill_reply(std::move(reply_right), -EINVAL);
+        return;
+    }
+
+    std::set<std::shared_ptr<Process>> target_processes;
+    bool found_at_least_one = false;
+
+    if (pid > 0) {
+        auto target_process = process_for_pid(pid);
+        if (!target_process) {
+            kill_reply(std::move(reply_right), -ESRCH);
+            return;
+        }
+
+        found_at_least_one = true;
+
+        if (target_process->can_send_signal(*process, sig))
+            target_processes.insert(target_process);
+    } else if (pid == 0) {
+        for (const auto &p : process->process_group->processes) {
+            if (p.second->can_send_signal(*process, sig)) {
+                target_processes.insert(p.second);
+            }
+        }
+    } else if (pid == -1) {
+        for (const auto &p : processes) {
+            found_at_least_one = true;
+            if (p.second != process && p.second->can_send_signal(*process, sig))
+                target_processes.insert(p.second);
+        }
+    } else if (pid < -1) {
+        pid_t pgid = -pid;
+        auto target_group = group_for_pgid(pgid);
+        if (!target_group) {
+            kill_reply(std::move(reply_right), -ESRCH);
+            return;
+        }
+
+        for (const auto &p : target_group->processes) {
+            found_at_least_one = true;
+            if (p.second->can_send_signal(*process, sig)) {
+                target_processes.insert(p.second);
+            }
+        }
+    }
+
+    if (target_processes.empty()) {
+        kill_reply(std::move(reply_right), found_at_least_one ? -EPERM : -ESRCH);
+        return;
+    }
+
+    auto waiter = std::make_shared<SignalWaiter>();
+    waiter->remaining_signals = target_processes.size();
+    waiter->reply_right = std::move(reply_right);
+    for (const auto &p : target_processes)
+        send_signal(p, sig, waiter);
 }
 
 pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::shared_ptr<Process> process)
@@ -1182,6 +1256,16 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
             }
 
             getcwd_handle(process, std::move(reply_right));
+            break;
+        }
+        case IPC_Kill_NUM: {
+            if (msg.size < sizeof(IPC_Kill)) {
+                kernelLogger() << "processd: Received IPC_Kill that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            IPC_Kill *m = reinterpret_cast<IPC_Kill *>(ipc_msg);
+            kill_handle(process, std::move(reply_right), m->pid, m->signal);
             break;
         }
 

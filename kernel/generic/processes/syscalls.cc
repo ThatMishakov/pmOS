@@ -3179,6 +3179,10 @@ void syscall_right_for_task_group(TaskDescriptor *task)
 void syscall_terminate_process(TaskDescriptor *task)
 {
     u64 right = syscall_arg64(task, 0);
+    u32 return_value = syscall_arg(task, 1, 0);
+
+    // TODO!!!
+    (void)return_value;
 
     auto result = get_process_by_right(task, right);
     if (!result.success()) {

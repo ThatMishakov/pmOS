@@ -89,6 +89,14 @@ std::shared_ptr<Process> process_for_pid(int32_t pid)
     return it->second;
 }
 
+std::shared_ptr<ProcessGroup> group_for_pgid(int32_t pgid)
+{
+    auto it = process_groups.find(pgid);
+    if (it == process_groups.end())
+        return nullptr;
+    return it->second;
+}
+
 void remove_process_group_from_session(std::shared_ptr<Session> session, std::shared_ptr<ProcessGroup> group)
 {
     assert(session);
@@ -480,4 +488,59 @@ std::string Process::get_cwd() const
     if (!cwd_vnode)
         return "/";
     return cwd_vnode->path();
+}
+
+bool Process::can_send_signal(const Process &sender, int signal) const
+{
+    if (sender.uid == uid || sender.euid == uid)
+        return true;
+
+    if (sender.uid == suid || sender.euid == suid)
+        return true;
+
+    if (signal == SIGCONT && sender.process_group->session == process_group->session)
+        return true;
+
+    if (zombie)
+        return false;
+
+    return false;
+}
+
+pmos::async::detached_task send_signal(std::shared_ptr<Process> target, int signal, std::shared_ptr<SignalWaiter> optional_waiter)
+{
+    assert(target);
+
+    bool signaled = false;
+
+    if (signal == SIGKILL && target->process_right) {
+        u32 return_value = 128 + signal;
+        auto result = terminate_process(target->process_right.get(), return_value);
+        if (result != SUCCESS) {
+            kernelLogger() << "processd: send_signal: Failed to terminate process " << target->pid << " with signal " << signal << ": " << result << "\n" << frg::endlog;
+        } else {
+            signaled = true;
+        }
+    }
+
+    if (!signaled) {
+        target->pending_signals |= (1ULL << signal);
+    }
+
+    // TODO: Signals ports and this stuff...
+
+    if (optional_waiter) {
+        optional_waiter->remaining_signals--;
+        if (optional_waiter->remaining_signals == 0) {
+            IPC_Kill_Reply reply = {
+                .type = IPC_Kill_Reply_NUM,
+                .flags = 0,
+                .result = 0,
+            };
+            auto result_send = pmos::send_message_right_one(optional_waiter->reply_right, reply, {}, true);
+            if (!result_send)
+                kernelLogger() << "processd: Error " << result_send.error().first << " sending kill reply to port " << optional_waiter->reply_right.get() << "\n" << frg::endlog;
+        }
+    }
+    co_return;
 }

@@ -826,5 +826,9 @@ pmos::async::task<std::expected<pmos::Right, int>> PtyVfs::open_file(std::shared
 
 void PtyData::issue_signal_to_fg(int signal)
 {
-    kernelLogger() << "posixd: stub issue_signal_to_fg for signal " << signal << " on pty " << idx << "\n" << frg::endlog;   
+    if (!foreground_group)
+        return;
+
+    for (auto &process : foreground_group->processes)
+        send_signal(process.second, signal);
 }

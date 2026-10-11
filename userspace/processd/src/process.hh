@@ -38,6 +38,8 @@ struct Process {
     bool ran_exec = false;
     bool zombie = false;
 
+    uint64_t pending_signals = 0;
+
     int exit_code = 0;
 
     uint32_t uid = 0;
@@ -58,9 +60,12 @@ struct Process {
     std::shared_ptr<VNode> cwd_vnode = nullptr;
 
     std::string get_cwd() const;
+
+    bool can_send_signal(const Process &sender, int signal) const;
 };
 
 std::shared_ptr<Process> get_process_kernel_id(uint64_t kernel_process_id);
+extern std::map<int32_t, std::shared_ptr<Process>> processes;
 
 struct ProcessGroup {
     int32_t pgid = 0;
@@ -79,8 +84,16 @@ struct Session {
 std::shared_ptr<Process> create_first_process();
 std::shared_ptr<Process> create_process(std::shared_ptr<Process> parent, pmos::Right process_right, uint64_t kernel_process_id);
 std::shared_ptr<Process> process_for_pid(int32_t pid);
+std::shared_ptr<ProcessGroup> group_for_pgid(int32_t pgid);
 
 void delete_process(std::shared_ptr<Process> process);
 void setsid_handle(std::shared_ptr<Process> process, pmos::Right reply_right);
 void setpgid_handle(std::shared_ptr<Process> process, pmos::Right reply_right, pid_t pid, pid_t pgid);
 void waitpid_handle(std::shared_ptr<Process> process, pmos::Right reply_right, pid_t pid, int options);
+
+struct SignalWaiter {
+    pmos::Right reply_right;
+    int remaining_signals;
+};
+
+pmos::async::detached_task send_signal(std::shared_ptr<Process> target, int signal, std::shared_ptr<SignalWaiter> optional_waiter = nullptr);
