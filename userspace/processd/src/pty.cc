@@ -13,6 +13,7 @@
 #include <poll.h>
 #include <sys/ioctl.h>
 #include <span>
+#include <limits.h>
 
 struct PtyVfs final: public Filesystem {
     std::expected<std::shared_ptr<VNode>, int> resolve_child(std::shared_ptr<VNode> parent, const std::string &name) override
@@ -645,6 +646,14 @@ void handle_ioctl(std::shared_ptr<PtyData> pty, unsigned request, unsigned flags
             break;
         }
         reply_data.insert(reply_data.end(), reinterpret_cast<std::byte *>(&pty->active_window_size), reinterpret_cast<std::byte *>(&pty->active_window_size) + sizeof(struct winsize));
+    }
+        break;
+    case TIOCGPGRP: {
+        if (pty->foreground_group) {
+            result_code = pty->foreground_group->pgid;
+        } else {
+            result_code = INT_MAX;
+        }
     }
         break;
     default:

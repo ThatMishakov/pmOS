@@ -810,7 +810,7 @@ pmos::async::task<std::expected<uint64_t, int>> load_executable(uint64_t task_id
     if (sr.result)
         co_return std::unexpected((int)sr.result);
 
-    kernelLogger() << "processd: load_executable: assigned page table " << page_table_id << " for task " << task_id << "\n" << frg::endlog;
+    // kernelLogger() << "processd: load_executable: assigned page table " << page_table_id << " for task " << task_id << "\n" << frg::endlog;
     if (interp)
         co_return interp_entry_point;
     else
@@ -919,7 +919,7 @@ pmos::async::detached_task execve_handle(std::shared_ptr<Process> process, std::
 
     delete_receive_right(main_port.get(), process->receive_right_id, 0);
 
-    kernelLogger() << "processd: execve_handle: starting new task " << new_task.value << " for process " << process->pid << "\n" << frg::endlog;
+    // kernelLogger() << "processd: execve_handle: starting new task " << new_task.value << " for process " << process->pid << "\n" << frg::endlog;
 
     process->running_exec = false;
     process->ran_exec = true;

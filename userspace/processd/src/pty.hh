@@ -12,6 +12,7 @@ void openpt_handle(pmos::Right reply_right, unsigned oflags);
 
 struct VNode;
 struct Session;
+struct ProcessGroup;
 
 struct PtyData {
     bool have_manager = true;
@@ -29,6 +30,8 @@ struct PtyData {
 
     std::shared_ptr<VNode> vnode = nullptr;
     std::shared_ptr<Session> session = nullptr;
+
+    std::shared_ptr<ProcessGroup> foreground_group = nullptr;
 
     struct Packet {
         std::vector<char> data;
