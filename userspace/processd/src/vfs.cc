@@ -430,7 +430,7 @@ pmos::async::detached_task open_file(pmos::Right reply_right, std::string path, 
 
     auto file_right = create_file_right(vnode);
 
-    uint16_t flags = 0;
+    uint32_t flags = 0;
     if (vnode->is_tty)
         flags |= FLAG_ISATTY;
 

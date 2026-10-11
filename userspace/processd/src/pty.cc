@@ -757,7 +757,7 @@ pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared
     co_return;
 }
 
-void openpt_error(pmos::Right &reply_right, int16_t result)
+void openpt_error(pmos::Right &reply_right, int32_t result)
 {
     if (!reply_right)
         return;
@@ -794,7 +794,7 @@ void openpt_handle(pmos::Right reply_right, unsigned oflags)
     auto io_right = std::move(right.value().first);
     auto op_right = std::move(op_right_result.value().first);
 
-    uint16_t flags = O_RDWR | (oflags & O_NONBLOCK) | FLAG_ISATTY;
+    uint32_t flags = O_RDWR | (oflags & O_NONBLOCK) | FLAG_ISATTY;
 
     IPC_Open_Reply reply = {
         .type        = IPC_Open_Reply_NUM,

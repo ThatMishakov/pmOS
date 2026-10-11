@@ -457,7 +457,7 @@ async fn ipc_handle_resolve_path(executor: Executor, reply_right: Option<SendRig
     ipc_resolve_path_reply(reply_right, 0, fs, Some(inode.unwrap()));
 }
 
-fn ipc_fs_open_reply(reply_right: Option<SendRight>, result: i16, flags: u16, fs_right: Option<SendRight>) -> Result<(), i32> {
+fn ipc_fs_open_reply(reply_right: Option<SendRight>, result: i32, flags: u32, fs_right: Option<SendRight>) -> Result<(), i32> {
     let msg = pmos::ipc_msgs::IPCFSOpenReply::new(result, flags);
     let rights = [fs_right, None, None, None];
     let reply_right = reply_right.ok_or(libc::ENOENT)?;
@@ -553,7 +553,7 @@ async fn get_object(state: SharedState, file: &mut File) -> Result<MemoryObjectR
 async fn ipc_fs_open(state: SharedState, executor: Executor, reply_right: Option<SendRight>, fs: Ext4, _flags: u32, inode: u64) {
     let inode = u32::try_from(inode).ok().and_then(NonZeroU32::new);
     if inode.is_none() {
-        _ = ipc_fs_open_reply(reply_right, -ENOENT as i16, 0, None);
+        _ = ipc_fs_open_reply(reply_right, -ENOENT as i32, 0, None);
         return;
     }
     let inode = inode.unwrap();

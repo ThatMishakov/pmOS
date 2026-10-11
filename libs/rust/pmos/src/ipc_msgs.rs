@@ -451,12 +451,12 @@ pub const IPC_FS_OPEN_REPLY_NUM: u32 = 0xD0;
 #[derive(Debug, Copy, Clone, Zeroable, Pod)]
 pub struct IPCFSOpenReply {
     msg_type: u32,
-    pub result_code: i16,
-    pub fs_flags: u16,
+    pub result_code: i32,
+    pub fs_flags: u32,
 }
 
 impl IPCFSOpenReply {
-    pub fn new(result_code: i16, fs_flags: u16) -> Self {
+    pub fn new(result_code: i32, fs_flags: u32) -> Self {
         Self {
             msg_type: IPC_FS_OPEN_REPLY_NUM,
             result_code,

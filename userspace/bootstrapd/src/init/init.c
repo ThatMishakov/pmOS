@@ -414,7 +414,7 @@ int start_service(struct Service *service, uint64_t object_right, uint64_t optio
 
     group_id = rr.value;
 
-    result_t rrr = add_task_to_group(r.value, group_id);
+    result_t rrr = add_task_to_group(r.value, group_id, 0).result;
     if (rrr != SUCCESS) {
         print_str("Loader: Could not add task to group for ");
         print_str(service->name);
@@ -684,7 +684,7 @@ int start_service_request(struct Service *service, const char *cmdline, size_t c
     group_id = rr.value;
     uint64_t new_group_id = group_id;
 
-    result_t rrr = add_task_to_group(r.value, group_id);
+    result_t rrr = add_task_to_group(r.value, group_id, 0).result;
     if (rrr != SUCCESS) {
         print_str("Loader: Could not add task to group for ");
         print_str(service->name);
