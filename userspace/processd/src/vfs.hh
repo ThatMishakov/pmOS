@@ -147,7 +147,7 @@ struct Path {
     std::vector<std::string> _components;
 };
 
-pmos::async::detached_task open_file(pmos::Right reply_right, std::string path, std::shared_ptr<Process> process);
+pmos::async::detached_task open_file(pmos::Right reply_right, std::string path, std::shared_ptr<Process> process, unsigned flags = 0);
 pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right fs_right, const std::string &mountpoint, int64_t root_inode);
 pmos::async::detached_task stat_handle(std::shared_ptr<VNode> vnode, pmos::Right reply_right, unsigned flags, std::string path);
 

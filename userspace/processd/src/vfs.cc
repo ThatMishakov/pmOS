@@ -408,7 +408,7 @@ pmos::async::task<std::expected<pmos::Right /* io_right */, int>> get_file_handl
     co_return co_await vnode->parent_fs->open_file(vnode, process);    
 }
 
-pmos::async::detached_task open_file(pmos::Right reply_right, std::string path, std::shared_ptr<Process> process)
+pmos::async::detached_task open_file(pmos::Right reply_right, std::string path, std::shared_ptr<Process> process, unsigned flags)
 {
     auto result = co_await resolve_path(std::move(path));
     if (!result) {
@@ -417,7 +417,7 @@ pmos::async::detached_task open_file(pmos::Right reply_right, std::string path, 
     }
 
     auto vnode = result.value();
-    if (vnode->type == FileType::Directory) {
+    if (vnode->type == FileType::Directory && !(flags & O_DIRECTORY)) {
         open_file_error_reply(reply_right, -EISDIR);
         co_return;
     }
@@ -430,14 +430,15 @@ pmos::async::detached_task open_file(pmos::Right reply_right, std::string path, 
 
     auto file_right = create_file_right(vnode);
 
-    uint32_t flags = 0;
+    // TODO: Propagate flags...
+    uint32_t out_flags = 0;
     if (vnode->is_tty)
-        flags |= FLAG_ISATTY;
+        out_flags |= FLAG_ISATTY;
 
     IPC_Open_Reply reply = {
         .type        = IPC_Open_Reply_NUM,
         .result_code = 0,
-        .fs_flags    = flags,
+        .fs_flags    = out_flags,
     };
 
     auto send_result = pmos::send_message_right_one(reply_right, reply, {}, true, std::move(file_right), std::move(fs_right).value());

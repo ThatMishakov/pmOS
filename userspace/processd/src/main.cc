@@ -1142,7 +1142,7 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
 
             auto *m = reinterpret_cast<IPC_Open *>(message.data());
             std::string path(m->path, message.size() - sizeof(IPC_Open));
-            open_file(std::move(reply_right), path, process);
+            open_file(std::move(reply_right), path, process, m->flags);
         } break;
 
         case IPC_Stat_NUM: {
