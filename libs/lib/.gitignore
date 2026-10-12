@@ -1,5 +1,0 @@
-!.gitignore
-*.[od]
-libpm.a
-/.deps
-/build
