@@ -1,38 +1,35 @@
 # pmOS
 
-A small (hobby) operating for RISC-V, LoongArch and x86 (i686 and x86_64), using a homemade microkernel, C library and userspace, partially developed as my end of degree project. The goal of the project is to make a general purpose operating system, with the objective of learning and being suitable for development and exploration of the RISC-V and X86 platforms. The microkernel is mostly written in C++, and the userspace is in a mixture of C, C++ and Rust (and ASM where needed). The [limine bootloader](https://limine-bootloader.org/) and [Hyper bootloader](https://github.com/UltraOS/Hyper) are used for booting the system, depending on the architecture, with x86_64 version being dual protocol with the same binary.
+A small (hobby) multiserver microkernel operating system for RISC-V, LoongArch and x86 (i686 and x86_64), using a homemade kernel and userspace, and [mlibc](https://github.com/managarm/mlibc) as the main C library, partially developed as my end of degree project. The goal of the project is to make a general purpose operating system, with the objective of learning and being suitable for development and exploration of the RISC-V and X86 platforms. The microkernel is mostly written in C++, and the userspace is in a mixture of C, C++ and Rust (and ASM where needed). The [limine bootloader](https://limine-bootloader.org/) and [Hyper bootloader](https://github.com/UltraOS/Hyper) are used for booting the system, depending on the architecture, and i686 and x86_64 ports are also bootable with multiboot2, with x86_64 version being triple protocol with the same binary.
 
 ## Screenshots
 RISC-V Execution:
 ![RISC-V execution](screenshots/risc-v.png)
 
-Baremetal execution on an old x86 (AMD E450) laptop, discovering an internal SATA HDD:
+Baremetal execution (of an old build) on an old x86 (AMD E450) laptop, discovering an internal SATA HDD:
 ![Baremetal execution](screenshots/baremetal-x86.jpg)
 
 ## Architecture
 
-The OS is based on a microkernel architecture, with the idea of running drivers and services in userspace. The kernel currently has physical and virtual memory managers, scheduling, interrupts, IPC and permissions managed inside it. Of the process management, the kernel only knows about threads (called "tasks" in the code), with (POSIX) processes and threads being an abstraction on top of it, managed in userspace. The rest is implemented in userspace, communicating through IPC message queues.
+The OS is trying to follow a multiserver microkernel architecture, running most drivers and servers in userspace. The kernel is in charge of memory management, scheduling, interrupts, and IPC. Capabilities are used for natural permissions management. The POSIX functions are mostly handled by personality servers in userspace, communicating through IPC.
 
-The executables use ELF format.
+Asynchronous IPC queues are currently used for IPC, with unbounded async send (multi-sender, anyone holding the right to send), and sync receive of messages of arbitrary size (with a single thread receiver). In addition, the kernel exposes memory objects to userspace, which can be used to provide shared memory between processes, and futex for quicker synchronization. The capabilities (rights) can either be transferred over IPC, or be moved between the capability namespaces (kernel process groups).
 
-The system supports booting by the limine protocol. In the past, multiboot2 was used with a stage 2 bootloader, but it was replaced by limine, since it works on both x86_64 and RISC-V. The kernel is loaded by limine, which initializes itself and starts the first user space task from a module called "bootstrap". It then receives some info from the kernel and list of modules, moved to memory objects and starts those up, and maps itself as a root filesystem.
-
-As such, the `kernel` directory contains the kernel, the `lib` contains userspace C libraries, `sysroot` contains system headers, `limine` contains the bootloader configs, and the rest of the directories contain different userspace programs, which make up the system. All of the drivers (including framebuffer) are run in userspace.
-
-The x86_64 and i686 ports are (also) using [Hyper](https://github.com/UltraOS/Hyper) bootloader and its Ultra protocol. The x86_64 build can be booted with either Limine or Ultra, while the rest of the builds only support one of the two (because of the limitations of protocols).
+The system bringup works by first starting the kernel with some boot protocol (limine, multiboot2 or Hyper), which then starts the statically linked bootstrap server, which in turn starts the posix/processd server, which then bringup the rest of the userspace.
 
 ## Project structure
 
-The project is rougly structured as follows:
+The project is roughly structured as follows:
 - `kernel/` - The microkernel
-- `lib/` - Different libraries (C, Rust and so on)
+- `lib/` - Different system libraries
+- `mlibc/` - The [mlibc](https://github.com/managarm/mlibc) C library
 - `userspace/` - Different userspace servers/programs
-- `host-recipes/`, `source-recipes/`, `recipes/`, `patches/`, `Jinxfile` - [Jinx](https://codeberg.org/Mintsuki/jinx) build system stuff
+- `host-recipes/`, `recipes/`, `patches/`, `Jinxfile` - [Jinx](https://codeberg.org/Mintsuki/jinx) build system stuff
 - `scripts/` - Build support scripts
 
 ## Compilation and execution
 
-The [Jinx build system](https://codeberg.org/Mintsuki/jinx) is used for building the system. A Makfile is provided in the root of this project, which downloads Jinx and uses it to build the system images for different architectures. The `qemu`, `qemu-x86`, `qemu-i686` and `qemu-loongarch64` makefile targets are provided to build and run RISC-V, amd64, ia32 and LoongArch64 images in qemu, respectively.
+The [Jinx meta-build-system](https://github.com/Mintsuki/Jinx) is used for building the system. A Makefile is provided in the root of this project, which downloads Jinx and uses it to build the system images for different architectures. The `qemu`, `qemu-x86`, `qemu-i686` and `qemu-loongarch64` makefile targets are provided to build and run RISC-V, amd64, ia32 and LoongArch64 images in qemu, respectively.
 
 If you would like to use jinx directly, you can run
 ```sh
@@ -46,12 +43,11 @@ ${source_dir}/jinx init ${source_dir} ARCH=<desired architecture, e.g. riscv64, 
 ${source_dir}/jinx build limine-disk-image
 ```
 
-## Immediate plans
+## Plans
 
-1. Implement working set for virtual memory (swap and page replacement)
-2. Implement AHCI driver reading and writing
- - Work on doccumentation
- - Improve project structure
+1. Get better read-write filesystem drivers (UDF, ext4, FAT32, etc.)
+2. Implement working set for virtual memory (swap and page replacement)
+3. Implement whatever is needed to port programs
 
 ## Features
 
@@ -60,8 +56,8 @@ These are the features that are planned to be had in the OS:
 ### Kernel
 
 #### Arch-independent features:
-- [ ] Processes and threads
-  - [ ] Processes - The kernel has tasks, but POSIX processes and execlp/spawn is not yet implemented
+- [x] Processes and threads
+  - [x] Processes
   - [x] Task switching
   - [x] Preemptive multitasking (boring)
   - [X] Threads - basic pthread implementation in userspace building on kernel interfaces
@@ -78,16 +74,15 @@ These are the features that are planned to be had in the OS:
     - [x] Mapping (anonymous mmap)
     - [x] Lazy allocations
     - [x] Full unmapping
-    - [x] Partial and overlaping unmapping (munmap)
+    - [x] Partial and overlapping unmapping (munmap)
     - [ ] memprotect and changing permissions
-    - [x] Acccess to physical memory
+    - [x] Access to physical memory
     - [x] Mapping of memory objects
     - [x] Copy-on-write
   - [ ] Memory objects
     - [x] Memory object creation from kernel
     - [x] Memory object access from kernel
-    - [ ] Blocking tasks on memory object access in kernel
-      - Need to make changes in scheduler
+    - [ ] Blocking tasks on memory object access in kernel/pagers
     - [x] Memory object mapping to userspace
     - [x] Memory object creation and management from userspace
   - [x] Delayed allocation
@@ -117,7 +112,7 @@ These are the features that are planned to be had in the OS:
     - [x] Notification of closed rights
     - [x] Sending rights over IPC
   
-- [ ] ~~Permissions~~ -> capabilities would solve that
+- [x] ~~Permissions~~ -> capabilities
 - [x] Multi CPU support
 
 #### RISC-V specific features:
@@ -152,21 +147,15 @@ These are the features that are planned to be had in the OS:
 - [ ] Process management (processd) - Mostly unfinished, I plan it to route signals
 - [ ] Networking (networkd)
 - [ ] Filesystems
-  - [ ] ext4 - With the help of [ext4plus crate](https://crates.io/crates/ext4plus/) in userspace
+  - [x] ext4 - With the help of [ext4plus crate](https://crates.io/crates/ext4plus/) in userspace
     - [x] Partition probing
-    - [ ] Mounting
-    - [ ] Reading
-    - [ ] Writing
+    - [x] Mounting
+    - [x] Reading
+    - [ ] Writing - not supported by the driver
+  - [ ] UDF
   - [ ] FAT32
   - [ ] FUSE
   - [ ] USTAR filesystem daemon - Archive parsing works, but it is very incomplete
-  - [ ] VFSd - being rewritten in Rust
-- [ ] pmbus - a bus for drivers and services in Rust
-  - [x] Publishing objects
-  - [x] Requesting objects
-  - [x] C++ bindings
-  - [x] C bindings
-  - [ ] Rust bindings
 - [ ] Drawing on screen (screend)
   - [x] Framebuffer
     - [x] Showing text with framebuffer
@@ -208,9 +197,10 @@ These are the features that are planned to be had in the OS:
 
 
 **Userland**
-- [ ] Terminal
+- [ ] Screen/keyboard tty
+- [x] ns16550 serial console
 - [ ] GUI
-- [ ] C/POSIX Library - a buch of functions are implemented, but a lot more are missing
+- [x] C/POSIX Library - using mlibc
 - [ ] Init server
   - [x] Launching servers
   - [x] Matching pmbus objects
@@ -222,18 +212,12 @@ These are the features that are planned to be had in the OS:
 - [X] C++ and libstdc++ (and other) runtime(s) - Compiling and working but a lot of C library functions are missing
 - [X] Go and libgo runtime with GCC - Compiling, but untested and probably broken for now. Also, exec-stuff is missing
 
-## Known issues
-
-## Documentation
-
-In works!
-
 ## Dependencies
 
 The following libraries have been used in the project, possibly containing their own licenses:
 - [smoldtb](/kernel/smoldtb/)
 - [flanterm](/terminald/flanterm/)
-- dlmalloc in libc and kernel
+- dlmalloc in kernel
 - [uACPI](/devicesd/generic/uACPI/)
 
 ## License
