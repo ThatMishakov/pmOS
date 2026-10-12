@@ -59,6 +59,7 @@ struct Process {
     std::list<WaitpidRequest> waitpid_requests;
     std::shared_ptr<VNode> cwd_vnode = nullptr;
 
+    std::expected<void, int> set_cwd(std::shared_ptr<VNode> vnode);
     std::string get_cwd() const;
 
     bool can_send_signal(const Process &sender, int signal) const;

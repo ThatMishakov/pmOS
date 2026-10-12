@@ -1116,6 +1116,35 @@ void kill_handle(std::shared_ptr<Process> process, pmos::Right reply_right, pid_
         send_signal(p, sig, waiter);
 }
 
+static void chdir_reply(pmos::Right reply_right, int result)
+{
+    IPC_Chdir_Reply reply = {
+        .type = IPC_Chdir_Reply_NUM,
+        .flags = 0,
+        .result_code = result,
+    };
+    auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+    if (!result_send)
+        kernelLogger() << "processd: chdir_reply: Failed to send reply message\n" << frg::endlog;
+}
+
+pmos::async::detached_task chdir_handle(std::shared_ptr<Process> process, pmos::Right reply_right, std::string path)
+{
+    auto vnode = co_await resolve_path(path, process);
+    if (!vnode) {
+        chdir_reply(std::move(reply_right), vnode.error());
+        co_return;
+    }
+
+    auto result = process->set_cwd(vnode.value());
+    if (!result) {
+        chdir_reply(std::move(reply_right), result.error());
+        co_return;
+    }
+
+    chdir_reply(std::move(reply_right), 0);
+}
+
 pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::shared_ptr<Process> process)
 {
     process->receive_right_id = rr.get();
@@ -1266,6 +1295,17 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
 
             IPC_Kill *m = reinterpret_cast<IPC_Kill *>(ipc_msg);
             kill_handle(process, std::move(reply_right), m->pid, m->signal);
+            break;
+        }
+        case IPC_Chdir_NUM: {
+            if (msg.size < sizeof(IPC_Chdir)) {
+                kernelLogger() << "processd: Received IPC_Chdir that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            IPC_Chdir *m = reinterpret_cast<IPC_Chdir *>(ipc_msg);
+            std::string path(m->path, message.size() - sizeof(IPC_Chdir));
+            chdir_handle(process, std::move(reply_right), std::move(path));
             break;
         }
 

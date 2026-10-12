@@ -154,3 +154,5 @@ pmos::async::detached_task stat_handle(std::shared_ptr<VNode> vnode, pmos::Right
 pmos::async::task<std::expected<pmos::Right /* io_right */, int>> get_file_handle(std::string path, std::shared_ptr<Process> process);
 
 pmos::async::detached_task attend_open_file(std::shared_ptr<VNode> vnode, pmos::ReceiveRight right);
+
+pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> resolve_path(std::string path, std::shared_ptr<Process> process);

@@ -277,7 +277,9 @@ void syscall_handler()
 
     syscall_table[call_n](task);
 
-    if ((syscall_error(task) < 0)) {
+    bool show_errors = false;
+
+    if (show_errors && (syscall_error(task) < 0)) {
         serial_logger.printf("Debug: syscall %i (%s) pid %li (%s) ", call_n, syscall_name(call_n), task->task_id,
                              task->name.c_str());
         int val = syscall_error(task);

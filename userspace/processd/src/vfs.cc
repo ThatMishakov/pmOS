@@ -16,6 +16,7 @@
 #include <fcntl.h>
 #include "devfs.hh"
 #include <pmos/fs-data.h>
+#include "process.hh"
 
 extern pmos::Port main_port;
 extern pmos::PortDispatcher dispatcher;
@@ -143,6 +144,13 @@ pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> resolve_path(std::
     }
 
     co_return std::unexpected(-ELOOP);
+}
+
+pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> resolve_path(std::string path, std::shared_ptr<Process> process)
+{
+    assert(process);
+
+    co_return co_await resolve_path(path, process->cwd_vnode, nullptr, true);
 }
 
 pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right fs_right, const std::string &mountpoint, int64_t root_inode)
@@ -324,6 +332,30 @@ void handle_ttyname(std::shared_ptr<VNode> vnode, pmos::Right reply_right)
         kernelLogger() << "posixd: Error " << result_send.error().first << " sending ttyname reply to port " << reply_right.get() << "\n" << frg::endlog;
 }
 
+static void chdir_reply(pmos::Right reply_right, int result)
+{
+    IPC_Chdir_Reply reply = {
+        .type = IPC_Chdir_Reply_NUM,
+        .flags = 0,
+        .result_code = result,
+    };
+    auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+    if (!result_send)
+        kernelLogger() << "processd: chdir_reply: Failed to send reply message\n" << frg::endlog;
+}
+
+static void handle_chdir(std::shared_ptr<VNode> vnode, uint64_t sender_process_id, pmos::Right reply_right)
+{
+    auto process = get_process_kernel_id(sender_process_id);
+    if (!process) {
+        chdir_reply(std::move(reply_right), -EPERM);
+        return;
+    }
+
+    auto result = process->set_cwd(std::move(vnode));
+    chdir_reply(std::move(reply_right), result.error_or(0));
+}
+
 pmos::async::detached_task attend_open_file(std::shared_ptr<VNode> vnode, pmos::ReceiveRight right)
 {
     while (1) {
@@ -377,6 +409,14 @@ pmos::async::detached_task attend_open_file(std::shared_ptr<VNode> vnode, pmos::
             if (!result_send)
                 kernelLogger() << "posixd: Error " << result_send.error().first << " sending unlockpt reply to port " << reply_right.get() << "\n" << frg::endlog;
         } break;
+        case IPC_Chdir_NUM: {
+            if (msg.size < sizeof(IPC_Chdir)) {
+                kernelLogger() << "processd: Received IPC_Chdir that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            handle_chdir(vnode, msg.sender_process, std::move(reply_right));
+        } break;
         default:
             kernelLogger() << "posixd: Unknown message type " << ipc_msg->type << " while attending file\n" << frg::endlog;
             break;
@@ -395,7 +435,7 @@ pmos::Right create_file_right(std::shared_ptr<VNode> vnode)
 
 pmos::async::task<std::expected<pmos::Right /* io_right */, int>> get_file_handle(std::string path, std::shared_ptr<Process> process)
 {
-    auto result = co_await resolve_path(std::move(path));
+    auto result = co_await resolve_path(std::move(path), process->cwd_vnode);
     if (!result) {
         co_return std::unexpected(result.error());
     }
@@ -410,7 +450,7 @@ pmos::async::task<std::expected<pmos::Right /* io_right */, int>> get_file_handl
 
 pmos::async::detached_task open_file(pmos::Right reply_right, std::string path, std::shared_ptr<Process> process, unsigned flags)
 {
-    auto result = co_await resolve_path(std::move(path));
+    auto result = co_await resolve_path(std::move(path), process->cwd_vnode);
     if (!result) {
         open_file_error_reply(reply_right, result.error());
         co_return;

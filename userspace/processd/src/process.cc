@@ -544,3 +544,15 @@ pmos::async::detached_task send_signal(std::shared_ptr<Process> target, int sign
     }
     co_return;
 }
+
+std::expected<void, int> Process::set_cwd(std::shared_ptr<VNode> vnode)
+{
+    if (!vnode)
+        return std::unexpected(-ENOENT);
+
+    if (vnode->type != FileType::Directory)
+        return std::unexpected(-ENOTDIR);
+
+    cwd_vnode = vnode;
+    return {};
+}
