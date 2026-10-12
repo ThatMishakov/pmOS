@@ -18,7 +18,7 @@ public:
 
     struct AuxVecVal {
         int a_type;
-        std::variant<long, uintptr_t, pmos::containers::vector<std::byte>> value;
+        std::variant<int64_t, uint64_t, pmos::containers::vector<std::byte>> value;
         // 0 - long plain value
         // 1 - pointer or function pointer
         // 2 - free form
@@ -45,7 +45,7 @@ public:
     size_t size_serialized() const;
 
     // Vector containing serialized data (or nothing on error)
-    std::optional<data_out_type> serialize(std::uintptr_t stack_end);
+    std::optional<data_out_type> serialize(std::uint64_t stack_end);
 
     bool is_64bit() const;
 protected:
@@ -134,7 +134,7 @@ inline size_t ElFAuxvecBuilder::auxval_size() const
     return (auxvec_.size() * 2 + 1) * ptr_size;
 }
 
-inline std::optional<ElFAuxvecBuilder::data_out_type> ElFAuxvecBuilder::serialize(std::uintptr_t stack_end)
+inline std::optional<ElFAuxvecBuilder::data_out_type> ElFAuxvecBuilder::serialize(std::uint64_t stack_end)
 {
     // Potentially leaves vector messed on error, which is fine here
     auto append_string_bytes = [](pmos::containers::vector<std::byte> &vec, std::string_view s) noexcept -> bool
@@ -202,7 +202,7 @@ inline std::optional<ElFAuxvecBuilder::data_out_type> ElFAuxvecBuilder::serializ
     if (!output.reserve(final_size))
         return {};
 
-    uintptr_t start_of_args = stack_end - args_serialized.size();
+    uint64_t start_of_args = stack_end - args_serialized.size();
 
     // Push arguments, args count and environment
     if (is_64bit()) {
@@ -256,9 +256,9 @@ inline std::optional<ElFAuxvecBuilder::data_out_type> ElFAuxvecBuilder::serializ
 
         for (const auto& i : auxvec_) {
             uint64_t value = 0;
-            if (auto l = std::get_if<long>(&i.value); l) {
+            if (auto l = std::get_if<int64_t>(&i.value); l) {
                 value = static_cast<uint64_t>(*l);
-            } else if (auto ptr = std::get_if<uintptr_t>(&i.value); ptr) {
+            } else if (auto ptr = std::get_if<uint64_t>(&i.value); ptr) {
                 value = static_cast<uint64_t>(*ptr);
             } else if (auto ii = std::get_if<pmos::containers::vector<std::byte>>(&i.value); ii) {
                 auto t = extra_offset.get(current_extra_offset++);
@@ -287,9 +287,9 @@ inline std::optional<ElFAuxvecBuilder::data_out_type> ElFAuxvecBuilder::serializ
 
         for (const auto& i : auxvec_) {
             uint32_t value = 0;
-            if (auto l = std::get_if<long>(&i.value); l) {
+            if (auto l = std::get_if<int64_t>(&i.value); l) {
                 value = static_cast<uint32_t>(*l);
-            } else if (auto ptr = std::get_if<uintptr_t>(&i.value); ptr) {
+            } else if (auto ptr = std::get_if<uint64_t>(&i.value); ptr) {
                 value = static_cast<uint32_t>(*ptr);
             } else if (auto ii = std::get_if<pmos::containers::vector<std::byte>>(&i.value); ii) {
                 auto t = extra_offset.get(current_extra_offset++);

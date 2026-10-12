@@ -697,23 +697,23 @@ ReturnStr<bool>
     auto &args = auxvec_builder.args();
 
     // Stack...
-    if (!auxvals.push_back({AT_USRSTACKLIM, (long) stack_desc.stack_size}))
+    if (!auxvals.push_back({AT_USRSTACKLIM, (int64_t) stack_desc.stack_size}))
         return Error(-ENOMEM);
-    if (!auxvals.push_back({AT_USRSTACKBASE, (uintptr_t) stack_desc.stack_top}))
+    if (!auxvals.push_back({AT_USRSTACKBASE, (uint64_t) stack_desc.stack_top}))
         return Error(-ENOMEM);
 
     // Pheader
-    if (!auxvals.push_back({AT_PHDR, (uintptr_t) phdr_tag.phdr_addr}))
+    if (!auxvals.push_back({AT_PHDR, (uint64_t) phdr_tag.phdr_addr}))
         return Error(-ENOMEM);
-    if (!auxvals.push_back({AT_PHENT, (long) phdr_tag.phdr_size}))
+    if (!auxvals.push_back({AT_PHENT, (int64_t) phdr_tag.phdr_size}))
         return Error(-ENOMEM);
-    if (!auxvals.push_back({AT_PHNUM, (long) phdr_tag.phdr_num}))
-        return Error(-ENOMEM);
-
-    if (!auxvals.push_back({AT_PAGESZ, (long) 4096})) // TODO...
+    if (!auxvals.push_back({AT_PHNUM, (int64_t) phdr_tag.phdr_num}))
         return Error(-ENOMEM);
 
-    if (!auxvals.push_back({AT_ENTRY, (uintptr_t) program_entry}))
+    if (!auxvals.push_back({AT_PAGESZ, (int64_t) 4096})) // TODO...
+        return Error(-ENOMEM);
+
+    if (!auxvals.push_back({AT_ENTRY, (uint64_t) program_entry}))
         return Error(-ENOMEM);
 
     // Object id
@@ -805,7 +805,7 @@ ReturnStr<bool>
     if (!b.val)
         return false;
 
-    if (!auxvals.push_back({AT_LOAD_DATA, (uintptr_t)pos}))
+    if (!auxvals.push_back({AT_LOAD_DATA, (uint64_t)pos}))
         return Error(-ENOMEM);
 
 
