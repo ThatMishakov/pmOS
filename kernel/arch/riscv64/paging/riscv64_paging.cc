@@ -558,6 +558,12 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_clone()
         }
     });
 
+    free_user_pages();
+    {
+        auto ctx = TLBShootdownContext::create_userspace(*this);
+        ctx.invalidate_all();
+    }
+
     for (auto &reg: this->paging_regions) {
         auto result = reg.clone_to(new_table, reg.start_addr, reg.access_type);
         if (result)
@@ -638,6 +644,7 @@ void RISCV64_Page_Table::free_user_pages()
 
     for (u64 i = 0; i < 256; ++i) {
         u64 entry_val = __atomic_load_n(active_pt + i, __ATOMIC_ACQUIRE);
+        __atomic_store_n(active_pt + 1, 0, __ATOMIC_RELEASE);
         RISCV64_PTE entry = RISCV64_PTE::from_u64(entry_val);
         if (entry.valid and not entry.is_special()) {
             assert(not entry.is_leaf());
