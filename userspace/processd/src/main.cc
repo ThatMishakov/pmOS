@@ -57,6 +57,7 @@
 #include <pmos/utility/auxvec_builder.hh>
 #include <fcntl.h>
 #include <set>
+#include "uname.hh"
 
 void KernelSink::operator()(const char *message)
 {
@@ -1145,6 +1146,33 @@ pmos::async::detached_task chdir_handle(std::shared_ptr<Process> process, pmos::
     chdir_reply(std::move(reply_right), 0);
 }
 
+static void uname_handle(pmos::Right reply_right)
+{
+    auto uname = get_uname();
+    IPC_Uname_Reply reply = {
+        .type = IPC_Uname_Reply_NUM,
+        .flags = 0,
+        .result_code = 0,
+        .sysname = {},
+        .nodename = {},
+        .release = {},
+        .version = {},
+        .machine = {},
+        .domainname = {},
+    };
+
+    memcpy(reply.sysname, uname.sysname, sizeof(uname.sysname));
+    memcpy(reply.nodename, uname.nodename, sizeof(uname.nodename));
+    memcpy(reply.release, uname.release, sizeof(uname.release));
+    memcpy(reply.version, uname.version, sizeof(uname.version));
+    memcpy(reply.machine, uname.machine, sizeof(uname.machine));
+    memcpy(reply.domainname, uname.domainname, sizeof(uname.domainname));
+
+    auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+    if (!result_send)
+        kernelLogger() << "processd: uname_handle: Failed to send reply message\n" << frg::endlog;
+}
+
 pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::shared_ptr<Process> process)
 {
     process->receive_right_id = rr.get();
@@ -1306,6 +1334,15 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
             IPC_Chdir *m = reinterpret_cast<IPC_Chdir *>(ipc_msg);
             std::string path(m->path, message.size() - sizeof(IPC_Chdir));
             chdir_handle(process, std::move(reply_right), std::move(path));
+            break;
+        }
+        case IPC_Uname_NUM: {
+            if (msg.size < sizeof(IPC_Uname)) {
+                kernelLogger() << "processd: Received IPC_Uname that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            uname_handle(std::move(reply_right));
             break;
         }
 
