@@ -3,8 +3,8 @@
 A small (hobby) multiserver microkernel operating system for RISC-V, LoongArch and x86 (i686 and x86_64), using a homemade kernel and userspace, and [mlibc](https://github.com/managarm/mlibc) as the main C library, partially developed as my end of degree project. The goal of the project is to make a general purpose operating system, with the objective of learning and being suitable for development and exploration of the RISC-V and X86 platforms. The microkernel is mostly written in C++, and the userspace is in a mixture of C, C++ and Rust (and ASM where needed). The [limine bootloader](https://limine-bootloader.org/) and [Hyper bootloader](https://github.com/UltraOS/Hyper) are used for booting the system, depending on the architecture, and i686 and x86_64 ports are also bootable with multiboot2, with x86_64 version being triple protocol with the same binary.
 
 ## Screenshots
-RISC-V Execution:
-![RISC-V execution](screenshots/risc-v.png)
+RISC-V Execution, running bash in qemu-riscv64 with ns16550 terminal:
+![RISC-V execution](screenshots/risc-v-bash.png)
 
 Baremetal execution (of an old build) on an old x86 (AMD E450) laptop, discovering an internal SATA HDD:
 ![Baremetal execution](screenshots/baremetal-x86.jpg)
