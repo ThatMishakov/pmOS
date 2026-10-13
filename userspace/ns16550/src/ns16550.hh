@@ -11,9 +11,9 @@ constexpr int THR_EMPTY  = 0x2;
 constexpr int THR = 0x0; // Transmitter Holding Register
 constexpr int IER = 0x1; // Interrupt Enable Register
 
-constexpr int IER_RLS      = 0x1; // Receiver Line Status
-constexpr int IER_RX_DATA  = 0x2; // Receiver Data Available
-constexpr int IER_TX_EMPTY = 0x4; // Transmitter Holding Register Empty
+constexpr int IER_RX_DATA  = 0x1; // Receiver Data Available
+constexpr int IER_TX_EMPTY = 0x2; // Transmitter Holding Register Empty
+constexpr int IER_RLS      = 0x4; // Receiver Line Status
 constexpr int IER_MS       = 0x8; // Modem Status
 
 constexpr int ISR = 0x2; // Interuupt Status Register

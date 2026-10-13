@@ -374,7 +374,7 @@ void ns16550_init()
 
     // Enable FIFO
     // TODO: Be compatible with 16450
-    set_register(FCR, FIFO_ENABLE | RX_FIFO_RESET | TX_FIFO_RESET | TRIGGER_8CHAR);
+    io_rw->write_register(FCR, FIFO_ENABLE | RX_FIFO_RESET | TX_FIFO_RESET | TRIGGER_8CHAR);
 }
 
 int buff_length             = 0;
@@ -391,7 +391,7 @@ void set_interrupts()
     if (writing)
         mask |= IER_TX_EMPTY;
 
-    set_register(IER, mask);
+    io_rw->write_register(IER, mask);
 }
 
 struct buffer {
