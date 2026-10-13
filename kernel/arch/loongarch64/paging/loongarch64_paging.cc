@@ -340,9 +340,16 @@ static void free_all_level(u64 level_page, unsigned level)
             pmm::free_memory_for_kernel(page, 1);
         }
     }
-}
+}       
 
-void LoongArch64_Page_Table::free_all_pages() { free_all_level(page_directory, 4); }
+void LoongArch64_Page_Table::free_all_pages() {
+    free_all_level(page_directory, 4);
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
+    u64 *active_pt = mapper.map(page_directory);
+    for (int i = 0; i < 512; ++i) {
+        __atomic_store_n(&active_pt[i], 0, __ATOMIC_RELEASE);
+    }
+}
 
 void LoongArch64_Page_Table::invalidate_tlb(void *page) { invalidate_user_page(page, 0); }
 
@@ -495,21 +502,10 @@ klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::create_clone()
     Auto_Lock_Scope_Double scope_guard(this->lock, new_table->lock);
 
     if (!new_table->paging_regions.empty())
-        // Somebody has messed with the page table while it was being created
-        // I don't know if it's the best solution to not block the tables
-        // immediately but I believe it's better to block them for shorter time
-        // and abort the operation when someone tries to mess with the paging,
-        // which would either be very poor coding or a bug anyways
         return nullptr; // "page table is already cloned"
 
     // This gets called on error
     auto guard = pmos::utility::make_scope_guard([&]() {
-        // Remove all the regions. It might not be necessary, since
-        // it should be handled by the destructor but in case somebody from
-        // userspace specultively does weird stuff with the
-        // not-yet-fully-constructed page table, it's better to give them an
-        // empty table
-
         auto tlb_ctx = TLBShootdownContext::create_userspace(*new_table);
 
         auto it = new_table->paging_regions.begin();
@@ -525,6 +521,12 @@ klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::create_clone()
             it = new_table->paging_regions.begin();
         }
     });
+
+    free_all_pages();
+    {
+        auto ctx = TLBShootdownContext::create_userspace(*this);
+        ctx.invalidate_all();
+    }
 
     for (auto &reg: this->paging_regions) {
         auto result = reg.clone_to(new_table, reg.start_addr, reg.access_type);

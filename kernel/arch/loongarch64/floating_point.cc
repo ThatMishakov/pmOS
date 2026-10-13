@@ -29,6 +29,20 @@ void detect_supported_extensions()
         fp = VectorInstructionsLevel::FP;
 }
 
+static size_t fp_size(VectorInstructionsLevel level)
+{
+    switch (level) {
+    case VectorInstructionsLevel::FP:
+        return 2 + 32; // 32 64-bit registers
+    case VectorInstructionsLevel::LSX:
+        return 2 + 64; // 32 128-bit registers
+    case VectorInstructionsLevel::LASX:
+        return 2 + 128; // 32 256-bit registers
+    default:
+        return 0;
+    }
+}
+
 kresult_t TaskDescriptor::init_fp_state()
 {
     if (is_system)
@@ -169,6 +183,25 @@ kresult_t handle_fp_disabled_exception(unsigned code)
     task->using_fp = true;
     fp_enable();
     fp_restore(task->fp_registers.get());
+
+    return 0;
+}
+
+kresult_t TaskDescriptor::inherit_registers_from_current()
+{
+    auto current = sched::get_current_task();
+    assert(current);
+
+    current->before_task_switch();
+
+    regs = current->regs;
+    if (current->using_fp) {
+        using_fp = true;
+        memcpy(fp_registers.get(), current->fp_registers.get(),
+               sizeof(u64) * fp_size(fp));
+    }
+
+    current->after_task_switch();
 
     return 0;
 }
