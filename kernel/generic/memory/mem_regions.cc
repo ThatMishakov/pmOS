@@ -50,6 +50,9 @@ static bool mapped_right_perm(Page_Table::Page_Info info, unsigned access_type)
     if (!info.is_allocated)
         return false;
 
+    if (!info.user_access)
+        return false;
+
     // if (access_type & Readable and not info.readable)
     //     return false;
 
