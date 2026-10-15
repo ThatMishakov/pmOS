@@ -210,7 +210,7 @@ pmos::async::task<std::expected<uint64_t /* reloc offset */, int>> load_into_mem
             if (c_result.result)
                 co_return std::unexpected((int)c_result.result);
             reloc_offset = c_result.virt_addr_intptr - min_page;
-            release_memory_range64(page_table, min_page, max_page - min_page);
+            release_memory_range64(page_table, c_result.virt_addr_intptr, max_page - min_page);
         }
 
         auto obj_result = co_await get_mem_object(file_handle, PROT_READ | PROT_EXEC);
@@ -315,7 +315,7 @@ pmos::async::task<std::expected<uint64_t /* reloc offset */, int>> load_into_mem
             if (c_result.result)
                 co_return std::unexpected((int)c_result.result);
             reloc_offset = c_result.virt_addr_intptr - min_page;
-            release_memory_range64(page_table, min_page, max_page - min_page);
+            release_memory_range64(page_table, c_result.virt_addr_intptr, max_page - min_page);
         }
 
         auto obj_result = co_await get_mem_object(file_handle, PROT_READ | PROT_EXEC);

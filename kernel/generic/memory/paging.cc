@@ -103,14 +103,31 @@ ReturnStr<bool> Page_Table::atomic_copy_to_user(void *to, const void *from, size
     return true;
 }
 
+static bool ranges_intersect(uintptr_t start1, size_t size1, uintptr_t start2, size_t size2)
+{
+    if (size1 == 0 || size2 == 0)
+        return false;
+
+    if (start1 < start2) {
+        return start2 - start1 < size1;
+    } else {
+        return start1 - start2 < size2;
+    }
+}
+
 kresult_t Page_Table::release_in_range(TLBShootdownContext &ctx, void *start_addr, size_t size)
 {
     invalidate_range(ctx, start_addr, size, true);
 
+    const auto unmap_start = reinterpret_cast<uintptr_t>(start_addr);
+
     // Special case: One large region needs to be split in two, from the middle
-    auto it          = paging_regions.get_smaller_or_equal(start_addr);
-    if (it != paging_regions.end() and it->start_addr < start_addr and
-        it->addr_end() > (void *)((char *)start_addr + size)) {
+    auto it = paging_regions.get_smaller_or_equal(start_addr);
+    const uintptr_t region_start = it != paging_regions.end() ? reinterpret_cast<uintptr_t>(it->start_addr) : 0;
+    const auto offset = unmap_start - region_start;
+
+    if (it != paging_regions.end() and region_start < unmap_start &&
+            offset < it->size && size < it->size - offset) {
         // This is the case when the region needs to be split
         // it is the only case that may fail because the system may not have enough memory to
         // allocate a second region
@@ -123,22 +140,35 @@ kresult_t Page_Table::release_in_range(TLBShootdownContext &ctx, void *start_add
         if (it == paging_regions.end())
             it = paging_regions.begin();
 
-        void *end_addr = (char *)start_addr + size;
-        while (it != paging_regions.end() and it->start_addr < end_addr) {
+        while (it != paging_regions.end()) {
+            const auto region_start =
+                reinterpret_cast<uintptr_t>(it->start_addr);
+
+            if (region_start >= unmap_start &&
+                region_start - unmap_start >= size)
+                break;
+            
             auto i = it++;
 
             // 1 region can be before the one to be released
-            if (not i->is_in_range(start_addr))
+            if (!ranges_intersect(
+                    reinterpret_cast<uintptr_t>(i->start_addr), i->size,
+                    reinterpret_cast<uintptr_t>(start_addr), size))
                 continue;
 
-            if (i->start_addr < start_addr) {
-                i->trim(i->start_addr, (char *)start_addr - (char *)i->start_addr);
-            } else if (i->addr_end() > end_addr) {
-                i->trim(end_addr, (char *)i->addr_end() - (char *)end_addr);
+            if (region_start < unmap_start) {
+                i->trim(i->start_addr, unmap_start - region_start);
             } else {
-                i->prepare_deletion();
-                paging_regions.erase(i);
-                i->rcu_free();
+                const auto offset = region_start - unmap_start;
+                const auto removed = size - offset;
+
+                if (removed < i->size) {
+                    i->trim(reinterpret_cast<void *>(region_start + removed), i->size - removed);
+                } else {
+                    i->prepare_deletion();
+                    paging_regions.erase(i);
+                    i->rcu_free();
+                }
             }
         }
     }

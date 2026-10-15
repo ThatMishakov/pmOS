@@ -394,7 +394,7 @@ result_t load_elf_to_memory(void *file_mapped, uint64_t mem_object_id, uint64_t 
 
         *relocation_offset = c_result.virt_addr_intptr - min_page;
 
-        release_memory_range64(page_table_id, min_page, max_page - min_page);
+        release_memory_range64(page_table_id, c_result.virt_addr_intptr, max_page - min_page);
     } else {
         *relocation_offset = 0;
     }
