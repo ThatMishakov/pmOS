@@ -60,11 +60,15 @@ _ap_bootstrap_entry:
     # Entry to the hart bootstrap code
 
     # Load the bootstrap address into stvec, then pagefault to it...
-    la t0, ap_entry_ptr
+    # The following is needed to make sure that the accesses are always pc-relative
+.option push
+.option norelax
+    lla t0, ap_entry_ptr
     ld t1, 0(t0)
     csrw stvec, t1
 
-    la t0, satp_bootstrap_value
+    lla t0, satp_bootstrap_value
+.option pop
     ld t1, 0(t0)
     csrw satp, t1
     sfence.vma
