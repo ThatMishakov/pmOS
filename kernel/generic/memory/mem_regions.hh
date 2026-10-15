@@ -148,22 +148,6 @@ namespace paging
          */
         constexpr virtual bool can_takeout_page() const noexcept { return false; }
 
-        /**
-         * @brief Prepares the page for being accessed by the kernel.
-         *
-         * This function prepares the page to be accessed by the kernel by checking permissions and
-         * whatnot and calling alloc_page() with the specially-crafter parameters. See alloc_page()
-         * for more details.
-         *
-         * @param access_mode Mode in which the page is to be accessed
-         * @param page_addr Address of the page
-         * @return true if the execution was successfull and the page is immediately available
-         * @return false is the execution was successfull but the resource is currently unavailable
-         * and the operation is needed to be repeated again once it becomes available.
-         * @see alloc_page()
-         */
-        [[nodiscard]] ReturnStr<bool> prepare_page(unsigned access_mode, void *page_addr);
-
         Generic_Mem_Region(void *start_addr, size_t size, klib::string name, Page_Table *owner,
                            unsigned access);
 

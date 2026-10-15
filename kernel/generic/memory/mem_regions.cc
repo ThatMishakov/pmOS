@@ -53,8 +53,8 @@ static bool mapped_right_perm(Page_Table::Page_Info info, unsigned access_type)
     if (!info.user_access)
         return false;
 
-    // if (access_type & Readable and not info.readable)
-    //     return false;
+    if ((access_type & Readable) and (not info.readable))
+        return false;
 
     if ((access_type & Writeable) and (not info.writeable))
         return false;
@@ -105,11 +105,6 @@ ReturnStr<bool> Generic_Mem_Region::on_page_fault(unsigned access_type, void *pa
     return true;
 }
 
-ReturnStr<bool> Generic_Mem_Region::prepare_page(unsigned access_mode, void *page_addr)
-{
-    return Error(-ENOSYS);
-}
-
 Memory_Type Phys_Mapped_Region::memory_type_for_phys_addr(phys_addr_t phys_addr) const
 {
     Memory_Type type;
@@ -145,9 +140,9 @@ ReturnStr<Page_Info> Phys_Mapped_Region::get_page(void *ptr_addr, unsigned acces
         .dirty = false,
         .user_access = true,
         .nofree = true,
-        .writeable = !!(access_type & Writeable),
-        .executable = !!(access_type & Executable),
-        .readable = !!(access_type & Readable),
+        .writeable = !!(this->access_type & Writeable),
+        .executable = !!(this->access_type & Executable),
+        .readable = !!(this->access_type & Readable),
         .cache_policy = memory_type_for_phys_addr(phys_addr),
         .page_addr = phys_addr,
     };
