@@ -39,6 +39,7 @@
 #include <processes/tasks.hh>
 #include <processes/syscalls.hh>
 #include <sched/sched.hh>
+#include <sbi/sbi.hh>
 #include <utils.hh>
 
 using namespace kernel::riscv64;
@@ -280,8 +281,9 @@ void illegal_instruction(u32 instruction)
 
 void service_timer_interrupt()
 {
+    // The SBI timer stays pending until its deadline is moved into the future.
+    sbi_set_timer((u64)-1);
     cpu_timer_interrupt();
-    // Pending timer interrupt is cleared by SBI
 }
 
 void plic_service_interrupt()
