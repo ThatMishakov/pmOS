@@ -252,5 +252,8 @@ void init_smp()
 {
     init_smp_acpi();
 
+    memory::init_rcu();
+    other_cpus_online = true;
+
     start_aps();
 }

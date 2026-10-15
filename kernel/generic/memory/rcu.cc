@@ -2,6 +2,23 @@
 
 using namespace kernel::memory;
 
+namespace kernel::sched
+{
+extern RCU paging_rcu;
+extern RCU heap_rcu;
+}
+
+void kernel::memory::init_rcu()
+{
+    // Initialize RCU bitmask
+    auto result = sched::paging_rcu.bitmask.resize((kernel::sched::get_cpu_count() + 63) / 64, 0);
+    if (!result)
+        panic("Failed to initialize RCU bitmask");
+    result = sched::heap_rcu.bitmask.resize((kernel::sched::get_cpu_count() + 63) / 64, 0);
+    if (!result)
+        panic("Failed to initialize RCU bitmask");
+}
+
 bool RCU::cpu_bit_set(size_t cpu_id) noexcept
 {
     return (bitmask[cpu_id / 64] & (1UL << (cpu_id % 64))) != 0;
@@ -22,10 +39,10 @@ bool RCU::generation_complete() noexcept
 void RCU::start_generation() noexcept
 {
     for (size_t i = 0; i < bitmask.size(); i++) {
-        if (((i + 1) * sizeof(u64) * 8) <= sched::number_of_cpus) {
+        if (((i + 1) * sizeof(u64) * 8) <= sched::get_cpu_count()) {
             bitmask[i] = -1UL;
         } else {
-            int number_of_bits = sched::number_of_cpus - i * sizeof(u64) * 8;
+            int number_of_bits = sched::get_cpu_count() - i * sizeof(u64) * 8;
             bitmask[i]         = (1UL << number_of_bits) - 1;
         }
     }

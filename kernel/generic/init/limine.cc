@@ -137,11 +137,6 @@ Arch_Temp_Mapper temp_temp_mapper_instance;
 
 u64 hhdm_offset = 0;
 
-namespace kernel::sched
-{
-extern size_t number_of_cpus;
-}
-
 extern void *_kernel_start;
 
 extern void *_text_start;

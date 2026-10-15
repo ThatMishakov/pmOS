@@ -490,6 +490,8 @@ void Page_Table::trigger_shootdown(Page_Table *maybe_page_table, sched::CPU_Info
         int old_gen = cpu->kernel_pt_generation;
         int new_gen = kernel_pt_generation;
 
+        cpu->kernel_pt_generation = new_gen;
+
         __atomic_add_fetch(&kernel_pt_active_cpus_count[new_gen], 1, __ATOMIC_RELAXED);
         __atomic_sub_fetch(&kernel_pt_active_cpus_count[old_gen], 1, __ATOMIC_RELEASE);
 
@@ -647,6 +649,8 @@ void TLBShootdownContext::finalize()
             auto my_cpu = sched::get_cpu_struct();
 
             Auto_Lock_Scope l(barrier);
+
+            kernel_shootdown_desc = this;
 
             int old_generation   = kernel_pt_generation;
             kernel_pt_generation = kernel_pt_generation == 0 ? 1 : 0;

@@ -62,9 +62,7 @@ memory::RCU heap_rcu;
 
 pmos::containers::vector<CPU_Info *> cpus;
 
-size_t get_cpu_count() noexcept { return cpus.size(); }
-
-size_t number_of_cpus = 1;
+size_t get_cpu_count() { return cpus.size(); }
 
 // u64 TaskDescriptor::check_unblock_immediately(u64 reason, u64 extra)
 // {

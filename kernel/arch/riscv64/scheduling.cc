@@ -610,6 +610,9 @@ void init_smp()
     init_smp_acpi();
     // TODO: FDT
 
+    kernel::memory::init_rcu();
+    other_cpus_online = true;
+
     start_aps();
 }
 

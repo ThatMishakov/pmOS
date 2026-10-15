@@ -477,6 +477,9 @@ void init_smp()
         }
     }
 
+    memory::init_rcu();
+    other_cpus_online = true;
+
     smp_wake_everyone_else_up();
 }
 

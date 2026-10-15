@@ -37,7 +37,7 @@
 
 namespace kernel::sched
 {
-extern size_t number_of_cpus;
+size_t get_cpu_count();
 }
 
 namespace kernel::memory
@@ -58,14 +58,16 @@ struct RCU_Head {
     rcu_func_t rcu_func;
 };
 
+void init_rcu();
+
 class RCU
 {
 public:
     inline RCU()
     {
-        bool success = bitmask.resize((kernel::sched::number_of_cpus + 63) / 64, 0);
-        assert(success);
-        (void)success;
+        // bool success = bitmask.resize((kernel::sched::number_of_cpus + 63) / 64, 0);
+        // assert(success);
+        // (void)success;
     }
 
     ~RCU() = default;
@@ -83,6 +85,7 @@ private:
     void start_generation() noexcept;
 
     friend struct RCU_CPU;
+    friend void init_rcu();
 };
 
 struct RCU_CPU {
