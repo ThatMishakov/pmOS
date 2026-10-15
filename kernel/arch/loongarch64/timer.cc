@@ -108,7 +108,9 @@ bool calculate_timer_frequency()
     u32 div           = mul_div >> 16;
 
     tmrbits = (csrrd32<0x21>() >> 4) & 0xff;
-    timer_max = (1 << tmrbits) - 1;
+    if (tmrbits > 63)
+        tmrbits = 63;
+    timer_max = (((u64)1) << tmrbits) - 1;
 
     log::serial_logger.printf("CPU Timer freq %i mul %i div %i bits %i\n", constant_freq, mul, div, tmrbits);
 

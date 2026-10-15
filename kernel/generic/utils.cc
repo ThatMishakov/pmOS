@@ -679,22 +679,25 @@ extern "C" ReturnStr<bool> user_access_page_fault(unsigned access, const char *f
     if (!dst || !src)
         return result;
 
-    if (access == Protection::Readable) {
-        assert(faulting_addr >= *src);
-        size_t diff = faulting_addr - *src;
-        assert(diff < size);
-        *dst += diff;
-        *src += diff;
-        size += diff;
-    } else {
-        assert(access == Protection::Writeable);
-        assert(faulting_addr >= *dst);
-        size_t diff = faulting_addr - *dst;
-        assert(diff < size);
-        *dst += diff;
-        *src += diff;
-        size += diff;
-    }
+    // if (access == Protection::Readable) {
+    //     assert(faulting_addr >= *src);
+    //     size_t diff = faulting_addr - *src;
+    //     assert(diff < size);
+    //     *dst += diff;
+    //     *src += diff;
+    //     size -= diff;
+    // } else {
+    //     assert(access == Protection::Writeable);
+    //     assert(faulting_addr >= *dst);
+    //     size_t diff = faulting_addr - *dst;
+    //     assert(diff < size);
+    //     *dst += diff;
+    //     *src += diff;
+    //     size -= diff;
+    // }
+    (void)dst;
+    (void)src;
+    (void)size;
 
     return result;
 }
