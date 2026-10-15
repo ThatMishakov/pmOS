@@ -160,7 +160,9 @@ namespace paging
          */
         bool is_in_range(void *addr) const
         {
-            return addr >= start_addr and (char *) addr < (char *)start_addr + size;
+            const auto address = reinterpret_cast<uintptr_t>(addr);
+            const auto start = reinterpret_cast<uintptr_t>(start_addr);
+            return address >= start && address - start < size;
         }
 
         bool has_access(unsigned access_mask) const noexcept

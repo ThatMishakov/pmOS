@@ -76,7 +76,7 @@ ReturnStr<Mem_Object_Reference *>
         return Error(-ENOMEM);
 
     return atomic_create_mem_object_region(page_aligned_start, page_aligned_size, access & 0x7,
-                                           access & 0x8, "anonymous memory", object, cow, 0,
+                                           fixed, "anonymous memory", object, cow, 0,
                                            page_aligned_size);
 }
 
@@ -327,9 +327,18 @@ bool Page_Table::can_takeout_page(void *page_addr) noexcept
 
 ReturnStr<void *> Page_Table::find_region_spot(void *desired_start, size_t size, bool fixed)
 {
-    void *end = (char *)desired_start + size;
+    if (size == 0)
+        return Error(-EINVAL);
 
-    bool region_ok = desired_start != 0;
+    const auto start = reinterpret_cast<uintptr_t>(desired_start);
+    const auto limit = reinterpret_cast<uintptr_t>(user_addr_max());
+    if (limit != 0 && size > limit)
+        return Error(-ENOMEM);
+
+    const uintptr_t max_start = limit - size;
+    bool valid_addr = start <= max_start;
+
+    bool region_ok = valid_addr && (fixed || desired_start != nullptr);
 
     if (region_ok) {
         auto it = paging_regions.get_smaller_or_equal(desired_start);
@@ -339,37 +348,44 @@ ReturnStr<void *> Page_Table::find_region_spot(void *desired_start, size_t size,
 
     if (region_ok) {
         auto it = paging_regions.lower_bound(desired_start);
-        if (it != paging_regions.end() and it->start_addr < end)
+        if (it != paging_regions.end() and reinterpret_cast<uintptr_t>(it->start_addr) - start < size)
             region_ok = false;
     }
 
     // If the new region doesn't overlap with anything, just use it
     if (region_ok) {
         return desired_start;
-
     } else {
-        if (fixed && desired_start == nullptr)
-            return Error(-EINVAL);
-
-        else if (fixed)
+        if (fixed && valid_addr)
             return desired_start;
+        else if (fixed)
+            return Error(-ENOMEM);
 
-        void *addr = (void *)0x1000;
+        uintptr_t addr = PAGE_SIZE;
         auto it    = paging_regions.begin();
         while (it != paging_regions.end()) {
-            void *end = (char *)addr + size;
+            if (addr > max_start)
+                return Error(-ENOMEM);
 
-            if (*it > end and end <= user_addr_max())
-                return addr;
+            const auto next_start = reinterpret_cast<uintptr_t>(it->start_addr);
 
-            addr = it->addr_end();
+            if (next_start >= addr && next_start - addr >= size)
+                return reinterpret_cast<void *>(addr);
+
+            const auto region_end =
+                reinterpret_cast<uintptr_t>(it->addr_end());
+            if (region_end == 0)
+                return Error(-ENOMEM);
+            if (region_end > addr)
+                addr = region_end;
+            
             ++it;
         }
 
-        if ((char *)addr + size > user_addr_max())
+        if (addr > max_start)
             return Error(-ENOMEM);
 
-        return addr;
+        return reinterpret_cast<void *>(addr);
     }
 }
 

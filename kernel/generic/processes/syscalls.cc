@@ -1422,7 +1422,7 @@ void syscall_get_segment(TaskDescriptor *current)
     case 1: {
         segment = target->regs.thread_pointer();
         auto b =
-            copy_to_user((char *)&current->regs.thread_pointer(), (char *)ptr, sizeof(segment));
+            copy_to_user((char *)&target->regs.thread_pointer(), (char *)ptr, sizeof(segment));
         if (!b.success()) {
             syscall_error(current) = b.result;
             return;
