@@ -329,12 +329,15 @@ static void free_all_level(u64 level_page, unsigned level)
 
     for (unsigned i = 0; i < 512; ++i) {
         auto pte = __atomic_load_n(active_pt + i, __ATOMIC_RELAXED);
-        if (!(pte & PAGE_VALID))
-            continue;
-
         if (level == 1) {
+            if (!(pte & PAGE_VALID))
+                continue;
+
             free_leaf_pte(pte);
         } else {
+            if (!pde_valid(pte))
+                continue;
+
             u64 page = pte & PAGE_ADDR_MASK;
             free_all_level(page, level - 1);
             pmm::free_memory_for_kernel(page, 1);
