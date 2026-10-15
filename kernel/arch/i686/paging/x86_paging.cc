@@ -59,8 +59,8 @@ u64 pae_load(u32 *pt, unsigned idx)
 
 void pae_store_new(u32 *pt, unsigned idx, u64 value)
 {
-    __atomic_store_n(pt + idx * 2, value & 0xFFFFFFFF, __ATOMIC_RELAXED);
-    __atomic_store_n(pt + idx * 2 + 1, value >> 32, __ATOMIC_RELEASE);
+    __atomic_store_n(pt + idx * 2 + 1, value >> 32, __ATOMIC_RELAXED);
+    __atomic_store_n(pt + idx * 2, value & 0xFFFFFFFF, __ATOMIC_RELEASE);
 }
 
 void pae_update(u32 *pt, unsigned idx, u64 new_value)
@@ -483,7 +483,7 @@ static void x86_invalidate_pages(kernel::paging::TLBShootdownContext &ctx, u32 c
             u32 start_idx  = addr_of_pd > (u32)virt_addr ? 0 : ((u32)virt_addr >> 12) & 0x3FF;
             u32 end_idx    = (limit == 0 && virt_addr != nullptr) or
                                   (last_idx == 1024 and i != 1023) or
-                                  ((limit >= 0x400000) and (addr_of_pd >= limit - 0x400000))
+                                  ((limit >= 0x400000) and (addr_of_pd <= limit - 0x400000))
                                  ? 1024
                                  : (limit >> 12) & 0x3FF;
             for (unsigned j = start_idx; j < end_idx; ++j) {

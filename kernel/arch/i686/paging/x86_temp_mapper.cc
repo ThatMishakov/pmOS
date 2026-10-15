@@ -117,7 +117,7 @@ void *x86_PAE_Temp_Mapper::kern_map(u64 phys_frame)
 {
     assert(!(phys_frame & 0xfff));
     for (unsigned i = min_index; i < start_index + size; ++i) {
-        if (not(pt_mapped[i] & PAGE_PRESENT)) {
+        if (not(pt_mapped[i*2] & PAGE_PRESENT)) {
             pae_entry_t entry = 0;
             entry |= phys_frame;
             entry |= PAGE_PRESENT;

@@ -1,4 +1,5 @@
 #include "rcu.hh"
+#include <utils.hh>
 
 using namespace kernel::memory;
 
