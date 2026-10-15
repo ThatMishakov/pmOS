@@ -10,6 +10,8 @@
 #include <pmos/utility/scope_guard.hh>
 #include <system_error>
 #include <unordered_map>
+#include <cstring>
+#include <cstdlib>
 
 extern pmos::PortDispatcher dispatcher;
 extern pmos::Port cmd_port;
@@ -41,7 +43,7 @@ void handle_disk_read(pmos::Right memory_object, int result, pmos::Right &reply_
     // printf("Sending reply to disk read status %i\n", result);
     auto r = send_message_right_one(reply_right, reply, {}, true, std::move(memory_object));
     if (!r) {
-        printf("Failed to send disk read reply: %i (%s)\n", (int)r.error(), strerror(r.error()));
+        printf("Failed to send disk read reply: %i (%s)\n", (int)r.error().first, strerror(r.error().first));
     }
 }
 
@@ -55,7 +57,7 @@ bool handle_create_right(pmos::Right disk_right, int result, pmos::Right &reply_
 
     auto r = send_message_right_one(reply_right, reply, {}, true, std::move(disk_right));
     if (!r) {
-        printf("Failed to send disk create right reply: %i (%s)\n", (int)r.error(), strerror(r.error()));
+        printf("Failed to send disk create right reply: %i (%s)\n", (int)r.error().first, strerror(r.error().first));
         return false;
     }
     return true;
@@ -260,7 +262,7 @@ pmos::async::detached_task handle_right_create(IPC_Disk_Create_Right request, Di
 
     try {
         rr = std::make_shared<RRWrapper>(RRWrapper{std::move(e->second), false});
-        disk_port.port_recieve_rights.insert(rr);
+        disk_port.port_receive_rights.insert(rr);
 
         handle_ipc(disk_port, std::move(rr), geometry.sector_count, geometry.logical_sector_size, geometry.physical_sector_size, sector_start, sector_count);
     } catch (...) {
@@ -288,11 +290,11 @@ void handle_disk_describe(AHCIPort &, DiskGeometry geometry, DiskConstraint cons
 
     auto r = send_message_right_one(reply_right, reply, {}, true);
     if (!r) {
-        printf("Failed to send disk describe reply: %i (%s)\n", (int)r.error(), strerror(r.error()));
+        printf("Failed to send disk describe reply: %i (%s)\n", (int)r.error().first, strerror(r.error().first));
     }
 }
 
-pmos::async::detached_task handle_ipc(AHCIPort &port, std::shared_ptr<RRWrapper> recieve_right, uint64_t sector_count, size_t logical_sector_size, size_t physical_sector_size, uint64_t from_sector, uint64_t to_sector_count)
+pmos::async::detached_task handle_ipc(AHCIPort &port, std::shared_ptr<RRWrapper> receive_right, uint64_t sector_count, size_t logical_sector_size, size_t physical_sector_size, uint64_t from_sector, uint64_t to_sector_count)
 {
     DiskGeometry geometry{sector_count, logical_sector_size, physical_sector_size};
     DiskConstraint constraint{from_sector, to_sector_count};
@@ -301,10 +303,10 @@ pmos::async::detached_task handle_ipc(AHCIPort &port, std::shared_ptr<RRWrapper>
     assert(to_sector_count <= sector_count);
 
     while (true) {
-        if (recieve_right->canceled)
+        if (receive_right->canceled)
             break;
 
-        auto msg = co_await dispatcher.get_message(recieve_right->right);
+        auto msg = co_await dispatcher.get_message(receive_right->right);
         if (!msg) {
             fprintf(stderr, "ahcid: Failed to get message for port! %i\n", msg.error());
             exit(1);
@@ -324,7 +326,7 @@ pmos::async::detached_task handle_ipc(AHCIPort &port, std::shared_ptr<RRWrapper>
         // } break;
         case IPC_Disk_Read_NUM: {
             if (msg->data.size() < sizeof(IPC_Disk_Read)) {
-                fprintf(stderr, "ahcid: Recieved message IPC_Disk_Read with too small of size\n");
+                fprintf(stderr, "ahcid: Received message IPC_Disk_Read with too small of size\n");
                 break;
             }
 
@@ -334,7 +336,7 @@ pmos::async::detached_task handle_ipc(AHCIPort &port, std::shared_ptr<RRWrapper>
         } break;
         case IPC_Disk_Create_Right_NUM: {
             if (msg->data.size() < sizeof(IPC_Disk_Create_Right)) {
-                fprintf(stderr, "ahcid: Recieved message IPC_Disk_Create_Right with too small of size\n");
+                fprintf(stderr, "ahcid: Received message IPC_Disk_Create_Right with too small of size\n");
                 break;
             }
 
@@ -344,7 +346,7 @@ pmos::async::detached_task handle_ipc(AHCIPort &port, std::shared_ptr<RRWrapper>
         } break;
         case IPC_Disk_Describe_NUM: {
             if (msg->data.size() < sizeof(IPC_Disk_Describe)) {
-                fprintf(stderr, "ahcid: Recieved message IPC_Disk_Describe with too small of size\n");
+                fprintf(stderr, "ahcid: Received message IPC_Disk_Describe with too small of size\n");
                 break;
             }
 
@@ -356,7 +358,7 @@ pmos::async::detached_task handle_ipc(AHCIPort &port, std::shared_ptr<RRWrapper>
         }
     }
 
-    port.port_recieve_rights.erase(recieve_right);
+    port.port_receive_rights.erase(receive_right);
 
     co_return;
 }

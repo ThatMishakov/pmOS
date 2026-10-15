@@ -31,6 +31,16 @@
 #include "linker.hh"
 #include "utils.hh"
 
-void *unoccupied = (void *)&_free_after_kernel;
+#include <unistd.h>
 
 extern "C" char *__cxa_demangle_gnu3(const char *name) { return (char *)name; }
+
+extern "C" long sysconf(int name)
+{
+    switch (name) {
+        case _SC_PAGESIZE:
+            return PAGE_SIZE;
+        default:
+            return -1;
+    }
+}

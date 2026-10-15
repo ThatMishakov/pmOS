@@ -36,14 +36,13 @@
 #include <errno.h>
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
-#include <kernel/elf.h>
 #include <memory/mem_object.hh>
 #include <pmos/load_data.h>
-#include <pmos/tls.h>
 #include <sched/defs.hh>
 #include <sched/sched.hh>
-#include "elf.hh"
+#include <pmos/utility/auxvec_builder.hh>
 #include <elf.h>
+#include "process.hh"
 
 namespace kernel::paging
 {
@@ -60,7 +59,7 @@ namespace kernel::proc
 Spinlock tasks_map_lock;
 sched_map tasks_map;
 
-TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel level) noexcept
+TaskDescriptor *TaskDescriptor::create(Process *parent, TaskDescriptor::PrivilegeLevel level) noexcept
 {
     // Create the structure
     klib::unique_ptr<TaskDescriptor> n = new TaskDescriptor();
@@ -113,6 +112,25 @@ TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel le
 
     // Assign a pid
     n->task_id = get_new_task_id();
+
+
+    Process *p = parent;
+    if (!p)
+        p = Process::create();
+    
+    if (!p)
+        return nullptr;
+
+    {
+        Auto_Lock_Scope l(p->lock);
+        if (!p->alive) {
+            assert(parent);
+            return nullptr;
+        }
+
+        p->child_tasks.insert(n.get());
+    }
+    n->process = p;
 
     // Add to the map of processes and to uninit list
     Auto_Lock_Scope l(tasks_map_lock);
@@ -171,13 +189,19 @@ ReturnStr<std::tuple<size_t, load_tag_stack_descriptor>>
                            });
 }
 
+Process *kernel_process = nullptr;
+
 kresult_t init_idle(sched::CPU_Info *cpu_str)
 {
     // This would not work outside of kernel initialization
     klib::unique_ptr<TaskDescriptor> i =
-        TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::Kernel);
+        TaskDescriptor::create(kernel_process, TaskDescriptor::PrivilegeLevel::Kernel);
     if (!i) [[unlikely]]
         return -ENOMEM;
+
+    if (!kernel_process)
+        kernel_process = i->process;
+    assert(kernel_process);
 
     assert(paging::idle_page_table);
     auto result = i->atomic_register_page_table(paging::idle_page_table);
@@ -244,14 +268,22 @@ void TaskDescriptor::init()
     }
 }
 
-void TaskDescriptor::atomic_kill()
+void TaskDescriptor::atomic_kill(bool kill_process)
 {
+    if (kill_process) {
+        assert(process);
+        process->atomic_terminate();
+        return;
+    }
+
+
     bool reschedule = false;
 
     {
         Auto_Lock_Scope scope_lock(sched_lock);
+        sched_pending_mask |= SCHED_FLAG_TERMINATE;
+
         const bool is_blocked = status == TaskStatus::TASK_BLOCKED;
-        status                = TaskStatus::TASK_DYING;
         if (is_blocked)
             unblock();
         else
@@ -341,11 +373,27 @@ kresult_t
     return register_page_table(klib::forward<klib::shared_ptr<paging::Arch_Page_Table>>(table));
 }
 
+#define ELF_ENDIANNESS 1
+
+#ifdef __x86_64__
+#define ELF_INSTR_SET EM_X86_64
+#elif defined(__i386__)
+#define ELF_INSTR_SET EM_386
+#elif defined(__riscv)
+#define ELF_INSTR_SET EM_RISCV
+#elif defined(__loongarch__)
+#define ELF_INSTR_SET EM_LOONGARCH
+#elif defined(__m68k__)
+#define ELF_INSTR_SET EM_68K
+#else
+#error "Unsupported architecture"
+#endif
+
 ReturnStr<
     std::optional<std::tuple<ulong, load_tag_elf_phdr, klib::shared_ptr<paging::Arch_Page_Table>>>>
     TaskDescriptor::load_elf_into_memory(klib::shared_ptr<paging::Mem_Object> elf)
 {
-    ELF_Common header;
+    Elf32_Ehdr header;
     auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(header));
     if (!r.success())
         return r.propagate();
@@ -354,25 +402,37 @@ ReturnStr<
         // ELF header can't be read immediately
         return {};
 
-    if (header.magic != ELF_MAGIC)
+    if (memcmp(header.e_ident, ELFMAG, SELFMAG)) {
+        log::serial_logger.printf("Kernel: ELF header magic mismatch: %x %x %x %x\n",
+                             header.e_ident[0], header.e_ident[1], header.e_ident[2],
+                             header.e_ident[3]);
         return Error(-ENOEXEC);
+    }
 
-    if (header.endianness != ELF_ENDIANNESS)
+    if (header.e_ident[5] != ELF_ENDIANNESS) {
+        log::serial_logger.printf("Kernel: ELF header endianness mismatch: %x, expected %x\n", header.e_ident[5], ELF_ENDIANNESS);
         return Error(-ENOEXEC);
+    }
 
-    if (header.type != ELF_EXEC)
+    if (header.e_type != ET_EXEC) {
+        log::serial_logger.printf("Kernel: ELF header type mismatch: %x, expected %x\n", header.e_type, ET_EXEC);
         return Error(-ENOEXEC);
+    }
 
     int paging_flags = 0;
 #ifdef __x86_64__
-    if (header.instr_set != ELF_X86_64 && header.instr_set != ELF_X86)
+    if (header.e_machine != EM_X86_64 && header.e_machine != EM_386) {
+        log::serial_logger.printf("Kernel: ELF header machine mismatch: %x, expected %x or %x\n", header.e_machine, EM_X86_64, EM_386);
         return Error(-ENOEXEC);
+    }
 
-    if (header.instr_set != ELF_X86_64)
+    if (header.e_machine == EM_386)
         paging_flags |= paging::Page_Table::FLAG_32BIT;
 #else
-    if (header.instr_set != ELF_INSTR_SET)
+    if (header.e_machine != ELF_INSTR_SET) {
+        log::serial_logger.printf("Kernel: ELF header machine mismatch: %x, expected %x\n", header.e_machine, ELF_INSTR_SET);
         return Error(-ENOEXEC);
+    }
 #endif
 
     klib::shared_ptr<paging::Arch_Page_Table> table;
@@ -380,11 +440,13 @@ ReturnStr<
     load_tag_elf_phdr phdr_tag = {LOAD_TAG_ELF_PHDR_HEADER, 0, 0, 0, 0};
     size_t load_count          = 0;
 
-    if (header.bitness == ELF_32BIT) {
-        using phreader = ELF_PHeader_32;
+    if (header.e_ident[4] == R_LARCH_32) {
+        using pheader = Elf32_Phdr;
 
-        ELF_32bit header;
-        auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(ELF_32bit));
+        u32 page_mask = PAGE_SIZE - 1;
+
+        Elf32_Ehdr header;
+        auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(header));
         if (!r.success())
             return r.propagate();
 
@@ -392,20 +454,22 @@ ReturnStr<
             // ELF header can't be read immediately
             return {};
 
-        if (header.prog_header_size != sizeof(phreader))
+        if (header.e_phentsize != sizeof(pheader)) {
+            log::serial_logger.printf("Kernel: ELF program header size mismatch: %x, expected %x\n", header.e_phentsize, sizeof(pheader));
             return Error(-ENOEXEC);
+        }
 
-        const u32 ph_count = header.program_header_entries;
-        klib::vector<phreader> phs;
+        const u32 ph_count = header.e_phnum;
+        pmos::containers::vector<pheader> phs;
         if (!phs.resize(ph_count))
             return Error(-ENOMEM);
 
-        unsigned pheader_size = ph_count * sizeof(phreader);
+        unsigned pheader_size = ph_count * sizeof(pheader);
         phdr_tag.phdr_num     = ph_count;
-        phdr_tag.phdr_size    = sizeof(phreader);
+        phdr_tag.phdr_size    = sizeof(pheader);
 
-        r = elf->read_to_kernel(header.program_header, (u8 *)phs.data(),
-                                ph_count * sizeof(phreader));
+        r = elf->read_to_kernel(header.e_phoff, (u8 *)phs.data(),
+                                ph_count * sizeof(pheader));
         if (!r.success())
             return r.propagate();
 
@@ -420,137 +484,92 @@ ReturnStr<
 
         // Load the program header into the page table
         for (size_t i = 0; i < ph_count; ++i) {
-            const phreader &ph = phs[i];
+            const pheader &ph = phs[i];
 
-            if (ph.type != ELF_SEGMENT_LOAD)
+            if (ph.p_type != PT_LOAD)
                 continue;
 
-            if ((ph.p_vaddr & 0xfff) != (ph.p_offset & 0xfff))
+            if ((ph.p_vaddr & page_mask) != (ph.p_offset & page_mask))
                 return Error(-ENOEXEC);
 
             // If pheader is inside this segment, set its virtual address
-            if (ph.p_offset <= header.program_header &&
-                header.program_header + pheader_size <= ph.p_offset + ph.p_filesz) {
-                phdr_tag.phdr_addr = ph.p_vaddr + header.program_header - ph.p_offset;
+            if (ph.p_offset <= header.e_phoff &&
+                header.e_phoff + pheader_size <= ph.p_offset + ph.p_filesz) {
+                phdr_tag.phdr_addr = ph.p_vaddr + header.e_phoff - ph.p_offset;
             }
 
-            if (!(ph.flags & ELF_FLAG_WRITABLE)) {
+            if (!(ph.p_flags & PF_W)) {
                 // Direct map the region
-                const u32 region_start = ph.p_vaddr & ~0xFFFUL;
-                const u32 file_offset  = ph.p_offset & ~0xFFFUL;
-                const u32 size         = ((ph.p_vaddr & 0xFFFUL) + ph.p_memsz + 0xFFF) & ~0xFFFUL;
+                const u32 region_start = ph.p_vaddr & ~page_mask;
+                const u32 file_offset  = ph.p_offset & ~page_mask;
+                const u32 size         = ((ph.p_vaddr + ph.p_memsz + page_mask) & ~page_mask) - region_start;
 
-                u8 protection_mask = (ph.flags & ELF_FLAG_EXECUTABLE)
+                u8 protection_mask = (ph.p_flags & PF_X)
                                          ? paging::Page_Table::Protection::Executable
                                          : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_READABLE) ? paging::Page_Table::Protection::Readable : 0;
+                    (ph.p_flags & PF_R) ? paging::Page_Table::Protection::Readable : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_WRITABLE) ? paging::Page_Table::Protection::Writeable : 0;
+                    (ph.p_flags & PF_W) ? paging::Page_Table::Protection::Writeable : 0;
 
                 // Upcast in 64 bit kernels is fine
                 auto res = table->atomic_create_mem_object_region((void *)(ulong)region_start, size,
                                                                   protection_mask, true, name, elf,
-                                                                  false, 0, file_offset, size);
+                                                                  false, file_offset, size);
                 if (!res.success())
                     return res.propagate();
             } else {
                 // Copy the region on access
-                const u32 region_start = ph.p_vaddr & ~0xFFFUL;
+                const u32 region_start = ph.p_vaddr & ~page_mask;
                 const u32 size =
-                    ((ph.p_vaddr & (u32)0xFFF) + ph.p_memsz + (u32)0xFFF) & ~(u32)0xFFF;
-                const u32 file_offset         = ph.p_offset;
-                const u32 file_size           = ph.p_filesz;
-                const u32 object_start_offset = ph.p_vaddr - region_start;
+                    ((ph.p_vaddr + ph.p_memsz + page_mask) & ~page_mask) - region_start;
+                const u32 file_offset         = ph.p_offset & ~page_mask;
+                const u32 file_size           = ph.p_offset + ph.p_filesz - file_offset;
 
-                u8 protection_mask = (ph.flags & ELF_FLAG_EXECUTABLE)
+                u8 protection_mask = (ph.p_flags & PF_X)
                                          ? paging::Page_Table::Protection::Executable
                                          : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_READABLE) ? paging::Page_Table::Protection::Readable : 0;
+                    (ph.p_flags & PF_R) ? paging::Page_Table::Protection::Readable : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_WRITABLE) ? paging::Page_Table::Protection::Writeable : 0;
+                    (ph.p_flags & PF_W) ? paging::Page_Table::Protection::Writeable : 0;
 
                 auto res = table->atomic_create_mem_object_region(
-                    (void *)(ulong)region_start, size, protection_mask, true, name, elf, true,
-                    object_start_offset, file_offset, file_size);
+                    (void *)(ulong)region_start, size, protection_mask, true, name, elf, true, file_offset, file_size);
 
                 if (!res.success())
                     return res.propagate();
             }
         }
 
-        for (size_t i = 0; i < ph_count; ++i) {
-            const phreader &ph = phs[i];
-
-            if (ph.type != PT_TLS)
-                continue;
-
-            const size_t size = sizeof(TLS_Data) + ((ph.p_filesz + 7) & ~7UL);
-            klib::unique_ptr<u32[]> t(new u32[size / sizeof(u32)]);
-            if (!t)
-                return Error(-ENOMEM);
-
-            TLS_Data *tls_data = (TLS_Data *)t.get();
-
-            tls_data->memsz  = ph.p_memsz;
-            tls_data->align  = ph.alignment;
-            tls_data->filesz = ph.p_filesz;
-
-            if (ph.p_filesz) {
-                r = elf->read_to_kernel(ph.p_offset, tls_data->data, ph.p_filesz);
-                if (!r.success())
-                    return r.propagate();
-            }
-
-            if (!r.val)
-                return {};
-
-            // Install memory region
-            const u32 pa_size = (size + 0xFFF) & ~0xFFF;
-            auto tls_virt =
-                table->atomic_create_normal_region(0, pa_size,
-                                                   paging::Page_Table::Protection::Readable |
-                                                       paging::Page_Table::Protection::Writeable,
-                                                   false, false, name + "_tls", 0, true);
-
-            if (!tls_virt.success())
-                return tls_virt.propagate();
-
-            auto r = table->atomic_copy_to_user(tls_virt.val->start_addr, tls_data, size);
-            if (!r.success())
-                return r.propagate();
-
-            if (!r.val)
-                return {};
-
-            regs.arg3() = (ulong)tls_virt.val->start_addr;
-        }
-
-        program_entry = header.program_entry;
+        program_entry = header.e_entry;
     } else {
         // Parse program headers
-        using phreader = ELF_PHeader_64;
+        using pheader = Elf64_Phdr;
 
-        ELF_64bit header;
-        auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(ELF_64bit));
+        u64 page_mask = PAGE_SIZE - 1;
+
+        Elf64_Ehdr header;
+        auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(header));
         if (!r.success())
             return r.propagate();
 
-        if (header.prog_header_size != sizeof(phreader))
+        if (header.e_phentsize != sizeof(pheader)) {
+            log::serial_logger.printf("Kernel: ELF program header size mismatch: %x, expected %x\n", header.e_phentsize, sizeof(pheader));
             return Error(-ENOEXEC);
+        }
 
-        u64 pheader_size   = header.program_header_entries * sizeof(phreader);
-        phdr_tag.phdr_num  = header.program_header_entries;
-        phdr_tag.phdr_size = sizeof(phreader);
+        u64 pheader_size   = header.e_phnum * sizeof(pheader);
+        phdr_tag.phdr_num  = header.e_phnum;
+        phdr_tag.phdr_size = sizeof(pheader);
 
-        const u64 ph_count = header.program_header_entries;
-        klib::vector<phreader> phs;
+        const u64 ph_count = header.e_phnum;
+        pmos::containers::vector<pheader> phs;
         if (!phs.resize(ph_count))
             return Error(-ENOMEM);
 
-        r = elf->read_to_kernel(header.program_header, (u8 *)phs.data(),
-                                ph_count * sizeof(phreader));
+        r = elf->read_to_kernel(header.e_phoff, (u8 *)phs.data(),
+                                ph_count * sizeof(pheader));
         if (!r.success())
             return r.propagate();
 
@@ -565,109 +584,62 @@ ReturnStr<
 
         // Load the program header into the page table
         for (size_t i = 0; i < ph_count; ++i) {
-            const phreader &ph = phs[i];
+            const pheader &ph = phs[i];
 
-            if (ph.type != ELF_SEGMENT_LOAD)
+            if (ph.p_type != PT_LOAD)
                 continue;
 
-            if ((ph.p_vaddr & 0xfff) != (ph.p_offset & 0xfff))
+            if ((ph.p_vaddr & page_mask) != (ph.p_offset & page_mask))
                 return Error(-ENOEXEC);
 
-            if (ph.p_offset <= header.program_header &&
-                header.program_header + pheader_size <= ph.p_offset + ph.p_filesz) {
-                phdr_tag.phdr_addr = ph.p_vaddr + header.program_header - ph.p_offset;
+            if (ph.p_offset <= header.e_phoff &&
+                header.e_phoff + pheader_size <= ph.p_offset + ph.p_filesz) {
+                phdr_tag.phdr_addr = ph.p_vaddr + header.e_phoff - ph.p_offset;
             }
 
-            if (!(ph.flags & ELF_FLAG_WRITABLE)) {
+            if (!(ph.p_flags & PF_W)) {
                 // Direct map the region
-                const u64 region_start = ph.p_vaddr & ~0xFFFUL;
-                const u64 file_offset  = ph.p_offset & ~0xFFFUL;
-                const u64 size         = ((ph.p_vaddr & 0xFFFUL) + ph.p_memsz + 0xFFF) & ~0xFFFUL;
+                const u64 region_start = ph.p_vaddr & ~page_mask;
+                const u64 file_offset  = ph.p_offset & ~page_mask;
+                const u64 size         = ((ph.p_vaddr + ph.p_memsz + page_mask) & ~page_mask) - region_start;
 
-                u8 protection_mask = (ph.flags & ELF_FLAG_EXECUTABLE)
+                u8 protection_mask = (ph.p_flags & PF_X)
                                          ? paging::Page_Table::Protection::Executable
                                          : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_READABLE) ? paging::Page_Table::Protection::Readable : 0;
+                    (ph.p_flags & PF_R) ? paging::Page_Table::Protection::Readable : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_WRITABLE) ? paging::Page_Table::Protection::Writeable : 0;
+                    (ph.p_flags & PF_W) ? paging::Page_Table::Protection::Writeable : 0;
 
                 auto res = table->atomic_create_mem_object_region((void *)(ulong)region_start, size,
                                                                   protection_mask, true, name, elf,
-                                                                  false, 0, file_offset, size);
+                                                                  false, file_offset, size);
                 if (!res.success())
                     return res.propagate();
             } else {
                 // Copy the region on access
-                const u64 region_start = ph.p_vaddr & ~0xFFFUL;
-                const u64 size         = ((ph.p_vaddr & 0xFFFUL) + ph.p_memsz + 0xFFF) & ~0xFFFUL;
-                const u64 file_offset  = ph.p_offset;
-                const u64 file_size    = ph.p_filesz;
-                const u64 object_start_offset = ph.p_vaddr - region_start;
+                const u64 region_start = ph.p_vaddr & ~page_mask;
+                const u64 size         = ((ph.p_vaddr + ph.p_memsz + page_mask) & ~page_mask) - region_start;
+                const u64 file_offset  = ph.p_offset & ~page_mask;
+                const u64 file_size    = ph.p_offset + ph.p_filesz - file_offset;
 
-                u8 protection_mask = (ph.flags & ELF_FLAG_EXECUTABLE)
+                u8 protection_mask = (ph.p_flags & PF_X)
                                          ? paging::Page_Table::Protection::Executable
                                          : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_READABLE) ? paging::Page_Table::Protection::Readable : 0;
+                    (ph.p_flags & PF_R) ? paging::Page_Table::Protection::Readable : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_WRITABLE) ? paging::Page_Table::Protection::Writeable : 0;
+                    (ph.p_flags & PF_W) ? paging::Page_Table::Protection::Writeable : 0;
 
                 auto res = table->atomic_create_mem_object_region(
-                    (void *)(ulong)region_start, size, protection_mask, true, name, elf, true,
-                    object_start_offset, file_offset, file_size);
+                    (void *)(ulong)region_start, size, protection_mask, true, name, elf, true, file_offset, file_size);
 
                 if (!res.success())
                     return res.propagate();
             }
         }
 
-        for (size_t i = 0; i < ph_count; ++i) {
-            const phreader &ph = phs[i];
-
-            if (ph.type != PT_TLS)
-                continue;
-
-            const size_t size = sizeof(TLS_Data) + ((ph.p_filesz + 7) & ~7UL);
-            klib::unique_ptr<u64[]> t(new u64[size / sizeof(u64)]);
-            if (!t)
-                return Error(-ENOMEM);
-
-            TLS_Data *tls_data = (TLS_Data *)t.get();
-
-            tls_data->memsz  = ph.p_memsz;
-            tls_data->align  = ph.alignment;
-            tls_data->filesz = ph.p_filesz;
-
-            r = elf->read_to_kernel(ph.p_offset, tls_data->data, ph.p_filesz);
-            if (!r.success())
-                return r.propagate();
-
-            if (!r.val)
-                return {};
-
-            // Install memory region
-            const u64 pa_size = (size + 0xFFF) & ~0xFFFUL;
-            auto tls_virt =
-                table->atomic_create_normal_region(0, pa_size,
-                                                   paging::Page_Table::Protection::Readable |
-                                                       paging::Page_Table::Protection::Writeable,
-                                                   false, false, name + "_tls", 0, true);
-
-            if (!tls_virt.success())
-                return tls_virt.propagate();
-
-            auto r = table->atomic_copy_to_user(tls_virt.val->start_addr, tls_data, size);
-            if (!r.success())
-                return r.propagate();
-
-            if (!r.val)
-                return {};
-
-            regs.arg3() = (ulong)tls_virt.val->start_addr;
-        }
-
-        program_entry = header.program_entry;
+        program_entry = header.e_entry;
     }
 
     return std::optional<
@@ -677,7 +649,7 @@ ReturnStr<
 
 ReturnStr<bool>
     TaskDescriptor::atomic_load_elf(ipc::MemObjectRight *elf, klib::string name,
-                                    const klib::vector<klib::unique_ptr<load_tag_generic>> &tags, TaskGroup *optional_group)
+                                    const pmos::containers::vector<klib::unique_ptr<load_tag_generic>> &tags, TaskGroup *optional_group)
 {
     assert(elf);
     assert(elf->alive);
@@ -693,8 +665,10 @@ ReturnStr<bool>
         return Error(-EEXIST);
 
     auto r = load_elf_into_memory(elf_obj);
-    if (!r.success())
+    if (!r.success()) {
+        log::serial_logger.printf("atomic_load_elf error -> %d\n", r.error);
         return r.propagate();
+    }
 
     if (!r.val)
         // ELF can't be loaded immediately
@@ -717,62 +691,57 @@ ReturnStr<bool>
 
     regs.program_counter() = program_entry;
 
-    ElFAuxvec auxvec_builder;
-    auxvec_builder.set_width(table->is_32bit() ? ElFAuxvec::PtrWidth::W32bit : ElFAuxvec::PtrWidth::W64bit);
+    pmos::utility::ElFAuxvecBuilder auxvec_builder;
+    auxvec_builder.set_width(table->is_32bit() ? pmos::utility::ElFAuxvecBuilder::PtrWidth::W32bit : pmos::utility::ElFAuxvecBuilder::PtrWidth::W64bit);
     auto &auxvals = auxvec_builder.auxvec();
-    auto &extra_info = auxvec_builder.extra_info();
     auto &args = auxvec_builder.args();
 
     // Stack...
-    if (!auxvals.push_back({AT_USRSTACKLIM, (long) stack_desc.stack_size}))
+    if (!auxvals.push_back({AT_USRSTACKLIM, (int64_t) stack_desc.stack_size}))
         return Error(-ENOMEM);
-    if (!auxvals.push_back({AT_USRSTACKBASE, (uintptr_t) stack_desc.stack_top}))
+    if (!auxvals.push_back({AT_USRSTACKBASE, (uint64_t) stack_desc.stack_top}))
         return Error(-ENOMEM);
 
     // Pheader
-    if (!auxvals.push_back({AT_PHDR, (uintptr_t) phdr_tag.phdr_addr}))
+    if (!auxvals.push_back({AT_PHDR, (uint64_t) phdr_tag.phdr_addr}))
         return Error(-ENOMEM);
-    if (!auxvals.push_back({AT_PHENT, (long) phdr_tag.phdr_size}))
+    if (!auxvals.push_back({AT_PHENT, (int64_t) phdr_tag.phdr_size}))
         return Error(-ENOMEM);
-    if (!auxvals.push_back({AT_PHNUM, (long) phdr_tag.phdr_num}))
+    if (!auxvals.push_back({AT_PHNUM, (int64_t) phdr_tag.phdr_num}))
+        return Error(-ENOMEM);
+
+    if (!auxvals.push_back({AT_PAGESZ, (int64_t) 4096})) // TODO...
+        return Error(-ENOMEM);
+
+    if (!auxvals.push_back({AT_ENTRY, (uint64_t) program_entry}))
         return Error(-ENOMEM);
 
     // Object id
     {
         auto object_id = elf->right_sender_id;
         auto arr = std::bit_cast<std::array<std::byte, sizeof(object_id)>>(object_id);
-        auto vec = klib::vector<std::byte>();
+        auto vec = pmos::containers::vector<std::byte>();
         if (!vec.append_range(arr))
             return Error(-ENOMEM);
 
-        auto idx = extra_info.size();
-        if (!extra_info.push_back(std::move(vec)))
-            return Error(-ENOMEM);
-
-        if (!auxvals.push_back({AT_MEM_OBJ_ID, (int) idx}))
+        if (!auxvals.push_back({AT_MEM_OBJ_ID, std::move(vec)}))
             return Error(-ENOMEM);
     }
 
     if (optional_group) {
         auto group_id = optional_group->get_id();
         auto arr = std::bit_cast<std::array<std::byte, sizeof(group_id)>>(group_id);
-        auto vec = klib::vector<std::byte>();
+        auto vec = pmos::containers::vector<std::byte>();
         if (!vec.append_range(arr))
             return Error(-ENOMEM);
 
-        auto idx = extra_info.size();
-        if (!extra_info.push_back(std::move(vec)))
-            return Error(-ENOMEM);
-
-        if (!auxvals.push_back({AT_TASK_GROUP_ID, (int) idx}))
+        if (!auxvals.push_back({AT_TASK_GROUP_ID, std::move(vec)}))
             return Error(-ENOMEM);
     }
 
     {
-        auto str = name.clone();
-        if (str.empty())
-            str = "<unknown>";
-        if (str.empty())
+        pmos::containers::string str;
+        if (!str.assign(name))
             return Error(-ENOMEM);
             
         if (!args.push_back(std::move(str)))
@@ -788,7 +757,7 @@ ReturnStr<bool>
     }
     u64 current_offset = 0;
 
-    klib::vector<u64> load_stack;
+    pmos::containers::vector<u64> load_stack;
     if (!load_stack.resize(size / 8))
         return Error(-ENOMEM);
 
@@ -836,6 +805,9 @@ ReturnStr<bool>
     if (!b.val)
         return false;
 
+    if (!auxvals.push_back({AT_LOAD_DATA, (uint64_t)pos}))
+        return Error(-ENOMEM);
+
 
     auto data = auxvec_builder.serialize(stack_desc.stack_top);
     if (!data)
@@ -865,9 +837,50 @@ ReturnStr<bool>
     return true;
 }
 
+// This function name is a bit misleading...
+static bool timer_complete(TaskDescriptor *task)
+{
+    {
+        Auto_Lock_Scope scope_lock(task->timer_lock);
+        if (task->timer_cpu == nullptr && !task->waiting_for_attention)
+            return true;
+    
+        assert(task->waiting_for_attention);
+    }
+
+    task->atomic_block_self(TaskDescriptor::SCHED_WAKE_ATTENTION, true);
+    return false;
+}
+
 void TaskDescriptor::cleanup()
 {
+    timer_try_remove();
+    // "LMAO"
+    if (!timer_complete(this))
+        // Oops, the dying task casually blocked (how did I get here?)
+        return;
+
     cleaned_up = true;
+
+    auto cpu_struct = sched::get_cpu_struct();
+    bool last_task_in_process = false;
+
+    {
+        assert(process);
+
+        Auto_Lock_Scope l(process->lock);
+        process->child_tasks.erase(this);
+
+        if (process->child_tasks.empty()) {
+            process->alive = false;
+            last_task_in_process = true;
+        }
+    }
+
+    if (last_task_in_process)
+        process->atomic_destroy_cleanup();
+
+    futex_try_remove();
 
     {
         Auto_Lock_Scope scope_lock(tasks_map_lock);
@@ -900,13 +913,16 @@ void TaskDescriptor::cleanup()
                                                                offsetof(TaskDescriptor, rcu_head));
         delete t;
     };
-    sched::get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
+    cpu_struct->heap_rcu_cpu.push(&rcu_head);
+
+    sched::find_new_process();
 }
 
 TaskDescriptor::TaskID TaskDescriptor::get_new_task_id()
 {
-    static TaskID next_id = 1;
-    return __atomic_fetch_add(&next_id, 1, __ATOMIC_RELAXED);
+    // TODO: This needs to be u32
+    static AtomicCounter next_id;
+    return next_id.atomic_next();
 }
 
 // TODO: Arch-specific!!!
@@ -927,7 +943,7 @@ TaskDescriptor::TaskID TaskDescriptor::get_new_task_id()
 
 TaskDescriptor::~TaskDescriptor() noexcept
 {
-    assert(status == TaskStatus::TASK_UNINIT or (status == TaskStatus::TASK_DYING and cleaned_up));
+    assert(status == TaskStatus::TASK_UNINIT or (sched_pending_mask == SCHED_FLAG_TERMINATE and cleaned_up));
 
     if (status == TaskStatus::TASK_UNINIT) {
         Auto_Lock_Scope scope_lock(tasks_map_lock);
@@ -935,10 +951,69 @@ TaskDescriptor::~TaskDescriptor() noexcept
     }
 }
 
-void TaskDescriptor::interrupt_restart_syscall()
+void TaskDescriptor::atomic_handle_unblock(u32 reason)
 {
-    pop_repeat_syscall();
-    syscalls::syscall_error(this) = -EINTR;
+    auto old_mask = __atomic_fetch_or(&wake_reason_mask, reason, __ATOMIC_RELAXED);
+    old_mask &= reason;
+    if (!(~old_mask & reason))
+        // No new bits set
+        return;
+
+    Auto_Lock_Scope scope_lock(sched_lock);
+    if ((reason & unblock_mask)) {
+        if (status == TaskStatus::TASK_BLOCKED)
+            unblock();
+        else if (status == TaskStatus::TASK_RUNNING)
+            sched_pending_mask |= SCHED_FLAG_WAKE;
+    }
+}
+
+void TaskDescriptor::atomic_block_self(u32 unblock_mask, bool force)
+{
+    Auto_Lock_Scope scope_lock(sched_lock);
+    this->unblock_mask = unblock_mask;
+    assert(status == TaskStatus::TASK_RUNNING);
+
+    if (sched_pending_mask & SCHED_FLAG_TERMINATE && !force) {
+        // Don't bother with anything (and keep the bit set)
+        return;
+    }
+
+    if (sched_pending_mask & SCHED_FLAG_WAKE) {
+        auto mask = __atomic_fetch_and(&wake_reason_mask, ~unblock_mask, __ATOMIC_RELAXED);
+        if (mask & unblock_mask) {
+            // Don't block and return immediately (other stuff will be handled after the unblocking)
+            sched_pending_mask &= ~SCHED_FLAG_WAKE;
+            return;
+        }
+    }
+
+    if (sched_pending_mask & SCHED_FLAG_PAUSE && !force) {
+        // Also don't block and propagate
+        return;
+    }
+
+    if (sched_pending_mask & SCHED_FLAG_INTERRUPT && !force) {
+        sched_pending_mask &= ~SCHED_FLAG_INTERRUPT;
+
+        assert(cancel_callback);
+        cancel_callback(this, pending_cancel_reason);
+        continuation_func = nullptr;
+
+        return;
+    }
+
+    status = TaskStatus::TASK_BLOCKED;
+
+    auto &queue = kernel::sched::blocked;
+    parent_queue = &queue;
+    {
+        Auto_Lock_Scope scope_l(queue.lock);
+        queue.push_back(this);
+    }
+
+    // Task switch
+    sched::find_new_process();
 }
 
 #if defined(__x86_64__) || defined(__i386__)
@@ -951,5 +1026,171 @@ kresult_t TaskDescriptor::get_io_permissions()
     return page_table->get_io_permissions();
 }
 #endif
+
+void TaskDescriptor::cancel_noop(TaskDescriptor *, i64)
+{
+    // Do nothing
+}
+
+void TaskDescriptor::cancel_syscall(TaskDescriptor *task, i64 error_code)
+{
+    syscalls::syscall_return(task) = error_code;
+}
+
+void TaskDescriptor::interrupt_blocked(i64 error_code)
+{
+    if (status == TaskStatus::TASK_BLOCKED) {
+        assert(cancel_callback);
+        cancel_callback(this, error_code);
+        continuation_func = nullptr;
+    } else if (status == TaskStatus::TASK_RUNNING) {
+        
+        sched_pending_mask |= SCHED_FLAG_INTERRUPT;
+    }
+}
+
+void TaskDescriptor::set_continuation(TaskDescriptor::continuation_func_type func, TaskDescriptor::cancel_callback_type cancel)
+{
+    continuation_func = func;
+    cancel_callback   = cancel;
+
+    __atomic_store_n(&wake_reason_mask, 0, __ATOMIC_RELEASE);
+}
+
+static void timer_continuation(TaskDescriptor *task)
+{
+    assert(task->waiting_for_attention);
+    task->waiting_for_attention = false;
+
+    task->continuation_func = task->attention_saved_continuation;
+    task->cancel_callback   = task->attention_saved_cancel;
+
+    assert(!task->timer_cpu);
+
+    auto result = task->timer_push();
+    assert(result);
+    (void)result;
+}
+
+bool TaskDescriptor::timer_push()
+{
+    Auto_Lock_Scope scope_lock(timer_lock);
+    auto current_cpu = sched::get_cpu_struct();
+
+    if (timer_cpu == nullptr) {
+        timer_cpu = current_cpu;
+        
+        sleep_waiter.fire_at_ns = timer_deadline;
+        current_cpu->timer_queue.insert(&sleep_waiter);
+        sched::maybe_rearm_timer(timer_deadline);
+
+        __atomic_and_fetch(&wake_reason_mask, ~TaskDescriptor::SCHED_WAKE_TIMER, __ATOMIC_RELAXED);
+
+        return true;
+    } else if (timer_cpu == current_cpu) {
+        current_cpu->timer_queue.erase(&sleep_waiter);
+        sleep_waiter.fire_at_ns = timer_deadline;
+        current_cpu->timer_queue.insert(&sleep_waiter);
+        sched::maybe_rearm_timer(timer_deadline);
+
+        __atomic_and_fetch(&wake_reason_mask, ~TaskDescriptor::SCHED_WAKE_TIMER, __ATOMIC_RELAXED);
+
+        return true;
+    } else {
+        // Wait for the other CPU's attention (it would have been requested before)
+        assert(waiting_for_attention);
+
+        attention_saved_continuation = continuation_func;
+        attention_saved_cancel       = cancel_callback;
+
+        continuation_func = timer_continuation;
+        cancel_callback   = nullptr; // Can't be cancelled
+
+        atomic_block_self(TaskDescriptor::SCHED_WAKE_ATTENTION);
+
+        return false;
+    }
+}
+
+void TaskDescriptor::TaskWaiter::fire()
+{
+    auto task = reinterpret_cast<TaskDescriptor *>(reinterpret_cast<char *>(this) - offsetof(TaskDescriptor, sleep_waiter));
+    
+    {
+        Auto_Lock_Scope scope_lock(task->timer_lock);
+        task->timer_cpu = nullptr;
+    }
+
+    task->atomic_handle_unblock(TaskDescriptor::SCHED_WAKE_TIMER);
+}
+
+void TaskDescriptor::TaskAttention::get_attention()
+{
+    // I have a feeling I forgot to do something in this function...
+
+    auto task = reinterpret_cast<TaskDescriptor *>(reinterpret_cast<char *>(this) - offsetof(TaskDescriptor, attention_node));
+    auto current_cpu = sched::get_cpu_struct();
+    
+    {
+        Auto_Lock_Scope l(current_cpu->attention_queue_lock);
+        current_cpu->attention_queue.erase(this);
+    }
+    bool unblock = true;
+    
+    {
+        Auto_Lock_Scope scope_lock(task->timer_lock);
+        if (task->timer_cpu == current_cpu) {
+            current_cpu->timer_queue.erase(&task->sleep_waiter);
+            task->timer_cpu = nullptr;
+            task->waiting_for_attention = false;
+        } else if (task->timer_cpu == nullptr) {
+            task->waiting_for_attention = false;
+        } else {
+            {
+                Auto_Lock_Scope l(task->timer_cpu->attention_queue_lock);
+                task->timer_cpu->attention_queue.push_back(&task->attention_node);
+            }
+            task->timer_cpu->ipi_get_attention();
+            unblock = false;
+        }
+    }
+
+    if (unblock) {
+        task->atomic_handle_unblock(TaskDescriptor::SCHED_WAKE_ATTENTION);
+    }
+}
+
+void TaskDescriptor::timer_try_remove()
+{
+    Auto_Lock_Scope scope_lock(timer_lock);
+    if (timer_cpu == nullptr)
+        return;
+    auto current = sched::get_cpu_struct();
+    if (timer_cpu == current) {
+        current->timer_queue.erase(&sleep_waiter);
+        timer_cpu = nullptr;
+    } else if (waiting_for_attention) {
+        // Other CPU will remove it when it gets attention
+    } else {
+        {
+            Auto_Lock_Scope l(timer_cpu->attention_queue_lock);
+            timer_cpu->attention_queue.push_back(&attention_node);
+        }
+        timer_cpu->ipi_get_attention();
+        waiting_for_attention = true;
+    }
+}
+
+bool TaskDescriptor::is_terminating() const
+{
+    assert(sched_lock.is_locked());
+    return sched_pending_mask & SCHED_FLAG_TERMINATE;
+}
+
+u64 TaskDescriptor::process_id() const
+{
+    assert(process);
+    return process->get_id();
+}
 
 } // namespace kernel::proc

@@ -1,6 +1,5 @@
 #include "plic.hh"
 
-#include <acpi/acpi.h>
 #include <dtb/dtb.hh>
 #include <interrupts/interrupt_handler.hh>
 #include <pmos/utility/scope_guard.hh>

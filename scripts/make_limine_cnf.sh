@@ -1,5 +1,7 @@
 #!/bin/sh
 
+LIBDIR="usr/lib"
+
 write_service_entry() {
     FILE="$1"
     NAME="$2"
@@ -54,6 +56,29 @@ write_service_entry_multiboot() {
 EOF
 }
 
+write_library_entry() {
+    FILE="$1"
+    NAME="$2"
+    NAME=${NAME##*/}
+    LIBPATH="$3"
+    cat <<EOF >> "$FILE"
+    module_path: boot():/${LIBPATH}/${NAME}
+    module_string: file
+
+EOF
+}
+write_library_entry_multiboot() {
+    FILE="$1"
+    NAME="$2"
+    NAME=${NAME##*/}
+    LIBPATH="$3"
+    cat <<EOF >> "$FILE"
+    module_path: boot():/${NAME}
+    module_string: /${LIBPATH}/${NAME};file
+
+EOF
+}
+
 
 if [ "$#" -ne 3 ]; then
     echo "Usage: $0 <output_file> <services> <arch>"
@@ -81,6 +106,9 @@ EOF
     for SERVICE in $SERVICES; do
         write_service_entry_multiboot "$FILE" "$SERVICE"
     done
+    for LIBRARY in $LIBRARIES; do
+        write_library_entry "$FILE" "$LIBRARY" $LIBDIR
+    done
 elif [ "$ARCH" = "x86_64" ]; then
     # Non-kaslr
     cat <<EOF >> "$FILE"
@@ -95,6 +123,9 @@ EOF
     for SERVICE in $SERVICES; do
         write_service_entry "$FILE" "$SERVICE"
     done
+    for LIBRARY in $LIBRARIES; do
+        write_library_entry "$FILE" "$LIBRARY" $LIBDIR
+    done
 
     # Multiboot2
     cat <<EOF >> "$FILE"
@@ -107,6 +138,9 @@ EOF
     write_bootstrap_entry_multiboot "$FILE"
     for SERVICE in $SERVICES; do
         write_service_entry_multiboot "$FILE" "$SERVICE"
+    done
+    for LIBRARY in $LIBRARIES; do
+        write_library_entry_multiboot "$FILE" "$LIBRARY" $LIBDIR
     done
 else
     # Non-kaslr
@@ -121,6 +155,9 @@ EOF
     write_bootstrap_entry "$FILE"
     for SERVICE in $SERVICES; do
         write_service_entry "$FILE" "$SERVICE"
+    done
+    for LIBRARY in $LIBRARIES; do
+        write_library_entry "$FILE" "$LIBRARY" $LIBDIR
     done
 
     # Kaslr
@@ -137,5 +174,8 @@ EOF
     write_bootstrap_entry "$FILE"
     for SERVICE in $SERVICES; do
         write_service_entry "$FILE" "$SERVICE"
+    done
+    for LIBRARY in $LIBRARIES; do
+        write_library_entry "$FILE" "$LIBRARY" $LIBDIR
     done
 fi

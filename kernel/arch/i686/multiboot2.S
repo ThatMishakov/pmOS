@@ -50,14 +50,14 @@ multiboot_map_kernel:
     popl %edi
 
     // Detect CPUID
-    pushfd // Save EFLAGS
-    pushfd // Save eflags again
+    pushfl // Save EFLAGS
+    pushfl // Save eflags again
     xorl $0x200000, (%esp) // Toggle ID bit in EFLAGS
-    popfd // Restore EFLAGS
-    pushfd // Get EFLAGS again
+    popfl // Restore EFLAGS
+    pushfl // Get EFLAGS again
     popl %eax // Store EFLAGS in EAX
     xorl (%esp), %eax // Check if ID bit changed
-    popfd // Restore original EFLAGS
+    popfl // Restore original EFLAGS
     andl $0x200000, %eax // Check if ID bit is set
     jz 1f
 
@@ -91,7 +91,7 @@ multiboot_map_kernel:
     // Check NX
     btl $CPUID_NX_BIT, %edx // Check if NX bit is supported
     jnc 2f // NX bit not supported
-    bts $NX_BIT, (multiboot_cpu_features - 9b)(%edi) // Set NX bit in features
+    btsl $NX_BIT, (multiboot_cpu_features - 9b)(%edi) // Set NX bit in features
 2:
 
     // Alloc cr3
@@ -532,6 +532,6 @@ multiboot_cpu_features: .long 0
 multiboot_cr3: .long 0
 
     // =================== .rodata ===================
-    .rodata
+    .section .rodata
 bad_sections_msg:
     .asciz "Kernel ELF has overlapping sections with incompatible permissions! The kernel can't boot!\r\n"

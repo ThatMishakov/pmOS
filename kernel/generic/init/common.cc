@@ -1,5 +1,3 @@
-#include <uacpi/uacpi.h>
-#include <uacpi/kernel_api.h>
 #include <types.hh>
 #include <kern_logger/kern_logger.hh>
 #include <messaging/rights.hh>
@@ -7,8 +5,11 @@
 
 using namespace kernel::log;
 
-phys_addr_t rsdp                       = -1ULL;
+#if defined(ENABLE_ACPI)
+#include <uacpi/uacpi.h>
+#include <uacpi/kernel_api.h>
 
+phys_addr_t rsdp = -1ULL;
 uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *out_rsdp_address)
 {
     if (rsdp == RSDP_INITIALIZER)
@@ -49,7 +50,28 @@ void init_acpi(phys_addr_t rsdp_addr)
     }
 }
 
-klib::vector<module> modules;
+
+klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp()
+{
+    if (rsdp == RSDP_INITIALIZER)
+        return {};
+
+    klib::unique_ptr<load_tag_generic> tag = (load_tag_generic *)new load_tag_rsdp;
+
+    auto *t   = (load_tag_rsdp *)tag.get();
+    t->header = LOAD_TAG_RSDP_HEADER;
+    t->rsdp   = rsdp;
+
+    return tag;
+}
+#else
+klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp()
+{
+    return {};
+}
+#endif
+
+pmos::containers::vector<boot_module> modules;
 
 klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules(kernel::proc::TaskGroup *group)
 {
@@ -93,24 +115,24 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules(kernel::proc::
     serial_logger.printf("Constructing load tag for %u modules\n", desc->modules_count);
     // Fill in the tags
     for (size_t i = 0; i < modules.size(); i++) {
-        auto &module     = modules[i];
+        auto &mod         = modules[i];
         auto &descriptor = desc->modules[i];
 
-        auto result = kernel::ipc::MemObjectRight::create_for_group(module.object, group);
+        auto result = kernel::ipc::MemObjectRight::create_for_group(mod.object, group);
         if (!result)
             panic("Failed to create right for the memory object during task 1 init!");
 
         serial_logger.printf("Module: %s, cmdline: %s\n", modules[i].path.c_str(), modules[i].cmdline.c_str());
 
         descriptor.memory_object_id = result.val->right_sender_id;
-        descriptor.size             = module.size;
-        memcpy((char *)tag.get() + string_offset, module.path.c_str(), module.path.size() + 1);
+        descriptor.size             = mod.size;
+        memcpy((char *)tag.get() + string_offset, mod.path.c_str(), mod.path.size() + 1);
         descriptor.path_offset = string_offset;
-        string_offset += module.path.size() + 1;
-        memcpy((char *)tag.get() + string_offset, module.cmdline.c_str(),
-               module.cmdline.size() + 1);
+        string_offset += mod.path.size() + 1;
+        memcpy((char *)tag.get() + string_offset, mod.cmdline.c_str(),
+               mod.cmdline.size() + 1);
         descriptor.cmdline_offset = string_offset;
-        string_offset += module.cmdline.size() + 1;
+        string_offset += mod.cmdline.size() + 1;
     }
 
     return tag;
@@ -141,18 +163,4 @@ klib::string module_cmdline(char *name, size_t max_len)
         return "";
 
     return klib::string(separator + 1, max_len - (separator - name) - 1);
-}
-
-klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp()
-{
-    if (rsdp == RSDP_INITIALIZER)
-        return {};
-
-    klib::unique_ptr<load_tag_generic> tag = (load_tag_generic *)new load_tag_rsdp;
-
-    auto *t   = (load_tag_rsdp *)tag.get();
-    t->header = LOAD_TAG_RSDP_HEADER;
-    t->rsdp   = rsdp;
-
-    return tag;
 }

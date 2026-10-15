@@ -5,19 +5,10 @@
 using namespace kernel::proc;
 using namespace kernel::proc::syscalls;
 
-static ulong call_flags(TaskDescriptor *task)
+unsigned syscalls::call_flags(TaskDescriptor *task)
 {
-    if (task->is_32bit())
-        return task->regs.rax;
-    else
-        return task->regs.rdi;
+    return task->regs.rax;
 }
-
-ulong syscalls::syscall_flags_reg(TaskDescriptor *task) { return call_flags(task); }
-
-unsigned syscalls::syscall_number(TaskDescriptor *task) { return call_flags(task) & 0xff; }
-
-ulong syscalls::syscall_flags(TaskDescriptor *task) { return call_flags(task) >> 8; }
 
 ulong syscalls::syscall_arg(TaskDescriptor *task, int arg, int args64before)
 {
@@ -26,9 +17,9 @@ ulong syscalls::syscall_arg(TaskDescriptor *task, int arg, int args64before)
         case 0:
             return task->regs.rbx;
         case 1:
-            return task->regs.rcx;
+            return task->regs.rsi;
         case 2:
-            return task->regs.rdx;
+            return task->regs.rdi;
         case 3:
             return task->regs.rbp;
         default:
@@ -37,11 +28,11 @@ ulong syscalls::syscall_arg(TaskDescriptor *task, int arg, int args64before)
     } else {
         switch (arg) {
         case 0:
-            return task->regs.rsi;
+            return task->regs.rdi;
         case 1:
-            return task->regs.rdx;
+            return task->regs.rsi;
         case 2:
-            return task->regs.rcx;
+            return task->regs.r10;
         case 3:
             return task->regs.r8;
         case 4:
@@ -53,16 +44,25 @@ ulong syscalls::syscall_arg(TaskDescriptor *task, int arg, int args64before)
     return 0;
 }
 
-static void syscall_ret_low(TaskDescriptor *task, i64 value)
+void syscalls::syscall_ret_low(TaskDescriptor *task, i64 value)
 {
     if (task->is_32bit()) {
         task->regs.rax = value & 0xffffffff;
-        task->regs.rdx = value >> 32;
+        task->regs.rbx = value >> 32;
     } else {
         task->regs.rax = value;
     }
 }
-static void syscall_ret_high(TaskDescriptor *task, u64 value)
+i64 syscalls::syscall_ret_low(TaskDescriptor *task)
+{
+    if (task->is_32bit()) {
+        return (i64)task->regs.rax | ((i64)task->regs.rbx << 32);
+    } else {
+        return task->regs.rax;
+    }
+}
+
+void syscalls::syscall_ret_high(TaskDescriptor *task, u64 value)
 {
     if (task->is_32bit()) {
         task->regs.rsi = value & 0xffffffff;
@@ -77,9 +77,9 @@ u64 syscalls::syscall_arg64(TaskDescriptor *task, int arg)
     if (task->is_32bit()) {
         switch (arg) {
         case 0:
-            return (task->regs.rbx & 0xffffffff) | (task->regs.rcx << 32);
+            return (task->regs.rbx & 0xffffffff) | (task->regs.rsi << 32);
         case 1:
-            return (task->regs.rdx & 0xffffffff) | (task->regs.rbp << 32);
+            return (task->regs.rdi & 0xffffffff) | (task->regs.rbp << 32);
         default:
             assert(!"Too many arguments");
         }
@@ -94,10 +94,10 @@ ReturnStr<bool> syscalls::syscall_arg64_checked(TaskDescriptor *task, int arg, u
     if (task->is_32bit()) {
         switch (arg) {
         case 0:
-            value = (task->regs.rbx & 0xffffffff) | (task->regs.rcx << 32);
+            value = (task->regs.rbx & 0xffffffff) | (task->regs.rsi << 32);
             break;
         case 1:
-            value = (task->regs.rdx & 0xffffffff) | (task->regs.rbp << 32);
+            value = (task->regs.rdi & 0xffffffff) | (task->regs.rbp << 32);
             break;
         default:
             return copy_from_user((char *)&value, (char *)task->regs.rsp + (arg - 2) * 8, 8);
@@ -143,31 +143,6 @@ ReturnStr<bool> syscalls::syscall_args_checked(TaskDescriptor *task, int arg, in
     }
     return Success(true);
 }
-
-u64 SyscallRetval::operator=(u64 value)
-{
-    syscall_ret_low(task, 0); // SUCCESS
-    syscall_ret_high(task, value);
-    return value;
-}
-
-i64 SyscallError::operator=(i64 value)
-{
-    assert(value <= 0);
-    syscall_ret_low(task, value);
-    return value;
-}
-
-std::pair<i64, u64> SyscallError::operator=(std::pair<i64, u64> value)
-{
-    syscall_ret_low(task, value.first);
-    syscall_ret_high(task, value.second);
-    return value;
-}
-
-SyscallError::operator int() const { return task->regs.rax; }
-
-void syscalls::syscall_success(TaskDescriptor *task) { syscall_ret_low(task, 0); }
 
 bool TaskDescriptor::is_32bit() const { return regs.cs == R3_LEGACY_CODE_SEGMENT; }
 

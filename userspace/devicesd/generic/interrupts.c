@@ -5,6 +5,7 @@
 #include <pmos/ipc.h>
 #include <string.h>
 #include <inttypes.h>
+#include <stdio.h>
 
 void request_interrupts_for(Message_Descriptor *desc, IPC_Request_Int *m, pmos_right_t reply_right)
 {

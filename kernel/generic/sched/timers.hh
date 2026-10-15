@@ -41,7 +41,7 @@ class Port;
 namespace kernel::sched
 {
 
-struct TimerRight final: TimerNode, ipc::RecieveRight, AttentionNode {
+struct TimerRight final: TimerNode, ipc::ReceiveRight, AttentionNode {
     Spinlock lock;
     // The parent_cpu gets decided and set when the timer gets rearmed
     CPU_Info *parent_cpu = nullptr;
@@ -58,9 +58,9 @@ struct TimerRight final: TimerNode, ipc::RecieveRight, AttentionNode {
     // TimerNode
     virtual void fire() override;
 
-    // RecieveRight
-    virtual bool destroy_recieve_right() override;
-    virtual ipc::RightType recieve_type() const override;
+    // ReceiveRight
+    virtual bool destroy_receive_right() override;
+    virtual ipc::RightType receive_type() const override;
 
     // GenericMessage overrides
     virtual void delete_self() override;

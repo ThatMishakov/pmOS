@@ -10,6 +10,7 @@
 #include <memory/mem_object.hh>
 #include "kernel_pages.hh"
 #include <processes/tasks.hh>
+#include <algorithm>
 
 
 using namespace kernel;
@@ -569,7 +570,7 @@ void init_modules(multiboot_info *info)
                 serial_logger.printf("Warning: Empty cmdline for module\n");
             }
 
-            module m = {
+            boot_module m = {
                 .path = std::move(path),
                 .cmdline = std::move(cmdline),
                 .phys_addr = mod->mod_start,
@@ -616,10 +617,10 @@ void init_acpi(multiboot_info *info)
     init_acpi(page.val.get_phys_addr());
 }
 
-klib::vector<klib::unique_ptr<load_tag_generic>>
+pmos::containers::vector<klib::unique_ptr<load_tag_generic>>
     construct_load_tag_framebuffer(multiboot_info *info)
 {
-    klib::vector<klib::unique_ptr<load_tag_generic>> tags {};
+    pmos::containers::vector<klib::unique_ptr<load_tag_generic>> tags {};
 
     auto fb_tag = (multiboot_tag_framebuffer *)find_tag(info, MULTIBOOT_TAG_TYPE_FRAMEBUFFER);
     if (!fb_tag) {
@@ -665,7 +666,7 @@ void init_task1(multiboot_info* info)
 {
     // Find task 1 module.
     // For now, just search for "bootstrap"
-    module *task1                = nullptr;
+    boot_module *task1 = nullptr;
     const klib::string bootstrap = "bootstrap";
     for (auto &m: modules) {
         serial_logger.printf("Module %s\n", m.cmdline.c_str());
@@ -683,7 +684,7 @@ void init_task1(multiboot_info* info)
     serial_logger.printf("Task 1 found: %s\n", task1->path.c_str());
 
     // Create new task and load ELF into it
-    auto task = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
+    auto task = TaskDescriptor::create(nullptr, TaskDescriptor::PrivilegeLevel::User);
     if (!task)
         panic("Failed to create task");
     task->name = "bootstrap";
@@ -693,12 +694,12 @@ void init_task1(multiboot_info* info)
     if (!group)
         panic("Failed to create task group for task 1");
 
-    auto object = ipc::MemObjectRight::create_for_group(task1->object, group.val, ipc::MemObjectRight::PERM_READ);
+    auto object = ipc::MemObjectRight::create_for_group(task1->object, group.val, -1);
     if (!object)
         panic("Failed to create memory object right for task 1");
 
     // Pass the modules to the task
-    klib::vector<klib::unique_ptr<load_tag_generic>> tags;
+    pmos::containers::vector<klib::unique_ptr<load_tag_generic>> tags;
     tags = construct_load_tag_framebuffer(info);
 
     auto t = construct_load_tag_rsdp();

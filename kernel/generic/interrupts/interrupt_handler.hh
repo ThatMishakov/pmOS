@@ -1,6 +1,6 @@
 #pragma once
 #include <lib/memory.hh>
-#include <lib/vector.hh>
+#include <pmos/containers/vector.hh>
 #include <messaging/messaging.hh>
 #include <messaging/ports.hh>
 #include <messaging/rights.hh>
@@ -20,18 +20,18 @@ namespace interrupts
 
 struct InterruptHandler;
 
-struct IntNotificationRight final: ipc::RecieveRight {
+struct IntNotificationRight final: ipc::ReceiveRight {
     // A bit of a thinking process here: initially, I wanted to make this an
     // ipc::Right, so that this can be accessed through the same APIs as other rights,
-    // but I think having this just be a RecieveRight makes more sense, so that
+    // but I think having this just be a ReceiveRight makes more sense, so that
     // other threads or whomever have no way to access this erroneously, which saves
     // the kernel from doing a bunch of checks...
-    // (also, perhaps recieve rights should be rethought, and made be per-task and not per-port)
+    // (also, perhaps receive rights should be rethought, and made be per-task and not per-port)
 
-    // Also, RecieveRight being a message already (which is a bit of a questionable descision
+    // Also, ReceiveRight being a message already (which is a bit of a questionable descision
     // in itself, but whatever) is what's wanted here already anyway
 
-    virtual bool destroy_recieve_right() override;
+    virtual bool destroy_receive_right() override;
     InterruptHandler *parent_handler = nullptr;
 
     bool alive : 1 = true;
@@ -44,7 +44,7 @@ struct IntNotificationRight final: ipc::RecieveRight {
     virtual size_t size() const override;
     virtual ReturnStr<bool> copy_to_user_buff(char *buff) const override;
     virtual void delete_self() override;
-    virtual ipc::RightType recieve_type() const override;
+    virtual ipc::RightType receive_type() const override;
 
     static ReturnStr<IntNotificationRight *> create_for_port(InterruptHandler *handler, ipc::Port *port);
 

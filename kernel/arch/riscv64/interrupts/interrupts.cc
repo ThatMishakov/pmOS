@@ -37,7 +37,9 @@
 #include <kern_logger/kern_logger.hh>
 #include <pmos/ipc.h>
 #include <processes/tasks.hh>
+#include <processes/syscalls.hh>
 #include <sched/sched.hh>
+#include <sbi/sbi.hh>
 #include <utils.hh>
 
 using namespace kernel::riscv64;
@@ -128,7 +130,7 @@ void page_fault(u64 addr, u64 scause)
 
     u64 access_type = 0;
     switch (scause) {
-    case INSTRUCTION_ACCESS_FAULT:
+    case INSTRUCTION_PAGE_FAULT:
         access_type = Generic_Mem_Region::Executable;
         break;
     case LOAD_PAGE_FAULT:
@@ -137,6 +139,8 @@ void page_fault(u64 addr, u64 scause)
     case STORE_AMO_PAGE_FAULT:
         access_type = Generic_Mem_Region::Writeable;
         break;
+    default:
+        panic("Unknown page fault cause %h at addr %h\n", scause, addr);
     }
 
     auto task       = get_cpu_struct()->current_task;
@@ -150,15 +154,15 @@ void page_fault(u64 addr, u64 scause)
 
         auto &regions = page_table->paging_regions;
         auto it       = regions.get_smaller_or_equal(virt_addr);
+
         if (it != regions.end() and it->is_in_range(virt_addr)) {
-            // serial_logger.printf("Pagefault in region %s\n",
-            // it->name.c_str());
             auto r = it->on_page_fault(access_type, virt_addr);
             if (!r.success())
                 return r.result;
 
             if (not r.val) {
-                task->atomic_block_by_page((void *)page, &task->page_table->blocked_tasks);
+                task->cancel_callback = TaskDescriptor::cancel_noop;
+                task->atomic_block_by_page((void *)page);
             }
 
             return 0;
@@ -178,6 +182,7 @@ void page_fault(u64 addr, u64 scause)
                              "-> %i killing process...\n",
                              virt_addr, task->task_id, task->name.c_str(), task->regs.pc, scause,
                              result);
+
         print_registers(task, serial_logger);
         task->atomic_kill();
     }
@@ -233,7 +238,8 @@ void illegal_instruction(u32 instruction)
 
             if (not b.val) {
                 auto page_aligned = task->regs.pc & ~0xfffUL;
-                task->atomic_block_by_page((void *)page_aligned, &task->page_table->blocked_tasks);
+                task->cancel_callback = TaskDescriptor::cancel_noop;
+                task->atomic_block_by_page((void *)page_aligned);
                 return 0;
             }
         }
@@ -267,16 +273,17 @@ void illegal_instruction(u32 instruction)
         global_logger.printf("Warning: pid %i (%s) pc %h instr 0x%h -> %i "
                              "killing process...\n",
                              task->task_id, task->name.c_str(), task->regs.pc, instruction, result);
+
+        print_registers(task, serial_logger);
         task->atomic_kill();
     }
 }
 
-extern "C" void syscall_handler();
-
 void service_timer_interrupt()
 {
+    // The SBI timer stays pending until its deadline is moved into the future.
+    sbi_set_timer((u64)-1);
     cpu_timer_interrupt();
-    // Pending timer interrupt is cleared by SBI
 }
 
 void plic_service_interrupt()
@@ -422,7 +429,7 @@ void handle_interrupt()
         case ENV_CALL_FROM_U_MODE:
             // Advance the program counter to the next instruction
             c->current_task->regs.program_counter() += 4;
-            syscall_handler();
+            syscalls::syscall_handler();
             break;
         case STORE_AMO_ACCESS_FAULT:
         case LOAD_ACCESS_FAULT:
@@ -440,11 +447,7 @@ void handle_interrupt()
         }
     }
 
-    while (c->current_task->regs.syscall_restart != 0) {
-        c->current_task->regs.a0              = c->current_task->syscall_num;
-        c->current_task->regs.syscall_restart = 0;
-        syscall_handler();
-    }
+    handle_scheduling();
 
     assert(c->nested_level == 1);
 }

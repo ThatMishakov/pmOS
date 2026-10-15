@@ -119,12 +119,15 @@ public:
 
     u16 &get_arch_flags() noexcept { return arch_flags; }
 
+    void invalidate_all();
+
 private:
     Page_Table *page_table = nullptr;
 
     short pages_count  = 0;
     short ranges_count = 0;
     u16 arch_flags     = 0; // This is currently for IO bitmap on x86...
+    bool flush_all_flag = false;
 
     page_ptr pages[MAX_PAGES] = {};
     range ranges[MAX_RANGES]  = {};
@@ -150,11 +153,27 @@ struct Page_Info {
     bool writeable : 1    = 0;
     bool executable : 1   = 0;
     bool readable : 1     = 0;
+    Memory_Type cache_policy = Memory_Type::Normal;
     u64 page_addr         = 0;
 
     kernel::pmm::Page_Descriptor create_copy() const;
 
     kernel::pmm::Page *get_page() const;
+
+    explicit operator bool() const { return is_allocated; }
+
+    Page_Table_Arguments to_page_table_args() const
+    {
+        return Page_Table_Arguments{
+            .readable           = readable,
+            .writeable          = writeable,
+            .user_access        = user_access,
+            .global             = 0,
+            .execution_disabled = !executable,
+            .extra              = flags,
+            .cache_policy       = cache_policy,
+        };
+    }
 };
 
 /**
@@ -205,8 +224,8 @@ public:
     /// Atomically creates a new id by increasing the top_id counter.
     static u64 create_new_id()
     {
-        static u64 top_id = 1;
-        return __atomic_fetch_add(&top_id, 1, 0);
+        static AtomicCounter top_id;
+        return top_id.atomic_next();
     }
 
     /// ORable flags that can be used to indicate different protection levels.
@@ -299,9 +318,6 @@ public:
                                   unsigned access, bool fixed, klib::string name,
                                   phys_addr_t phys_addr_start, PhysRegionType type = PhysRegionType::Deduce);
 
-    /// Copies anonymous page at the given address
-    [[nodiscard]] virtual kresult_t resolve_anonymous_page(void *virt_addr, unsigned access_type) = 0;
-
     /**
      * @brief Creates a memory region referencing the memory object
      *
@@ -320,8 +336,6 @@ public:
      * @param name The name of the new region.
      * @param object Memory object to be referenced by the new region.
      * @param cow If the memory should be copied on write or not.
-     * @param start_offset_bytes Offset in bytes, after which the memory object is to be accessed.
-     * Must be 0 for non-CoW regions
      * @param object_offset_bytes Offset in bytes of memory object to start_offset mapping. Must be
      * page-aligned for non-CoW regions
      * @param object_size_bytes Size of the memory object, after which the memory will be nulled. On
@@ -331,27 +345,12 @@ public:
      */
     [[nodiscard]] ReturnStr<Mem_Object_Reference *> atomic_create_mem_object_region(
         void *page_aligned_start, size_t page_aligned_size, unsigned access, bool fixed,
-        klib::string name, klib::shared_ptr<Mem_Object> object, bool cow, u64 start_offset_bytes,
+        klib::string name, klib::shared_ptr<Mem_Object> object, bool cow,
         u64 object_offset_bytes, u64 object_size_bytes) noexcept;
 
-    /**
-     * @brief Prepares user page for being accessed by the kernel.
-     *
-     * This function prepares the user page to be accessed by the kernel in the mannes specified by
-     * access_type. This function might block the task, in which case false will be returned.
-     *
-     * @param virt_addr Page-aligned virtual address of the page
-     * @param access_type The OR combination of Protection enum entries signalling how the memory is
-     * to be accessed.
-     * @param task Task trying to access the memory. This function might block the task if deemed
-     * necessary.
-     * @return true The operation has been successfull and the page is immediately available.
-     * @return false The operation has been successfull, however the page is not immediately
-     * available and the task has been blocked. The action might need to be repeated once the page
-     * becomes available and the task is unblocked.
-     */
-    [[nodiscard]] ReturnStr<bool> prepare_user_page(void *virt_addr, unsigned access_type);
-    // bool prepare_user_buffer(u64 virt_addr, unsigned access_type);
+    [[nodiscard]] ReturnStr<Page_Info> prepare_user_page(void *virt_addr, unsigned access_type);
+
+    [[nodiscard]] ReturnStr<bool> atomic_page_fault(void *virt_addr, unsigned access_type);
 
     /// @brief Indicates if the page can be taken out and used without copying to provide for the
     /// missing page
@@ -365,25 +364,6 @@ public:
     /// Gets a page table by its id or throws an exception if no page table was found
     static klib::shared_ptr<Page_Table> get_page_table_throw(u64 id);
 
-    /// Provides a page to a new page table
-    /// @todo redo the function
-    static bool atomic_provide_page(proc::TaskDescriptor *from_task,
-                                    const klib::shared_ptr<Page_Table> &to, void *page_from,
-                                    void *page_to, u64 flags);
-
-    /**
-     * @brief Maps the page with the appropriate permissions
-     *
-     * This function deduces the appropriate permissions for the page by finding the corresponding
-     * region and then maps it there, preparing the paging structures as needed (in case of using
-     * multi-level page tables)
-     *
-     * @param page_addr Physical address of the page
-     * @param virt_addr Virtual address to where the page shall be mapped
-     * @return Error code
-     */
-    [[nodiscard]] virtual kresult_t map(u64 page_addr, void *virt_addr) noexcept;
-
     /**
      * @brief Maps the page to the virtual address
      *
@@ -395,22 +375,10 @@ public:
      * @param virt_addr Virtual address to where the page shall be mapped
      * @param arg Arguments and protections with which the page should be mapped.
      */
-    [[nodiscard]] virtual kresult_t map(u64 page_addr, void *virt_addr,
+    [[nodiscard]] virtual kresult_t map(phys_addr_t page_addr, void *virt_addr,
                                         Page_Table_Arguments arg) = 0;
 
-    /**
-     * @brief Maps the page to the virtual address
-     *
-     * This function maps the specified page to the virtual address with given *arg* arguments and
-     * adjusting and allocating memory for the appropriate paging structures as needed (in case of
-     * using multi-level page tables)
-     *
-     * @param page Descriptor of the page
-     * @param virt_addr Virtual address to where the page shall be mapped
-     * @param arg Arguments and protections with which the page should be mapped.
-     */
-    [[nodiscard]] virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr,
-                                        Page_Table_Arguments arg) noexcept = 0;
+    kresult_t map(Page_Info info, void *virt_addr);
 
     // /// Return structure used with check_if_allocated_and_set_flag()
     // struct Check_Return_Str {
@@ -448,7 +416,11 @@ public:
     virtual void *user_addr_max() const = 0;
 
     /// Returns true if the address should not accessible to the user
-    inline bool is_in_kernel_space(void *virt_addr) { return virt_addr >= user_addr_max(); }
+    inline bool is_in_kernel_space(void *virt_addr)
+    {
+        auto addr_max = user_addr_max();
+        return !addr_max || virt_addr >= addr_max;
+    }
 
     /**
      * @brief Atomically takes out the paging region and transfers it to a new page table
@@ -469,42 +441,10 @@ public:
      * @return The location of the region in the new page table.
      */
     ReturnStr<std::pair<void *, size_t>> atomic_transfer_region(const klib::shared_ptr<Page_Table> &to,
-                                             void *region_orig, void *prefered_to, unsigned access,
-                                             bool fixed);
-
-    /**
-     * @brief  Moves the mapped pages from the old region to a new region, invaludating the old page
-     * table as needed
-     *
-     * @param to Page Table to which the pages shall be moved
-     * @param from_addr From where the pages should be taken out in the old tage table
-     * @param to_addr To where the pages should be transferred in the new page table
-     * @param size_bytes Size of the region that should be transferred in bytes
-     * @param new_access The protections that the pages should have after being moved to the new
-     * page table
-     */
-    [[nodiscard]] kresult_t move_pages(TLBShootdownContext &ctx,
-                                       const klib::shared_ptr<Page_Table> &to, void *from_addr,
-                                       void *to_addr, size_t size_bytes, unsigned new_access) noexcept;
-
-    /**
-     * @brief  Copies (installs) anonymous pages from the old page table to the new page table.
-     *
-     * This function maps the anonymous pages as read only, and shares them with the new page table,
-     * achieving the copy-on-write semantics.
-     *
-     * @param to Page Table to which the pages shall be copied
-     * @param from_addr From where the pages should be taken out in the old tage table
-     * @param to_addr To where the pages should be transferred in the new page table
-     * @param size_bytes Size of the region that should be transferred in bytes
-     * @param new_access The protections that the pages should have after being moved to the new
-     * page table
-     */
-    virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, void *from_addr,
-                                           void *to_addr, size_t size_bytes, unsigned new_access) = 0;
+                                             void *region_orig, void *prefered_to, unsigned access, bool fixed);
 
     /// Gets information for the page mapping.
-    virtual Page_Info get_page_mapping(void *virt_addr) const = 0;
+    [[nodiscard]] virtual Page_Info get_page_mapping(void *virt_addr) const = 0;
 
     /**
      * @brief Deletes a memory region identified by (starting at) *region_start*
@@ -544,7 +484,7 @@ public:
     /// @brief Checks if the pages exists and invalidates it, invalidating TLB entries if needed
     /// @param virt_addr Virtual address of the page
     /// @param free Indicates whether the page should be freed or not after invalidating
-    virtual void invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free) = 0;
+    virtual void invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free);
 
     /// @brief Invalidates the pages in the given range, also invalidating TLB entries as needed.
     /// @param virt_addr Virtual address of the start of the region that should be invalidated
@@ -564,6 +504,11 @@ public:
         (void)flags;
     }
 
+    // Pushes the blocked task to the page table's blocked queue (binary tree), if it's not
+    // in it already. This does not check if it can be unblocked immediately.
+    void atomic_push_blocked_task(proc::TaskDescriptor *task, const void *page);
+
+    [[nodiscard]] virtual bool page_pending(void *virt_addr) const;
 protected:
     Page_Table() = default;
 
@@ -599,15 +544,15 @@ kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
                    Page_Table_Arguments arg);
 
 // Generic functions to map and release pages in kernel, using the active page table
-kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Arguments arg);
-kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr);
-void unmap_kernel_pages(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes);
+kresult_t map_kernel_page(phys_addr_t phys_addr, void *virt_addr, Page_Table_Arguments arg);
+kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr, bool free);
+void unmap_kernel_pages(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes, bool free);
 
 // Generic function to map multiple pages
-kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr, size_t size_bytes,
+kresult_t map_pages(ptable_top_ptr_t page_table, phys_addr_t phys_addr, void *virt_addr, size_t size_bytes,
                     Page_Table_Arguments arg);
-kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Arguments arg);
-kresult_t map_kernel_pages_overwrite(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Arguments arg);
+kresult_t map_kernel_pages(phys_addr_t phys_addr, void *virt_addr, size_t size, Page_Table_Arguments arg);
+kresult_t map_kernel_pages_overwrite(phys_addr_t phys_addr, void *virt_addr, size_t size, Page_Table_Arguments arg);
 
 // Generic function to apply the page table to the current CPU
 void apply_page_table(ptable_top_ptr_t page_table);
@@ -636,7 +581,7 @@ struct MemoryRegion {
     MemoryRegionType type;
 };
 
-extern klib::vector<MemoryRegion> memory_map;
+extern pmos::containers::vector<MemoryRegion> memory_map;
 
 Memory_Type memory_type_for_phys_addr(phys_addr_t phys_addr);
 

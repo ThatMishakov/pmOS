@@ -6,6 +6,7 @@
 #include <types.hh>
 #include <lib/memory.hh>
 #include "messaging.hh"
+#include <pmos/system.h>
 
 namespace kernel::proc
 {
@@ -30,6 +31,8 @@ enum class RightType : u8 {
     InterruptSource,
     InterruptNotification,
     Timer,
+    Process,
+    TaskGroup,
 };
 
 struct Right {
@@ -44,6 +47,12 @@ struct Right {
 
     /// Sender-facing id (gets changed when the right is copied/moved, depending on the task group)
     u64 right_sender_id = 0;
+
+    // Permissions bitmask for different types of rights
+    u32 permissions_mask = 0;
+
+    u32 atomic_get_permissions_mask() const;
+    u32 atomic_set_permissions_mask(u32 mask_to_and);
 
     bool alive : 1      = true;
     bool of_message : 1 = false;
@@ -82,9 +91,9 @@ struct Right {
     unsigned type_as_int() const;
 };
 
-struct RecieveRight: GenericMessage {
+struct ReceiveRight: GenericMessage {
     union {
-        pmos::containers::RBTreeNode<RecieveRight> parent_head = {};
+        pmos::containers::RBTreeNode<ReceiveRight> parent_head = {};
         memory::RCU_Head rcu_head;
     };
 
@@ -94,27 +103,28 @@ struct RecieveRight: GenericMessage {
     /// Parent-facing id (does not change, and gets copied when right is duplicated)
     u64 right_parent_id = 0;
 
-    virtual bool destroy_recieve_right() = 0;
-    virtual ~RecieveRight() = default;
+    virtual bool destroy_receive_right() = 0;
+    virtual ~ReceiveRight() = default;
 
-    virtual RightType recieve_type() const = 0;
+    virtual RightType receive_type() const = 0;
 
     // GenericMessage overrides
     virtual size_t size() const override;
     virtual ReturnStr<bool> copy_to_user_buff(char *buff) const override;
     virtual u64 sent_with_right() const override;
     virtual u64 sender_task_id() const override;
+    virtual u64 sender_process_id() const override;
 };
 
-struct SendRight: Right, RecieveRight {
-    // TODO(-ish): This shouldn't be a recieve right
-    virtual u64 right_id_in_reciever() const;
+struct SendRight: Right, ReceiveRight {
+    // TODO(-ish): This shouldn't be a receive right
+    virtual u64 right_id_in_receiver() const;
 
     virtual void rcu_push() override;
     virtual void remove_from_parent() override;
 
-    // RecieveRight override
-    virtual bool destroy_recieve_right() override;
+    // ReceiveRight override
+    virtual bool destroy_receive_right() override;
 
     virtual Port *parent_port() = 0;
 };
@@ -122,15 +132,15 @@ struct SendRight: Right, RecieveRight {
 struct SendManyRightShared;
 
 struct SendManyRight final: SendRight {
-    virtual u64 right_id_in_reciever() const override;
+    virtual u64 right_id_in_receiver() const override;
 
-    // This stuff is racey, and allows to potentially leak the right IDs in the namespace of the reciever,
+    // This stuff is racey, and allows to potentially leak the right IDs in the namespace of the receiver,
     // if this right gets sent, before the ID has been returned to userspace, which seems like a very small issue, but is it?
     static ReturnStr<SendManyRight *> create_for_group(Port *port, proc::TaskGroup *group, u64 id_in_parent);
 
     virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;
     virtual RightType type() const override;
-    virtual RightType recieve_type() const override;
+    virtual RightType receive_type() const override;
 
     virtual bool destroy_nolock(DestroyReason reason, proc::TaskGroup *match_group = nullptr) override;
 
@@ -142,7 +152,7 @@ struct SendManyRight final: SendRight {
 
     virtual Port *parent_port() override;
 
-    static std::pair<klib::unique_ptr<SendRight>, klib::unique_ptr<RecieveRight>> create_for_message();
+    static std::pair<klib::unique_ptr<SendRight>, klib::unique_ptr<ReceiveRight>> create_for_message();
 
     // Don't take task group here, since it doesn't matter if userspace tries to race this, and gets
     // to run this after the right had been sent.
@@ -158,7 +168,7 @@ struct SendOnceRight final: SendRight {
 
     virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;
     virtual RightType type() const override;
-    virtual RightType recieve_type() const override;
+    virtual RightType receive_type() const override;
 
     // Right overrides
     virtual bool destroy_nolock(DestroyReason reason, proc::TaskGroup *match_group = nullptr) override;
@@ -169,7 +179,7 @@ struct SendOnceRight final: SendRight {
     static klib::unique_ptr<SendRight> create_for_message();
 };
 
-struct SendManyRightShared final: RecieveRight {
+struct SendManyRightShared final: ReceiveRight {
     Spinlock lock;
     bool alive: 1 = true;
     using list = pmos::containers::CircularDoubleList<SendManyRight, &SendManyRight::send_many_node>;
@@ -177,8 +187,8 @@ struct SendManyRightShared final: RecieveRight {
 
     void rcu_push();
 
-    virtual bool destroy_recieve_right() override;
-    virtual RightType recieve_type() const override;
+    virtual bool destroy_receive_right() override;
+    virtual RightType receive_type() const override;
 
     // GenericMessage overrides
     virtual void delete_self() override;
@@ -192,15 +202,7 @@ struct MemObjectRight final: Right {
 
     klib::shared_ptr<paging::Mem_Object> mem_object;
 
-    static constexpr u32 PERM_READ   = 1 << 0;
-    static constexpr u32 PERM_WRITE  = 1 << 1;
-    static constexpr u32 PERM_DELETE = 1 << 2;
-    static constexpr u32 PERM_PAGE   = 1 << 3;
-    static constexpr u32 PERM_EXPAND = 1 << 4;
-
-    static constexpr u32 PERM_ALL = (1 << 5) - 1;
-
-    u32 permission_mask = 0;
+    static constexpr u32 PERM_ALL = RIGHT_PERMISSION_READ | RIGHT_PERMISSION_WRITE | RIGHT_PERMISSION_EXECUTE | RIGHT_PERMISSION_MANAGE;
 
     virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;
 

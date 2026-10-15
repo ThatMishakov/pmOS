@@ -68,7 +68,7 @@ public:
 
     constexpr unique_ptr(pointer p) noexcept: ptr(p) {};
 
-    template<class U> constexpr unique_ptr<T>(unique_ptr<U> &&p) noexcept: ptr(p.ptr)
+    template<class U> constexpr unique_ptr(unique_ptr<U> &&p) noexcept: ptr(p.ptr)
     {
         p.ptr = nullptr;
     }

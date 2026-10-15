@@ -43,7 +43,7 @@
  * kernel and instead are dispatched into the userspace. Thus, upon recieving an
  * interrupt, kernel fetches this descriptor from prog_int_array and tries to
  * send the notification to the indicated port. If it is valid and no error has
- * been produced, the listener should then recieve a message containing
+ * been produced, the listener should then receive a message containing
  * IPC_Kernel_Interrupt struct indicating the interrupt reason and some
  * additional information. The userspace process is then in charge of dealing
  * with it. The interrupts can be programmed with the help of
@@ -51,7 +51,7 @@
  * processd is currently in charge of managing the interrupts.
  *
  * As currently implemented, the EOI is automatically sent as soon as the
- * interuupt is recieved. The grand idea however is would be to extend the
+ * interuupt is received. The grand idea however is would be to extend the
  * messaging interface to allow the drivers dealing with interrupts to send EOIs
  * themselves as they deem necessary.
  *

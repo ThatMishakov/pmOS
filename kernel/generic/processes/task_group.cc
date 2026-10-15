@@ -59,6 +59,15 @@ void TaskGroup::destroy()
         }
     }
 
+    auto first_right_to_group = [this] -> TaskGroupRight * {
+        Auto_Lock_Scope l(rights_to_group_lock);
+        if (rights_to_group.empty())
+            return nullptr;
+        return &*rights_to_group.begin();
+    };
+    while (auto r = first_right_to_group())
+        r->destroy(ipc::Right::DestroyReason::DeletedBySender);
+
     auto first_right = [this] {
         Auto_Lock_Scope l(rights_lock);
         auto r = rights.begin();
@@ -109,7 +118,7 @@ ReturnStr<TaskGroup *> TaskGroup::create_for_task(TaskDescriptor *task)
     {
         Auto_Lock_Scope lock(task->sched_lock);
         auto s = task->status;
-        if (s == TaskStatus::TASK_DYING || s == TaskStatus::TASK_DEAD)
+        if (task->is_terminating() || s == TaskStatus::TASK_DEAD)
             return nullptr;
 
         auto t = task->task_groups.insert_noexcept(group);
@@ -141,8 +150,7 @@ kresult_t TaskGroup::atomic_register_task(TaskDescriptor *task)
     bool inserted = false;
     {
         Auto_Lock_Scope lock(task->sched_lock);
-        auto s = task->status;
-        if (s == TaskStatus::TASK_DYING || s == TaskStatus::TASK_DEAD)
+        if (task->is_terminating() || task->status == TaskStatus::TASK_DEAD)
             return -ENOENT;
 
         auto t = task->task_groups.insert_noexcept(this);
@@ -201,6 +209,7 @@ kresult_t TaskGroup::atomic_register_task(TaskDescriptor *task)
 
 kresult_t TaskGroup::atomic_remove_task(TaskDescriptor *task)
 {
+    bool should_destroy = false;
     {
         Auto_Lock_Scope lock(tasks_lock);
         if (tasks.count(task->task_id) == 0)
@@ -212,8 +221,7 @@ kresult_t TaskGroup::atomic_remove_task(TaskDescriptor *task)
         task->rights_namespace.compare_exchange_strong(
             expected, nullptr, std::memory_order::release, std::memory_order::consume);
 
-        if (!alive())
-            destroy();
+        should_destroy = !alive();
     }
 
     // TODO: It looks like this doesn't work
@@ -248,6 +256,9 @@ kresult_t TaskGroup::atomic_remove_task(TaskDescriptor *task)
         Auto_Lock_Scope lock(task->sched_lock);
         task->task_groups.erase(this);
     }
+
+    if (should_destroy)
+        destroy();
 
     return 0;
 }
@@ -393,6 +404,92 @@ kresult_t TaskGroup::transfer_rights(ipc::GenericMessage *msg, std::array<u64, 4
         }
 
     return 0;
+}
+
+ipc::RightType TaskGroupRight::type() const { return ipc::RightType::TaskGroup; }
+
+void TaskGroupRight::remove_from_parent()
+{
+    assert(group);
+    Auto_Lock_Scope l(group->rights_to_group_lock);
+    group->rights_to_group.erase(this);
+}
+
+void TaskGroupRight::rcu_push()
+{
+    rcu_head.rcu_func = [](void *self, bool) {
+        TaskGroupRight *t =
+            reinterpret_cast<TaskGroupRight *>(reinterpret_cast<char *>(self) - offsetof(TaskGroupRight, rcu_head));
+        delete t;
+    };
+    sched::get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
+}
+
+ReturnStr<std::pair<ipc::Right *, u64>> TaskGroupRight::duplicate(proc::TaskGroup *to_group)
+{
+    assert(group);
+    assert(parent_group);
+    assert(parent_group == to_group);
+
+    klib::unique_ptr<TaskGroupRight> new_right = new TaskGroupRight();
+    if (!new_right)
+        return Error(-ENOMEM);
+
+    new_right->group        = group;
+    new_right->parent_group = parent_group;
+    new_right->of_message   = false;
+    new_right->permissions_mask = permissions_mask;
+
+    Auto_Lock_Scope l(lock);
+    if (!alive || of_message || parent_group != to_group)
+        return Error(-ENOENT);
+
+    Auto_Lock_Scope ll(new_right->lock);
+
+    Auto_Lock_Scope l1(group->rights_to_group_lock);
+
+    Auto_Lock_Scope l2(parent_group->rights_lock);
+    if (!parent_group->atomic_alive())
+        return Error(-ESRCH);
+    if (!group->atomic_alive())
+        return Error(-ENOENT);
+
+    new_right->right_sender_id = ++parent_group->current_right_id;
+    parent_group->rights.insert(new_right.get());
+    group->rights_to_group.push_back(new_right.get());
+
+    auto ptr = new_right.release();
+
+    return Success(std::make_pair(ptr, ptr->right_sender_id));
+}
+
+ReturnStr<TaskGroupRight *> TaskGroupRight::create_for_group(TaskGroup *for_group, TaskGroup *parent_group)
+{
+    assert(for_group);
+    assert(parent_group);
+
+    klib::unique_ptr<TaskGroupRight> right = new TaskGroupRight();
+    if (!right)
+        return Error(-ENOMEM);
+
+    right->group        = for_group;
+    right->parent_group = parent_group;
+    right->of_message   = false;
+
+    Auto_Lock_Scope l(for_group->rights_to_group_lock);
+
+    Auto_Lock_Scope l1(parent_group->rights_lock);
+    if (!parent_group->atomic_alive())
+        return Error(-ESRCH);
+    if (!for_group->atomic_alive())
+        return Error(-ENOENT);
+
+    right->right_sender_id = ++parent_group->current_right_id;
+    parent_group->rights.insert(right.get());
+    for_group->rights_to_group.push_back(right.get());
+
+    auto ptr = right.release();
+    return Success(ptr);
 }
 
 } // namespace kernel::proc

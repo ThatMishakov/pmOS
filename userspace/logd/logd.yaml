@@ -3,3 +3,4 @@ services:
   path: /logd.elf
   description: Logging Server
   run_type: ALWAYS_ONCE
+  cmdline: "--stdout_pipe $STDOUT_RIGHT --stderr_pipe $STDERR_RIGHT"

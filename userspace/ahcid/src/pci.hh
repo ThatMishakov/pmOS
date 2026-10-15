@@ -33,7 +33,7 @@ struct PCIDevice
     // Registers the interrupt for the device
     // Returns 0 on success, otherwise -errno
     // This has to block, since it can change the affinity, and it might break the messaging (yet another TODO...)
-    pmos::async::task<pmos::RecieveRight> register_interrupt();
+    pmos::async::task<pmos::ReceiveRight> register_interrupt();
 
     uint16_t group() const;
     uint8_t bus() const;

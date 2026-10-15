@@ -89,10 +89,6 @@ public:
 
     virtual kresult_t map(u64 page_addr, void *virt_addr,
                           ::kernel::paging::Page_Table_Arguments arg) override;
-    virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr,
-                          ::kernel::paging::Page_Table_Arguments arg) override;
-
-    kresult_t resolve_anonymous_page(void *virt_addr, unsigned access_type) override;
 
     // Clears the TLB cache for the given page
     void invalidate_tlb(void *page) override;
@@ -100,10 +96,6 @@ public:
     void tlb_flush_all() override;
 
     Page_Info get_page_mapping(void *virt_addr) const override;
-
-    virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, void *from_addr,
-                                           void *to_addr, size_t size_bytes,
-                                           unsigned new_access) override;
 
     virtual void invalidate_range(::kernel::paging::TLBShootdownContext&, void *virt_addr, size_t size_bytes,
                                   bool free) override;

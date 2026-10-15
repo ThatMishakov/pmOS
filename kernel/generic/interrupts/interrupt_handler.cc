@@ -61,7 +61,7 @@ ipc::RightType IntSourceRight::type() const
     return ipc::RightType::InterruptSource;
 }
 
-ipc::RightType IntNotificationRight::recieve_type() const
+ipc::RightType IntNotificationRight::receive_type() const
 {
     return ipc::RightType::InterruptNotification;
 }
@@ -101,7 +101,7 @@ static void after_removing_pending(InterruptHandler *handler)
         interrupt_disable(handler);
 }
 
-bool IntNotificationRight::destroy_recieve_right()
+bool IntNotificationRight::destroy_receive_right()
 {
     if (!alive)
         return false;
@@ -147,6 +147,7 @@ ReturnStr<std::pair<ipc::Right *, u64>> IntSourceRight::duplicate(proc::TaskGrou
 
     new_right->parent_group = group;
     new_right->parent_handler = parent_handler;
+    new_right->permissions_mask = permissions_mask;
 
     Auto_Lock_Scope l(lock);
     if (!alive || of_message || parent_group != group)
@@ -182,6 +183,7 @@ NotificationResult InterruptHandler::send_interrupt_notification()
         assert(port->alive);
 
         n.pending_completion = true;
+        n.sent = true;
 
         Auto_Lock_Scope l(port->lock);
         port->enqueue(klib::unique_ptr(&n));

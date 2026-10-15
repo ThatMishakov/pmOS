@@ -32,7 +32,7 @@
 
 #pragma once
 #include <assert.h>
-#include <lib/vector.hh>
+#include <pmos/containers/vector.hh>
 #include <types.hh>
 
 namespace kernel::sched
@@ -61,13 +61,18 @@ struct RCU_Head {
 class RCU
 {
 public:
-    inline RCU() { assert(bitmask.resize((kernel::sched::number_of_cpus + 63) / 64, 0)); }
+    inline RCU()
+    {
+        bool success = bitmask.resize((kernel::sched::number_of_cpus + 63) / 64, 0);
+        assert(success);
+        (void)success;
+    }
 
     ~RCU() = default;
 
 private:
     Spinlock lock;
-    klib::vector<u64> bitmask;
+    pmos::containers::vector<u64> bitmask;
 
     u64 generation         = 0;
     u64 highest_generation = 0;

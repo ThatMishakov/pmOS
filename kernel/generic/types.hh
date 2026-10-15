@@ -32,6 +32,7 @@
 #include <concepts>
 #include <kernel/types.h>
 #include <lib/utility.hh>
+#include <cstddef>
 
 using kresult_t = i64;
 

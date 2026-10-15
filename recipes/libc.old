@@ -1,0 +1,21 @@
+#!/bin/sh
+
+name=libc
+version=0.0.1
+revision=1
+
+source_dir=libs/lib
+deps="libc-headers pmos-containers"
+hostdeps="clang"
+
+configure() {
+    cmake -S ${source_dir} -DSYSROOT=${sysroot} -DTARGET_ARCH=${JINX_ARCH}
+}
+
+build() {
+    make  -j ${parallelism}
+}
+
+package() {
+    DESTDIR="${dest_dir}" make install
+}

@@ -57,7 +57,7 @@ static void set_tlbrentry()
 
 extern "C" void bootstrap_isr();
 
-constinit const void *bootstrap_isr_virt = (void *)bootstrap_isr;
+constinit void (*bootstrap_isr_virt)() = bootstrap_isr;
 
 void set_early_exceptions()
 {
@@ -234,17 +234,6 @@ kresult_t LoongArch64_Page_Table::map(u64 page_addr, void *virt_addr,
     return loongarch_map_page(page_directory, virt_addr, page_addr, arg);
 }
 
-kresult_t LoongArch64_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr,
-                                      kernel::paging::Page_Table_Arguments arg)
-{
-    auto page_phys = page.get_phys_addr();
-    arg.extra      = PAGING_FLAG_STRUCT_PAGE;
-    auto result    = loongarch_map_page(page_directory, virt_addr, page_phys, arg);
-    if (result == 0)
-        page.takeout_page();
-    return result;
-}
-
 pmos::containers::map<u64, klib::shared_ptr<LoongArch64_Page_Table>> page_tables;
 Spinlock page_tables_lock;
 
@@ -351,9 +340,16 @@ static void free_all_level(u64 level_page, unsigned level)
             pmm::free_memory_for_kernel(page, 1);
         }
     }
-}
+}       
 
-void LoongArch64_Page_Table::free_all_pages() { free_all_level(page_directory, 4); }
+void LoongArch64_Page_Table::free_all_pages() {
+    free_all_level(page_directory, 4);
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
+    u64 *active_pt = mapper.map(page_directory);
+    for (int i = 0; i < 512; ++i) {
+        __atomic_store_n(&active_pt[i], 0, __ATOMIC_RELEASE);
+    }
+}
 
 void LoongArch64_Page_Table::invalidate_tlb(void *page) { invalidate_user_page(page, 0); }
 
@@ -384,75 +380,6 @@ void LoongArch64_Page_Table::invalidate_range(TLBShootdownContext &ctx, void *vi
     char *end = (char *)virt_addr + size_bytes;
     for (char *i = (char *)virt_addr; i < end; i += 4096)
         invalidate(ctx, i, free);
-}
-
-kresult_t LoongArch64_Page_Table::resolve_anonymous_page(void *virt_addr, unsigned access_type)
-{
-    assert(access_type & Writeable);
-
-    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
-    mapper.map(page_directory);
-    for (int i = 4; i > 1; --i) {
-        const u8 offset = 12 + (i - 1) * 9;
-        const u64 index = ((u64)virt_addr >> offset) & 0x1FF;
-
-        u64 entry = __atomic_load_n(mapper.ptr + index, __ATOMIC_RELAXED);
-        assert(entry & PAGE_VALID);
-        mapper.map(entry & PAGE_ADDR_MASK);
-    }
-
-    const u64 index = ((u64)virt_addr >> 12) & 0x1FF;
-    u64 entry       = __atomic_load_n(mapper.ptr + index, __ATOMIC_RELAXED);
-    assert(entry & PAGE_VALID);
-    assert(entry & (PAGING_FLAG_STRUCT_PAGE << PAGE_AVAILABLE_SHIFT));
-    assert(!(entry & PAGE_DIRTY));
-
-    auto page = pmm::Page_Descriptor::find_page_struct(entry & PAGE_ADDR_MASK);
-    assert(page.page_struct_ptr);
-
-    if (__atomic_load_n(&page.page_struct_ptr->l.refcount, __ATOMIC_ACQUIRE) == 2) {
-        // only owner of the page
-        entry = PAGE_DIRTY;
-        __atomic_store_n(mapper.ptr + index, entry, __ATOMIC_RELEASE);
-        invalidate_user_page((void *)virt_addr, 0);
-        return 0;
-    }
-
-    auto owner = page.page_struct_ptr->l.owner;
-    assert(owner && "page owner not found");
-
-    auto new_descriptor =
-        owner->atomic_request_anonymous_page(page.page_struct_ptr->l.offset, true);
-    if (!new_descriptor.success())
-        return new_descriptor.result;
-
-    entry &= ~PAGE_VALID;
-    __atomic_store_n(mapper.ptr + index, entry, __ATOMIC_RELEASE);
-
-    {
-        auto tlb_ctx = TLBShootdownContext::create_userspace(*this);
-        tlb_ctx.invalidate_page(virt_addr);
-    }
-
-    u64 new_page_phys = new_descriptor.val.takeout_page();
-
-    Temp_Mapper_Obj<u64> new_mapper(request_temp_mapper());
-    void *new_page = new_mapper.map(new_page_phys);
-    Temp_Mapper_Obj<u64> old_mapper(request_temp_mapper());
-    void *old_page = old_mapper.map(entry & PAGE_ADDR_MASK);
-
-    memcpy(new_page, old_page, PAGE_SIZE);
-
-    page.release_taken_out_page();
-
-    entry |= PAGE_VALID;
-    entry |= PAGE_DIRTY;
-    entry &= ~PAGE_ADDR_MASK;
-    entry |= new_page_phys;
-    __atomic_store_n(mapper.ptr + index, entry, __ATOMIC_RELEASE);
-
-    invalidate_user_page((void *)virt_addr, 0);
-    return 0;
 }
 
 kresult_t loongarch_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *virt_addr,
@@ -566,26 +493,6 @@ static kresult_t copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 p
     return 0;
 }
 
-kresult_t LoongArch64_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to,
-                                                       void *from_addr, void *to_addr,
-                                                       size_t size_bytes, unsigned access)
-{
-    u64 offset = 0;
-    kresult_t result;
-    {
-        TLBShootdownContext ctx = TLBShootdownContext::create_userspace(*this);
-        result = copy_to_recursive(to, page_directory, (u64)from_addr, (u64)to_addr, size_bytes,
-                                   access, (u64)from_addr, 4, offset, ctx);
-    }
-
-    if (result != 0) {
-        auto ctx = TLBShootdownContext::create_userspace(*to);
-        to->invalidate_range(ctx, (void *)to_addr, offset, true);
-    }
-
-    return result;
-}
-
 klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::create_clone()
 {
     klib::shared_ptr<LoongArch64_Page_Table> new_table = create_empty();
@@ -595,21 +502,10 @@ klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::create_clone()
     Auto_Lock_Scope_Double scope_guard(this->lock, new_table->lock);
 
     if (!new_table->paging_regions.empty())
-        // Somebody has messed with the page table while it was being created
-        // I don't know if it's the best solution to not block the tables
-        // immediately but I believe it's better to block them for shorter time
-        // and abort the operation when someone tries to mess with the paging,
-        // which would either be very poor coding or a bug anyways
         return nullptr; // "page table is already cloned"
 
     // This gets called on error
     auto guard = pmos::utility::make_scope_guard([&]() {
-        // Remove all the regions. It might not be necessary, since
-        // it should be handled by the destructor but in case somebody from
-        // userspace specultively does weird stuff with the
-        // not-yet-fully-constructed page table, it's better to give them an
-        // empty table
-
         auto tlb_ctx = TLBShootdownContext::create_userspace(*new_table);
 
         auto it = new_table->paging_regions.begin();
@@ -625,6 +521,12 @@ klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::create_clone()
             it = new_table->paging_regions.begin();
         }
     });
+
+    free_all_pages();
+    {
+        auto ctx = TLBShootdownContext::create_userspace(*this);
+        ctx.invalidate_all();
+    }
 
     for (auto &reg: this->paging_regions) {
         auto result = reg.clone_to(new_table, reg.start_addr, reg.access_type);
@@ -664,10 +566,10 @@ kresult_t paging::map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size,
     return paging::map_pages(loongarch64::paging::kernel_page_dir(), phys_addr, virt_addr, size, arg);
 }
 
-kresult_t paging::unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
+kresult_t paging::unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr, bool free)
 {
     return loongarch64::paging::loongarch_unmap_page(ctx, loongarch64::paging::kernel_page_dir(),
-                                                     virt_addr, false);
+                                                     virt_addr, free);
 }
 
 kresult_t paging::map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,

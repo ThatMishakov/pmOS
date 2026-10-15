@@ -48,6 +48,22 @@ namespace kernel::proc
 class TaskDescriptor;
 class TaskGroup;
 
+struct TaskGroupRight final: ipc::Right {
+    TaskGroup *group = nullptr;
+    union {
+        pmos::containers::DoubleListHead<TaskGroupRight> parent_head = {};
+        memory::RCU_Head rcu_head;
+    };
+
+    static ReturnStr<TaskGroupRight *> create_for_group(TaskGroup *for_group, TaskGroup *namespace_group);
+
+    virtual ReturnStr<std::pair<ipc::Right *, u64>> duplicate(proc::TaskGroup *) override;
+    virtual ipc::RightType type() const override;
+    virtual void remove_from_parent() override;
+
+    virtual void rcu_push() override;
+};
+
 class TaskGroup
 {
 public:
@@ -145,7 +161,7 @@ public:
 
     kresult_t transfer_rights(ipc::GenericMessage *msg, std::array<u64, 4> right_ids);
 private:
-    id_type id = __atomic_fetch_add(&next_id, 1, __ATOMIC_SEQ_CST);
+    id_type id = next_id.atomic_next();
 
     union {
         pmos::containers::RBTreeNode<TaskGroup> bst_head_global = {};
@@ -184,7 +200,7 @@ private:
      */
     void atomic_remove_from_global_map() noexcept;
 
-    static inline u64 next_id = 1;
+    static inline AtomicCounter next_id;
 
     friend bool ipc::Port::delete_self() noexcept;
 
@@ -199,6 +215,10 @@ public: // Fun!!!
     rights_tree::RBTreeHead rights;
     mutable Spinlock rights_lock;
     u64 current_right_id = 0;
+
+    using rights_list = pmos::containers::CircularDoubleList<TaskGroupRight, &TaskGroupRight::parent_head>;
+    mutable Spinlock rights_to_group_lock;
+    rights_list rights_to_group;
 
     friend struct ipc::Right;
     friend class ipc::Port;

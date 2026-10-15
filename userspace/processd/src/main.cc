@@ -26,6 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "fs_ops.hh"
 #include <cassert>
 #include <cinttypes>
 #include <memory>
@@ -34,7 +35,6 @@
 #include <pmos/ports.h>
 #include <pmos/system.h>
 #include <stdexcept>
-#include <stdio.h>
 #include <string>
 #include <system_error>
 #include <unordered_map>
@@ -42,722 +42,1503 @@
 #include <variant>
 #include <vector>
 #include <pmos/async/coroutines.hh>
+#include <pmos/utility/scope_guard.hh>
+#include "log.hh"
+#include <string.h>
+#include <charconv>
+#include "pipe.hh"
+#include "vfs.hh"
+#include "process.hh"
+#include "pty.hh"
+#include "devfs.hh"
+#include <elf.h>
+#include <pmos/memory.h>
+#include <sys/mman.h>
+#include <pmos/utility/auxvec_builder.hh>
+#include <fcntl.h>
+#include <set>
+#include "uname.hh"
+
+void KernelSink::operator()(const char *message)
+{
+    pmos_kernel_debug_log(message, strlen(message));
+}
 
 pmos::Port main_port = pmos::Port::create().value();
 pmos::PortDispatcher dispatcher(main_port);
 
-pmos::RecieveRight send_reply_throw(pmos::Right &right, auto t)
+pmos::async::detached_task vfs_handle_messages();
+
+void register_process(IPC_Register_Process *msg, pmos::Right reply_right, std::shared_ptr<Process> process, pmos::Right process_right);
+pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::shared_ptr<Process> process);
+
+void execve_reply(pmos::Right reply_right, int error)
 {
-    auto result = pmos::send_message_right_one(right, t, {}, true);
-    if (!result)
-        throw std::system_error(result.error(), std::system_category());
+    kernelLogger() << "processd error " << error << "\n" << frg::endlog;
 
-    return std::move(*result);
-}
-
-const std::string processd_port_name = "/pmos/processd";
-
-template<class... Ts> struct overloaded: Ts... {
-    using Ts::operator()...;
-};
-
-struct Process;
-struct Task {
-    uint64_t task_id        = 0;
-    bool present            = false;
-    Process *parent_process = nullptr;
-
-    struct PIDRequest {
+    IPC_Execve_Reply reply = {
+        .type = IPC_Execve_Reply_NUM,
+        .result_code = error,
     };
-    struct ParentPIDRequest {
-    };
-    struct PgroupRequest {
-    };
-    struct SetGroupRequest {
-        int64_t pid;
-        int64_t task_group_id;
-    };
-
-    using wait_var =
-        std::tuple<pmos::Right,
-                   std::variant<SetGroupRequest, PIDRequest, ParentPIDRequest, PgroupRequest>>;
-    std::vector<wait_var> waiting_ports;
-};
-std::unordered_map<uint64_t, std::unique_ptr<Task>> tasks;
-
-struct Group;
-struct Process {
-    uint64_t process_id            = 0;
-    uint64_t process_task_group_id = 0;
-    std::unordered_set<Task *> tasks;
-    Group *parent_group = nullptr;
-
-    std::unordered_set<Process *> children;
-    Process *parent  = nullptr;
-    pid_t parent_pid = 1; // Save the parent pid for when the parent is destroyed
-
-    bool is_group_leader() const;
-
-    // TODO: is_session_leader
-};
-std::unordered_map<uint64_t, std::unique_ptr<Process>> processes;
-std::unordered_map<uint64_t, Process *> process_for_task_group;
-
-struct Group {
-    uint64_t group_id = 0;
-    std::unordered_set<Process *> processes;
-    Process *leader = nullptr;
-};
-std::unordered_map<uint64_t, std::unique_ptr<Group>> groups;
-void erase_process_from_group(Process *p)
-{
-    auto group = p->parent_group;
-    group->processes.erase(p);
-    if (p->is_group_leader()) {
-        group->leader = nullptr;
-
-        // TODO: Send signals to the group, etc.
-    }
-
-    if (group->processes.empty()) {
-        groups.erase(group->group_id);
-    }
-}
-
-bool Process::is_group_leader() const { return parent_group->leader == this; }
-
-Group *get_default_group()
-{
-    Group *gp = nullptr;
-    auto it   = groups.find(1);
-    if (it == groups.end()) {
-        auto group      = std::make_unique<Group>();
-        gp              = group.get();
-        group->group_id = 1;
-        groups[1]       = std::move(group);
-    } else {
-        gp = it->second.get();
-    }
-    return gp;
-}
-
-void register_process_reply(pmos::Right &reply_right, unsigned flags, int result,
-                            uint64_t process_id)
-{
-    IPC_Register_Process_Reply reply;
-    reply.type   = IPC_Register_Process_Reply_NUM;
-    reply.flags  = flags;
-    reply.result = result;
-    reply.pid    = process_id;
 
     auto r = pmos::send_message_right_one(reply_right, reply, {}, true);
     if (!r)
-        throw std::system_error(r.error(), std::system_category());
+        kernelLogger() << "processd: Error " << r.error().first << " sending message to right " << reply_right.get() << " for execve_reply\n" << frg::endlog;
 }
 
-void watch_group(uint64_t task_group_id)
+bool sum_less_or_equals(uint64_t a, uint64_t b, uint64_t size)
 {
-    syscall_r r = set_task_group_notifier_mask(task_group_id, main_port.get(),
-                                               NOTIFICATION_MASK_DESTROYED |
-                                                   NOTIFICATION_MASK_ON_REMOVE_TASK |
-                                                   NOTIFICATION_MASK_ON_ADD_TASK,
-                                               NOTIFY_FOR_EXISTING_TASKS);
-    if (r.result != SUCCESS)
-        throw std::system_error(-r.result, std::system_category());
+    return (a + b >= a) && (a + b <= size);
 }
 
-// Reserve PID 1
-pid_t next_process_id = 2;
+#define ELF_ENDIANNESS 1
+#ifdef __x86_64__
+#define ELF_INSTR_SET EM_X86_64
+#elif defined(__i386__)
+#define ELF_INSTR_SET EM_386
+#elif defined(__riscv)
+#define ELF_INSTR_SET EM_RISCV
+#elif defined(__loongarch__)
+#define ELF_INSTR_SET EM_LOONGARCH
+#endif
 
-void set_group_reply(pmos::Right &reply_right, int result, pid_t group_id)
+pmos::async::task<std::expected<std::optional<std::string>, int>> get_interpreter_path(pmos::Right &file_handle)
 {
-    IPC_Set_Process_Group_Reply reply;
-    reply.type     = IPC_Set_Process_Group_Reply_NUM;
-    reply.flags    = 0;
-    reply.result   = result;
-    reply.group_id = group_id;
+    Elf32_Ehdr ehdr;
 
-    auto r = pmos::send_message_right_one(reply_right, reply, {}, true);
-    if (!r.has_value())
-        printf("processd: Error %d sending message to right %" PRIu64 "for set_group_reply\n",
-               r.error(), reply_right.get());
-}
+    auto read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)&ehdr, sizeof(ehdr)), 0);
+    if (!read_result)
+        co_return std::unexpected(read_result.error());
 
-void process_set_group(Task::SetGroupRequest req, Task *t, pmos::Right reply_right)
-{
-    assert(t);
-    assert(t->parent_process);
+    if (ehdr.e_ident[4] == R_LARCH_32) {
+        uint32_t phdr_size = ehdr.e_phentsize;
+        uint32_t phdr_count = ehdr.e_phnum;
+        uint32_t total_size = phdr_size * phdr_count;
+        std::vector<uint8_t> phdr_data(total_size);
+        auto phdr_read_result = co_await read_file(file_handle, phdr_data, ehdr.e_phoff);
+        if (!phdr_read_result)
+            co_return std::unexpected((int)phdr_read_result.error());
 
-    auto p         = t->parent_process;
-    pid_t pid      = req.pid == 0 ? p->process_id : req.pid;
-    pid_t group_id = req.task_group_id == 0 ? p->process_task_group_id : req.task_group_id;
-
-    if (pid < 1 || group_id < 1) {
-        // The value of the pgid argument is less than 0, or is not a value supported by the
-        // implementation.
-        set_group_reply(reply_right, -EINVAL, 0);
-        return;
-    }
-
-    auto it = process_for_task_group.find(group_id);
-    if (it == process_for_task_group.end()) {
-        // The value of the pid argument does not match the process ID of the calling process or of
-        // a child process of the calling process.
-        set_group_reply(reply_right, -ESRCH, 0);
-        return;
-    }
-
-    auto target_process = it->second;
-
-    if (target_process != p && target_process->parent != p) {
-        // The value of the pid argument does not match the process ID of the calling process or of
-        // a child process of the calling process.
-        set_group_reply(reply_right, -ESRCH, 0);
-        return;
-    }
-
-    // if (target_process->is_session_leader()) {
-    //     // The process group ID of a process group leader cannot be changed.
-    //     set_group_reply(reply_right, -EPERM, 0);
-    //     return;
-    // }
-
-    // Verify session
-    // if (p->session != target_process->session) {
-    //     // The value of the pid argument matches the process ID of a child process of the calling
-    //     process and the child process is not in the same session as the calling process.
-    //     set_group_reply(reply_right, -EPERM, 0);
-    //     return;
-    // }
-
-    if (pid == group_id) {
-        if (p->parent_group->leader == p) {
-            set_group_reply(reply_right, 0, group_id);
-            return;
-        }
-
-        erase_process_from_group(p);
-
-        auto group       = std::make_unique<Group>();
-        auto gp          = group.get();
-        group->group_id  = group_id;
-        groups[group_id] = std::move(group);
-
-        gp->processes.insert(target_process);
-        gp->leader = target_process;
-
-        target_process->parent_group = gp;
-
-        set_group_reply(reply_right, 0, group_id);
-    } else {
-        auto it = groups.find(group_id);
-        if (it == groups.end()) {
-            // Target process group does not exist
-            set_group_reply(reply_right, -EPERM, 0);
-            return;
-        }
-
-        // Verify the session
-
-        erase_process_from_group(p);
-        it->second->processes.insert(p);
-        p->parent_group = it->second.get();
-
-        set_group_reply(reply_right, 0, group_id);
-    }
-}
-
-void process_requests(Task *t)
-{
-    for (auto &port: t->waiting_ports) {
-        auto &right = std::get<0>(port);
-        std::visit(
-            overloaded {
-                [&](Task::PIDRequest) {
-                    auto pp = t->parent_process;
-                    try {
-                        IPC_PID_For_Task_Reply reply;
-                        reply.type   = IPC_PID_For_Task_Reply_NUM;
-                        reply.flags  = 0;
-                        reply.result = 0;
-                        reply.pid    = pp->process_id;
-
-                        send_reply_throw(right, reply);
-                    } catch (std::system_error &e) {
-                        printf(
-                            "processd: Error %d sending message to port %lu for waiting task %lu\n",
-                            e.code().value(), right.get(), t->task_id);
-                    }
-                },
-                [&](Task::ParentPIDRequest) {
-                    auto pp = t->parent_process;
-                    try {
-                        IPC_PID_For_Task_Reply reply;
-                        reply.type   = IPC_PID_For_Task_Reply_NUM;
-                        reply.flags  = 0;
-                        reply.result = 0;
-                        reply.pid    = pp->parent_pid;
-                        send_reply_throw(right, reply);
-                    } catch (std::system_error &e) {
-                        printf("processd: Error %d sending message to port %" PRIu64
-                               " for waiting task %" PRIu64 "\n",
-                               e.code().value(), right.get(), t->task_id);
-                    }
-                },
-                [&](Task::PgroupRequest) {
-                    auto pp = t->parent_process;
-                    try {
-                        IPC_PID_For_Task_Reply reply;
-                        reply.type   = IPC_PID_For_Task_Reply_NUM;
-                        reply.flags  = 0;
-                        reply.result = 0;
-                        reply.pid    = pp->parent_group->group_id;
-                        send_reply_throw(right, reply);
-                    } catch (std::system_error &e) {
-                        printf("processd: Error %d sending message to port %" PRIu64
-                               " for waiting task %" PRIu64 "\n",
-                               e.code().value(), right.get(), t->task_id);
-                    }
-                },
-                [&](Task::SetGroupRequest r) { process_set_group(r, t, std::move(right)); }},
-            std::get<1>(port));
-    }
-    t->waiting_ports.clear();
-}
-
-void register_process(IPC_Register_Process *msg, uint64_t sender, pmos::Right reply_right)
-{
-    uint64_t task_id = msg->worker_task_id == 0 ? sender : msg->worker_task_id;
-    auto it          = tasks.find(task_id);
-    Group *group     = get_default_group();
-    Process *pp      = nullptr;
-    if (it == tasks.end()) {
-        try {
-            auto process                   = std::make_unique<Process>();
-            pp                             = process.get();
-            process->process_id            = next_process_id++;
-            process->process_task_group_id = msg->task_group_id;
-            processes[process->process_id] = std::move(process);
-            pp->parent_group               = group;
-            group->processes.insert(pp);
-
-            process_for_task_group[msg->task_group_id] = pp;
-
-            auto task            = std::make_unique<Task>();
-            auto tp              = task.get();
-            task->task_id        = task_id;
-            task->present        = true;
-            task->parent_process = pp;
-            tasks[task_id]       = std::move(task);
-
-            pp->tasks.insert(tp);
-
-            watch_group(msg->task_group_id);
-
-            register_process_reply(reply_right, 0, 0, pp->process_id);
-        } catch (const std::system_error &e) {
-            try {
-                register_process_reply(reply_right, 0, -e.code().value(), 0);
-            } catch (...) {
-            }
-
-            group->processes.erase(pp);
-            tasks.erase(task_id);
-            processes.erase(next_process_id--);
-            process_for_task_group.erase(msg->task_group_id);
-        }
-    } else {
-        if (it->second->parent_process == nullptr)
-            try {
-                auto process                   = std::make_unique<Process>();
-                pp                             = process.get();
-                process->process_id            = next_process_id++;
-                process->process_task_group_id = msg->task_group_id;
-                processes[process->process_id] = std::move(process);
-
-                process_for_task_group[msg->task_group_id] = pp;
-
-                it->second->parent_process = pp;
-                it->second->present        = true;
-                pp->tasks.insert(it->second.get());
-
-                watch_group(msg->task_group_id);
-
-                register_process_reply(reply_right, 0, 0, pp->process_id);
-
-                process_requests(it->second.get());
-            } catch (const std::system_error &e) {
-                try {
-                    register_process_reply(reply_right, 0, -e.code().value(), 0);
-                } catch (std::system_error &e) {
-                    printf("processd: Error %d sending message to port %lu\n", e.code().value(),
-                           reply_right.get());
-                }
-
-                group->processes.erase(pp);
-                processes.erase(next_process_id--);
-                process_for_task_group.erase(msg->task_group_id);
-            }
-        else if (it->second->parent_process->process_task_group_id == 0) {
-            it->second->parent_process->process_task_group_id = msg->task_group_id;
-            process_for_task_group[msg->task_group_id]        = it->second->parent_process;
-
-            watch_group(msg->task_group_id);
-
-            register_process_reply(reply_right, 0, 0, it->second->parent_process->process_id);
-        } else if (it->second->parent_process->process_task_group_id != msg->task_group_id) {
-            register_process_reply(reply_right, 0, -EEXIST, 0);
-        } else {
-            try {
-                register_process_reply(reply_right, REGISTER_PROCESS_REPLY_FLAG_EXISITING, 0,
-                                       it->second->parent_process->process_id);
-            } catch (std::system_error &e) {
-                printf("processd: Error %d sending message to port %lu for task %lu for "
-                       "register_process\n",
-                       e.code().value(), reply_right.get(), task_id);
+        for (uint32_t i = 0; i < phdr_count; ++i) {
+            Elf32_Phdr *phdr = reinterpret_cast<Elf32_Phdr *>(phdr_data.data() + i * phdr_size);
+            if (phdr->p_type == PT_INTERP) {
+                std::vector<char> interp_path(phdr->p_filesz);
+                auto interp_read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)interp_path.data(), interp_path.size()), phdr->p_offset);
+                if (!interp_read_result)
+                    co_return std::unexpected(interp_read_result.error());
+                if (interp_path.empty())
+                    co_return std::unexpected(-ENOEXEC);
+                size_t len = strnlen(interp_path.data(), interp_path.size());
+                co_return std::string(interp_path.data(), len);
             }
         }
-    }
-}
+    } else if (ehdr.e_ident[4] == R_LARCH_64) {
+        Elf64_Ehdr ehdr64;
+        auto read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)&ehdr64, sizeof(ehdr64)), 0);
+        if (!read_result)
+            co_return std::unexpected((int)read_result.error());
 
-void destroy_process(uint64_t task_group_id)
-{
-    auto it = process_for_task_group.find(task_group_id);
-    if (it == process_for_task_group.end()) {
-        printf("processd: Task group %lu not found when destroying a process\n", task_group_id);
-        return;
-    }
+        uint64_t phdr_size = ehdr64.e_phentsize;
+        uint64_t phdr_count = ehdr64.e_phnum;
+        uint64_t total_size = phdr_size * phdr_count;
+        std::vector<uint8_t> phdr_data(total_size);
+        auto phdr_read_result = co_await read_file(file_handle, phdr_data, ehdr64.e_phoff);
+        if (!phdr_read_result)
+            co_return std::unexpected((int)phdr_read_result.error());
 
-    erase_process_from_group(it->second);
-
-    // TODO: Do the notification stuff, etc.
-
-    for (auto p: it->second->tasks) {
-        tasks.erase(p->task_id);
-    }
-    processes.erase(it->second->process_id);
-    process_for_task_group.erase(it);
-}
-
-void add_task_to_process(uint64_t task_group_id, uint64_t task_id)
-{
-    // Find task group
-    auto it = process_for_task_group.find(task_group_id);
-    if (it == process_for_task_group.end()) {
-        printf("processd: Task group %lu not found\n", task_group_id);
-        return;
-    }
-
-    auto it2 = tasks.find(task_id);
-    if (it2 == tasks.end()) {
-        auto task = std::make_unique<Task>();
-        auto tp   = task.get();
-
-        task->task_id        = task_id;
-        task->present        = true;
-        task->parent_process = it->second;
-        tasks[task_id]       = std::move(task);
-
-        it->second->tasks.insert(tp);
-    } else {
-        if (it2->second->parent_process == nullptr) {
-            // TODO: Notify waiting tasks, etc.
-            it2->second->parent_process = it->second;
-            it2->second->present        = true;
-            it->second->tasks.insert(it2->second.get());
-
-            process_requests(it2->second.get());
-        } else if (it2->second->parent_process != it->second) {
-            printf("processd: Task %lu already belongs to another process\n", task_id);
+        for (uint64_t i = 0; i < phdr_count; ++i) {
+            Elf64_Phdr *phdr = reinterpret_cast<Elf64_Phdr *>(phdr_data.data() + i * phdr_size);
+            if (phdr->p_type == PT_INTERP) {
+                std::vector<char> interp_path(phdr->p_filesz);
+                auto interp_read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)interp_path.data(), interp_path.size()), phdr->p_offset);
+                if (!interp_read_result)
+                    co_return std::unexpected(interp_read_result.error());
+                if (interp_path.empty())
+                    co_return std::unexpected(-ENOEXEC);
+                size_t len = strnlen(interp_path.data(), interp_path.size());
+                co_return std::string(interp_path.data(), len);
+            }
         }
-        // Else task is already in the group
+    } else {
+        co_return std::unexpected(-ENOEXEC);
     }
+
+    co_return {};
 }
 
-void pid_for_task(IPC_PID_For_Task *m, uint64_t sender_task_id, pmos::Right reply_right)
+pmos::async::task<std::expected<uint64_t /* reloc offset */, int>> load_into_memory(uint64_t page_table, pmos::Right &file_handle)
 {
-    uint64_t task_id = m->task_id == 0 ? sender_task_id : m->task_id;
+    Elf32_Ehdr ehdr;
+    uint64_t reloc_offset = 0;
+    const auto page_size = getpagesize();
 
-    auto it = tasks.find(task_id);
-    if (it == tasks.end()) {
-        if (m->flags & PID_FOR_TASK_WAIT_TO_APPEAR) {
-            auto task = std::make_unique<Task>();
-            auto tp   = task.get();
+    auto read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)&ehdr, sizeof(ehdr)), 0);
+    if (!read_result)
+        co_return std::unexpected(read_result.error());
 
-            task->task_id  = task_id;
-            task->present  = false;
-            tasks[task_id] = std::move(task);
+    bool is_relocatable = (ehdr.e_type == ET_DYN);
 
-            if (m->flags & PID_FOR_TASK_PARENT_PID) {
-                tp->waiting_ports.push_back({std::move(reply_right), Task::ParentPIDRequest {}});
-            } else if (m->flags & PID_FOR_TASK_GROUP_ID) {
-                tp->waiting_ports.push_back({std::move(reply_right), Task::PgroupRequest {}});
+    if (ehdr.e_ident[4] == R_LARCH_32) {
+        uint32_t phdr_size = ehdr.e_phentsize;
+        uint32_t phdr_count = ehdr.e_phnum;
+        uint32_t total_size = phdr_size * phdr_count;
+        std::vector<uint8_t> phdr_data(total_size);
+        auto phdr_read_result = co_await read_file(file_handle, phdr_data, ehdr.e_phoff);
+        if (!phdr_read_result)
+            co_return std::unexpected((int)phdr_read_result.error());
+
+        const uint32_t page_mask = page_size - 1;
+
+        if (is_relocatable) {
+            uint32_t min_page = UINT_MAX, max_page = 0;
+
+            for (uint32_t i = 0; i < phdr_count; ++i) {
+                Elf32_Phdr *phdr = reinterpret_cast<Elf32_Phdr *>(phdr_data.data() + i * phdr_size);
+                if (phdr->p_type != PT_LOAD)
+                    continue;
+
+                uint32_t start_page = phdr->p_vaddr & ~page_mask;
+                uint32_t end_page   = ((phdr->p_vaddr & page_mask) + phdr->p_memsz + page_mask) & ~page_mask;
+
+                if (start_page < min_page)
+                    min_page = start_page;
+                if (end_page > max_page)
+                    max_page = end_page;
+            }
+
+            auto c_result = create_normal_region64(page_table, min_page, max_page - min_page, PROT_READ | PROT_WRITE | PROT_EXEC);
+            if (c_result.result)
+                co_return std::unexpected((int)c_result.result);
+            reloc_offset = c_result.virt_addr_intptr - min_page;
+            release_memory_range64(page_table, min_page, max_page - min_page);
+        }
+
+        auto obj_result = co_await get_mem_object(file_handle, PROT_READ | PROT_EXEC);
+        if (!obj_result)
+            co_return std::unexpected(obj_result.error());
+        auto mem_object = std::move(obj_result.value());
+
+        for (uint32_t i = 0; i < phdr_count; ++i) {
+            Elf32_Phdr *phdr = reinterpret_cast<Elf32_Phdr *>(phdr_data.data() + i * phdr_size);
+            if (phdr->p_type != PT_LOAD)
+                continue;
+
+            if ((phdr->p_vaddr & 0xfff) != (phdr->p_offset & 0xfff))
+                co_return std::unexpected(-ENOEXEC);
+
+            if (!(phdr->p_flags & PF_W)) {
+                // Direct map
+
+                const uint32_t region_start = phdr->p_vaddr & ~page_mask;
+                const uint32_t file_offset  = phdr->p_offset & ~page_mask;
+                const uint32_t size         = ((phdr->p_vaddr & page_mask) + phdr->p_memsz + page_mask) & ~page_mask;
+
+                unsigned protection = CREATE_FLAG_FIXED;
+                if (phdr->p_flags & PF_X)
+                    protection |= PROT_EXEC;
+                if (phdr->p_flags & PF_R)
+                    protection |= PROT_READ;
+
+                map_mem_object_param_t map_params = {
+                    .page_table_id = page_table,
+                    .object_right = mem_object.get(),
+                    .addr_start_uint = region_start + reloc_offset,
+                    .size = size,
+                    .offset_object = file_offset,
+                    .object_size = size,
+                    .access_flags = protection,
+                };
+                if (auto mem_request = map_mem_object(&map_params); mem_request.result)
+                    co_return std::unexpected((int)mem_request.result);
             } else {
-                tp->waiting_ports.push_back({std::move(reply_right), Task::PIDRequest {}});
+                // Copy on write
+
+                const uint32_t region_start = phdr->p_vaddr & ~page_mask;
+                const uint32_t size         = ((phdr->p_vaddr & page_mask) + phdr->p_memsz + page_mask) & ~page_mask;
+                const uint32_t file_offset  = phdr->p_offset & ~page_mask;
+                const uint32_t file_size    = phdr->p_offset + phdr->p_filesz - file_offset;
+
+                unsigned protection = CREATE_FLAG_COW | CREATE_FLAG_FIXED | PROT_WRITE;
+                if (phdr->p_flags & PF_X)
+                    protection |= PROT_EXEC;
+                if (phdr->p_flags & PF_R)
+                    protection |= PROT_READ;
+
+                map_mem_object_param_t map_params = {
+                    .page_table_id = page_table,
+                    .object_right = mem_object.get(),
+                    .addr_start_uint = region_start + reloc_offset,
+                    .size = size,
+                    .offset_object = file_offset,
+                    .object_size = file_size,
+                    .access_flags = protection,
+                };
+                if (auto mem_request = map_mem_object(&map_params); mem_request.result)
+                    co_return std::unexpected((int)mem_request.result);
             }
-        } else {
-            IPC_PID_For_Task_Reply reply;
-            reply.type   = IPC_PID_For_Task_Reply_NUM;
-            reply.flags  = 0;
-            reply.result = -ENOENT;
-            reply.pid    = 0;
+        }
+    } else if (ehdr.e_ident[4] == R_LARCH_64) {
+        Elf64_Ehdr ehdr;
+        auto read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)&ehdr, sizeof(ehdr)), 0);
+        if (!read_result)
+            co_return std::unexpected((int)read_result.error());
 
-            send_message_right_one(reply_right, reply, {}, true);
+        uint64_t phdr_size = ehdr.e_phentsize;
+        uint64_t phdr_count = ehdr.e_phnum;
+        uint64_t total_size = phdr_size * phdr_count;
+        std::vector<uint8_t> phdr_data(total_size);
+        auto phdr_read_result = co_await read_file(file_handle, phdr_data, ehdr.e_phoff);
+        if (!phdr_read_result)
+            co_return std::unexpected((int)phdr_read_result.error());
+    
+        const uint64_t page_mask = page_size - 1;
+        
+        if (is_relocatable) {
+            const uint64_t page_mask = page_size - 1;
+            uint64_t min_page = UINT_MAX, max_page = 0;
+
+            for (uint64_t i = 0; i < phdr_count; ++i) {
+                Elf64_Phdr *phdr = reinterpret_cast<Elf64_Phdr *>(phdr_data.data() + i * phdr_size);
+                if (phdr->p_type != PT_LOAD)
+                    continue;
+
+                uint64_t start_page = phdr->p_vaddr & ~page_mask;
+                uint64_t end_page   = ((phdr->p_vaddr & page_mask) + phdr->p_memsz + page_mask) & ~page_mask;
+
+                if (start_page < min_page)
+                    min_page = start_page;
+                if (end_page > max_page)
+                    max_page = end_page;
+            }
+
+            auto c_result = create_normal_region64(page_table, min_page, max_page - min_page, PROT_READ | PROT_WRITE | PROT_EXEC);
+            if (c_result.result)
+                co_return std::unexpected((int)c_result.result);
+            reloc_offset = c_result.virt_addr_intptr - min_page;
+            release_memory_range64(page_table, min_page, max_page - min_page);
+        }
+
+        auto obj_result = co_await get_mem_object(file_handle, PROT_READ | PROT_EXEC);
+        if (!obj_result)
+            co_return std::unexpected(obj_result.error());
+        auto mem_object = std::move(obj_result.value());
+
+        for (uint64_t i = 0; i < phdr_count; ++i) {
+            Elf64_Phdr *phdr = reinterpret_cast<Elf64_Phdr *>(phdr_data.data() + i * phdr_size);
+            if (phdr->p_type != PT_LOAD)
+                continue;
+
+            if ((phdr->p_vaddr & 0xfff) != (phdr->p_offset & 0xfff))
+                co_return std::unexpected(-ENOEXEC);
+
+            if (!(phdr->p_flags & PF_W)) {
+                // Direct map
+
+                const uint64_t region_start = phdr->p_vaddr & ~page_mask;
+                const uint64_t file_offset  = phdr->p_offset & ~page_mask;
+                const uint64_t size         = ((phdr->p_vaddr & page_mask) + phdr->p_memsz + page_mask) & ~page_mask;
+
+                unsigned protection = CREATE_FLAG_FIXED;
+                if (phdr->p_flags & PF_X)
+                    protection |= PROT_EXEC;
+                if (phdr->p_flags & PF_R)
+                    protection |= PROT_READ;
+
+                map_mem_object_param_t map_params = {
+                    .page_table_id = page_table,
+                    .object_right = mem_object.get(),
+                    .addr_start_uint = region_start + reloc_offset,
+                    .size = size,
+                    .offset_object = file_offset,
+                    .object_size = size,
+                    .access_flags = protection,
+                };
+                if (auto mem_request = map_mem_object(&map_params); mem_request.result)
+                    co_return std::unexpected((int)mem_request.result);
+            } else {
+                // Copy on write
+
+                const uint64_t region_start = phdr->p_vaddr & ~page_mask;
+                const uint64_t size         = ((phdr->p_vaddr & page_mask) + phdr->p_memsz + page_mask) & ~page_mask;
+                const uint64_t file_offset  = phdr->p_offset & ~page_mask;
+                const uint64_t file_size    = phdr->p_offset + phdr->p_filesz - file_offset;
+
+                unsigned protection = CREATE_FLAG_COW | CREATE_FLAG_FIXED | PROT_WRITE;
+                if (phdr->p_flags & PF_X)
+                    protection |= PROT_EXEC;
+                if (phdr->p_flags & PF_R)
+                    protection |= PROT_READ;
+
+                map_mem_object_param_t map_params = {
+                    .page_table_id = page_table,
+                    .object_right = mem_object.get(),
+                    .addr_start_uint = region_start + reloc_offset,
+                    .size = size,
+                    .offset_object = file_offset,
+                    .object_size = file_size,
+                    .access_flags = protection,
+                };
+                if (auto mem_request = map_mem_object(&map_params); mem_request.result)
+                    co_return std::unexpected((int)mem_request.result);
+            }
         }
     } else {
-        if (it->second->present) {
-            auto task = it->second.get();
-            pid_t pid;
-            if (m->flags & PID_FOR_TASK_PARENT_PID)
-                pid = task->parent_process->parent_pid;
-            else if (m->flags & PID_FOR_TASK_GROUP_ID)
-                pid = task->parent_process->parent_group->group_id;
-            else
-                pid = task->parent_process->process_id;
-            IPC_PID_For_Task_Reply reply;
-            reply.type   = IPC_PID_For_Task_Reply_NUM;
-            reply.flags  = 0;
-            reply.result = 0;
-            reply.pid    = pid;
+        co_return std::unexpected(-ENOEXEC);
+    }
 
-            send_message_right_one(reply_right, reply, {}, true);
-        } else {
-            if (m->flags & PID_FOR_TASK_PARENT_PID)
-                it->second->waiting_ports.push_back(
-                    {std::move(reply_right), Task::ParentPIDRequest {}});
-            else if (m->flags & PID_FOR_TASK_GROUP_ID)
-                it->second->waiting_ports.push_back(
-                    {std::move(reply_right), Task::PgroupRequest {}});
-            else
-                it->second->waiting_ports.push_back({std::move(reply_right), Task::PIDRequest {}});
+    co_return reloc_offset;
+}
+
+pmos::async::task<std::expected<uint64_t, int>> find_phdr_address(pmos::Right &file_handle)
+{
+    Elf32_Ehdr ehdr;
+    auto read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)&ehdr, sizeof(ehdr)), 0);
+    if (!read_result)
+        co_return std::unexpected(read_result.error());
+
+    if (ehdr.e_ident[4] == R_LARCH_32) {
+        uint32_t phdr_size = ehdr.e_phentsize;
+        uint32_t phdr_count = ehdr.e_phnum;
+        uint32_t total_size = phdr_size * phdr_count;
+
+        std::vector<uint8_t> phdr_data(total_size);
+        auto phdr_read_result = co_await read_file(file_handle, phdr_data, ehdr.e_phoff);
+        if (!phdr_read_result)
+            co_return std::unexpected((int)phdr_read_result.error());
+
+        for (uint32_t i = 0; i < phdr_count; ++i) {
+            Elf32_Phdr *phdr = reinterpret_cast<Elf32_Phdr *>(phdr_data.data() + i * phdr_size);
+            if (phdr->p_type == PT_PHDR) {
+                co_return phdr->p_vaddr;
+            }
+        }
+    } else if (ehdr.e_ident[4] == R_LARCH_64) {
+        Elf64_Ehdr ehdr;
+        auto read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)&ehdr, sizeof(ehdr)), 0);
+        if (!read_result)
+            co_return std::unexpected((int)read_result.error());
+
+        uint64_t phdr_size = ehdr.e_phentsize;
+        uint64_t phdr_count = ehdr.e_phnum;
+        uint64_t total_size = phdr_size * phdr_count;
+
+        std::vector<uint8_t> phdr_data(total_size);
+        auto phdr_read_result = co_await read_file(file_handle, phdr_data, ehdr.e_phoff);
+        if (!phdr_read_result)
+            co_return std::unexpected((int)phdr_read_result.error());
+
+        for (uint64_t i = 0; i < phdr_count; ++i) {
+            Elf64_Phdr *phdr = reinterpret_cast<Elf64_Phdr *>(phdr_data.data() + i * phdr_size);
+            if (phdr->p_type == PT_PHDR) {
+                co_return phdr->p_vaddr;
+            }
         }
     }
+
+    kernelLogger() << "processd: find_phdr_address: No PT_PHDR found in ELF file\n" << frg::endlog;
+    co_return std::unexpected(-ENOEXEC);
 }
 
-void remove_task_from_process(uint64_t task_group_id, uint64_t task_id)
+struct OpenFileIpc {
+    pmos_right_t io_right;
+    pmos_right_t op_right;
+    uint64_t flags;
+};
+
+struct PmosFsDataHeader {
+    uint64_t total_size;
+    uint64_t array_size;
+};
+
+std::expected<void, int> pass_filesystem(pmos::Right fs_object_right, pmos::Right task_group_right, uint64_t task_group, uint64_t page_table, pmos::utility::ElFAuxvecBuilder &auxvec)
 {
-    auto it = tasks.find(task_id);
-    if (it == tasks.end()) {
-        printf("processd: Task %lu not found\n", task_id);
-        return;
-    }
-    auto task = it->second.get();
+    constexpr size_t max_entries = 256;
+    constexpr size_t entry_size = sizeof(OpenFileIpc);
 
-    if (task->parent_process == nullptr) {
-        printf("processd: Task %lu does not belong to any process\n", task_id);
-        return;
+    auto size = get_mem_object_size(fs_object_right.get(), 0);
+    if (size.result)
+        return std::unexpected((int)size.result);
+    if (size.value == 0 || size.value > 64*1024)
+        return std::unexpected(-EINVAL);
+
+    size_t src_count = size.value / entry_size;
+    if (src_count > max_entries)
+        src_count = max_entries;
+
+    map_mem_object_param_t map_params = {
+        .page_table_id = 0,
+        .object_right = fs_object_right.get(),
+        .addr_start_uint = 0,
+        .size = size.value,
+        .offset_object = 0,
+        .object_size = size.value,
+        .access_flags = PROT_READ,
+    };
+    auto map_result = map_mem_object(&map_params);
+    if (map_result.result != SUCCESS)
+        return std::unexpected((int)map_result.result);
+    pmos::utility::scope_guard unmap_object([&] {
+        munmap(map_result.virt_addr, size.value);
+    });
+
+    auto group_result = add_task_to_group(TASK_ID_SELF, task_group_right.get(), FLAG_GROUP_ID_IS_RIGHT);
+    if (group_result.result != SUCCESS)
+        return std::unexpected((int)group_result.result);
+    auto source_group_id = group_result.value;
+    pmos::utility::scope_guard remove_from_group([&] {
+        remove_task_from_group(TASK_ID_SELF, source_group_id);
+    });
+
+    auto page_size = getpagesize();
+    auto dest_data_size = sizeof(PmosFsDataHeader) + max_entries * entry_size;
+    auto map_size = (dest_data_size + page_size - 1) & ~(page_size - 1);
+    auto new_map_result = create_normal_region(0, nullptr, map_size, PROT_READ | PROT_WRITE);
+    if (new_map_result.result)
+        return std::unexpected((int)new_map_result.result);
+    pmos::utility::scope_guard unmap_table([&] {
+        munmap(new_map_result.virt_addr, map_size);
+    });
+
+    {
+        auto namespace_result = set_namespace(source_group_id, NAMESPACE_RIGHTS);
+        if (namespace_result.result != SUCCESS)
+            return std::unexpected((int)namespace_result.result);
+        pmos::utility::scope_guard reset_namespace([&] {
+            set_namespace(namespace_result.value, NAMESPACE_RIGHTS);
+        });
+
+        auto *header = reinterpret_cast<PmosFsDataHeader *>(new_map_result.virt_addr);
+        header->total_size = map_size;
+        header->array_size = max_entries;
+
+        auto dest_start = reinterpret_cast<std::byte *>(new_map_result.virt_addr) + sizeof(PmosFsDataHeader);
+
+        for (size_t i = 0; i < src_count; ++i) {
+            OpenFileIpc *entry = reinterpret_cast<OpenFileIpc *>(map_result.virt_addr) + i;
+            OpenFileIpc *dest = reinterpret_cast<OpenFileIpc *>(dest_start) + i;
+
+            if (entry->io_right == 0)
+                continue;
+
+            if (entry->flags & O_CLOEXEC)
+                continue;
+
+            auto dup_result = dup_right(entry->io_right);
+            if (dup_result.result) {
+                kernelLogger() << "processd: pass_filesystem: failed to dup io right " << entry->io_right
+                               << " for fd " << i << ": " << (int)dup_result.result << "\n" << frg::endlog;
+                return std::unexpected((int)dup_result.result);
+            }
+
+            auto transfer_result = transfer_right(task_group, dup_result.right, 0);
+            if (transfer_result.result) {
+                kernelLogger() << "processd: pass_filesystem: failed to transfer io right for fd " << i
+                               << ": " << (int)transfer_result.result << "\n" << frg::endlog;
+                delete_right(dup_result.right);
+                return std::unexpected((int)transfer_result.result);
+            }
+
+            dest->io_right = transfer_result.right;
+
+            dup_result = dup_right(entry->op_right);
+            if (dup_result.result) {
+                kernelLogger() << "processd: pass_filesystem: failed to dup op right " << entry->op_right
+                               << " for fd " << i << ": " << (int)dup_result.result << "\n" << frg::endlog;
+                return std::unexpected((int)dup_result.result);
+            }
+
+            transfer_result = transfer_right(task_group, dup_result.right, 0);
+            if (transfer_result.result) {
+                kernelLogger() << "processd: pass_filesystem: failed to transfer op right for fd " << i
+                               << ": " << (int)transfer_result.result << "\n" << frg::endlog;
+                delete_right(dup_result.right);
+                return std::unexpected((int)transfer_result.result);
+            }
+
+            dest->op_right = transfer_result.right;
+            dest->flags = entry->flags;
+        }
     }
 
-    if (task->parent_process->process_task_group_id != task_group_id) {
-        printf("processd: Task %lu does not belong to group %lu\n", task_id, task_group_id);
-        return;
-    }
+    auto move_result = transfer_region(page_table, new_map_result.virt_addr, 0, PROT_READ | PROT_WRITE);
+    if (move_result.result)
+        return std::unexpected((int)move_result.result);
+    unmap_table.release();
 
-    task->parent_process->tasks.erase(task);
-    tasks.erase(task_id);
+    if (!auxvec.auxvec().push_back({AT_FD_TABLE, move_result.virt_addr_intptr}))
+        throw std::bad_alloc();
+
+    return {};
 }
 
-void set_group(IPC_Set_Process_Group *m, uint64_t task_id, pmos::Right reply_right)
+pmos::async::task<std::expected<uint64_t, int>> load_executable(uint64_t task_id, pmos::Right &file_handle, std::shared_ptr<Process> process, std::vector<std::string> args, std::vector<std::string> envs, pmos::Right posix_right, pmos::Right fs_object_right, pmos::Right task_group_right)
 {
-    auto it = tasks.find(task_id);
-    if (it == tasks.end()) {
-        auto task = std::make_unique<Task>();
-        auto tp   = task.get();
+    Elf32_Ehdr ehdr;
 
-        task->task_id        = task_id;
-        task->present        = false;
-        task->parent_process = nullptr;
+    auto read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)&ehdr, sizeof(ehdr)), 0);
+    if (!read_result) {
+        co_return std::unexpected((int)read_result.error());
+    }
 
-        tp->waiting_ports.push_back(
-            {std::move(reply_right), Task::SetGroupRequest {m->pid, m->pgid}});
+    if (memcmp(&ehdr.e_ident, ELFMAG, SELFMAG))
+        co_return std::unexpected(-ENOEXEC);
+
+    if (ehdr.e_ident[5] != ELF_ENDIANNESS)
+        co_return std::unexpected(-ENOEXEC);
+
+    if (ehdr.e_type != ET_EXEC && ehdr.e_type != ET_DYN)
+        co_return std::unexpected(-ENOEXEC);
+
+    auto interp_path_result = co_await get_interpreter_path(file_handle);
+    if (!interp_path_result)
+        co_return std::unexpected(interp_path_result.error());
+    
+    auto interp = std::move(interp_path_result.value());
+    pmos::Right interp_handle;
+    bool interp_is_relocatable = false;
+    if (interp) {
+        auto interp_file = co_await get_file_handle(*interp, process);
+        if (!interp_file)
+            co_return std::unexpected(interp_file.error());
+        interp_handle = std::move(interp_file.value());
+
+        Elf32_Ehdr interp_ehdr;
+        auto interp_read_result = co_await read_file(interp_handle, std::span<uint8_t>((uint8_t *)&interp_ehdr, sizeof(interp_ehdr)), 0);
+        if (!interp_read_result)
+            co_return std::unexpected((int)interp_read_result.error());
+
+        if (memcmp(&interp_ehdr.e_ident, ELFMAG, SELFMAG))
+            co_return std::unexpected(-ENOEXEC);
+        if (interp_ehdr.e_ident[5] != ELF_ENDIANNESS)
+            co_return std::unexpected(-ENOEXEC);
+        if (interp_ehdr.e_type != ET_EXEC && interp_ehdr.e_type != ET_DYN)
+            co_return std::unexpected(-ENOEXEC);
+
+        if (interp_ehdr.e_machine != ehdr.e_machine)
+            co_return std::unexpected(-ENOEXEC);
+
+        interp_is_relocatable = (interp_ehdr.e_type == ET_DYN);
+    }
+
+    page_table_req_ret_t pt_request = assign_page_table(task_id, 0, PAGE_TABLE_CREATE, ehdr.e_machine);
+    if (pt_request.result)
+        co_return std::unexpected((int)pt_request.result);
+    pmos_pagetable_t page_table_id = pt_request.page_table;
+
+    uint64_t interp_reloc_offset = 0;
+    uint64_t reloc_offset = 0;
+
+    if (interp && !interp_is_relocatable) {
+        auto result = co_await load_into_memory(page_table_id, interp_handle);
+        if (!result)
+            co_return std::unexpected(result.error());
+
+        interp_reloc_offset = result.value();
+    }
+
+    auto result = co_await load_into_memory(page_table_id, file_handle);
+    if (!result)
+        co_return std::unexpected(result.error());
+    reloc_offset = result.value();
+
+    if (interp && interp_is_relocatable) {
+        auto result = co_await load_into_memory(page_table_id, interp_handle);
+        if (!result)
+            co_return std::unexpected(result.error());
+
+        interp_reloc_offset = result.value();
+    }
+
+    pmos::utility::ElFAuxvecBuilder auxvec_builder;
+    auxvec_builder.set_width(ehdr.e_ident[4] == R_LARCH_32 ? pmos::utility::ElFAuxvecBuilder::PtrWidth::W32bit : pmos::utility::ElFAuxvecBuilder::PtrWidth::W64bit);
+
+    auto &builder_args = auxvec_builder.args();
+    for (const auto &arg : args) {
+        pmos::containers::string str;
+        if (!str.assign(arg))
+            throw std::bad_alloc();
+
+        if (!builder_args.push_back(std::move(str)))
+            throw std::bad_alloc();
+    }
+
+    auto &builder_envs = auxvec_builder.envp();
+    for (const auto &env : envs) {
+        pmos::containers::string str;
+        if (!str.assign(env))
+            throw std::bad_alloc();
+        
+        if (!builder_envs.push_back(std::move(str)))
+            throw std::bad_alloc();
+    }
+
+    auto &auxvals = auxvec_builder.auxvec();
+
+    size_t stack_size = 16 * 1024 * 1024; // 16 MB stack
+    auto stack_result = create_normal_region(page_table_id, nullptr, stack_size, PROT_NONE);
+    if (stack_result.result)
+        co_return std::unexpected((int)stack_result.result);
+
+    if (!auxvals.push_back({AT_USRSTACKBASE, stack_result.virt_addr_intptr}))
+        throw std::bad_alloc();
+    if (!auxvals.push_back({AT_USRSTACKLIM, stack_result.virt_addr_intptr + stack_size}))
+        throw std::bad_alloc();
+
+    if (!auxvals.push_back({AT_PAGESZ, getpagesize()}))
+        throw std::bad_alloc();
+
+    uint64_t entry_point;
+
+    // Pheader stuff
+    if (ehdr.e_ident[4] == R_LARCH_32) {
+        if (!auxvals.push_back({AT_PHENT, (uint64_t)ehdr.e_phentsize}))
+            throw std::bad_alloc();
+        if (!auxvals.push_back({AT_PHNUM, (uint64_t)ehdr.e_phnum}))
+            throw std::bad_alloc();
+
+        if (!auxvals.push_back({AT_ENTRY, ehdr.e_entry + reloc_offset}))
+            throw std::bad_alloc();
+
+        entry_point = ehdr.e_entry + reloc_offset;
     } else {
-        if (it->second->present) {
-            process_set_group({m->pid, m->pgid}, it->second.get(), std::move(reply_right));
+        Elf64_Ehdr ehdr64;
+        auto read_result = co_await read_file(file_handle, std::span<uint8_t>((uint8_t *)&ehdr64, sizeof(ehdr64)), 0);
+        if (!read_result)
+            co_return std::unexpected((int)read_result.error());
+
+        if (!auxvals.push_back({AT_PHENT, (uint64_t)ehdr64.e_phentsize}))
+            throw std::bad_alloc();
+        if (!auxvals.push_back({AT_PHNUM, (uint64_t)ehdr64.e_phnum}))
+            throw std::bad_alloc();
+
+        if (!auxvals.push_back({AT_ENTRY, ehdr64.e_entry + reloc_offset}))
+            throw std::bad_alloc();
+
+        entry_point = ehdr64.e_entry + reloc_offset;
+    }
+
+    auto phdr_address_result = co_await find_phdr_address(file_handle);
+    if (!phdr_address_result)
+        co_return std::unexpected(phdr_address_result.error());
+
+    if (!auxvals.push_back({AT_PHDR, phdr_address_result.value() + reloc_offset}))
+        throw std::bad_alloc();
+
+    uint64_t interp_entry_point = 0;
+    if (interp) {
+        if (!auxvals.push_back({AT_BASE, interp_reloc_offset}))
+            throw std::bad_alloc();
+
+        Elf32_Ehdr interp_ehdr;
+        auto read_result = co_await read_file(interp_handle, std::span<uint8_t>((uint8_t *)&interp_ehdr, sizeof(interp_ehdr)), 0);
+        if (!read_result)
+            co_return std::unexpected(read_result.error());
+
+        if (interp_ehdr.e_ident[4] == R_LARCH_32) {
+            interp_entry_point = interp_ehdr.e_entry + interp_reloc_offset;
         } else {
-            it->second->waiting_ports.push_back(
-                {std::move(reply_right), Task::SetGroupRequest {m->pid, m->pgid}});
+            Elf64_Ehdr interp_ehdr64;
+            auto read_result = co_await read_file(interp_handle, std::span<uint8_t>((uint8_t *)&interp_ehdr64, sizeof(interp_ehdr64)), 0);
+            if (!read_result)
+                co_return std::unexpected(read_result.error());
+
+            interp_entry_point = interp_ehdr64.e_entry + interp_reloc_offset;
         }
     }
+
+    auto group = create_task_group();
+    if (group.result)
+        co_return std::unexpected((int)group.result);
+    pmos::utility::scope_guard group_guard([=]{
+        remove_task_from_group(TASK_ID_SELF, group.value);
+    });
+
+    auto add_result = add_task_to_group(task_id, group.value, 0);
+    if (add_result.result)
+        co_return std::unexpected((int)add_result.result);
+    uint64_t group_id = group.value;
+
+    {
+        auto arr = std::bit_cast<std::array<std::byte, sizeof(group_id)>>(group_id);
+        auto vec = pmos::containers::vector<std::byte>();
+        if (!vec.append_range(arr))
+            throw std::bad_alloc();
+
+        if (!auxvals.push_back({AT_TASK_GROUP_ID, std::move(vec)}))
+            throw std::bad_alloc();
+    }
+
+    {
+        auto transfer_result = transfer_right(group_id, posix_right.get(), 0);
+        if (transfer_result.result)
+            co_return std::unexpected(transfer_result.result);
+        posix_right.release();
+
+        auto right_id = transfer_result.right;
+        auto arr = std::bit_cast<std::array<std::byte, sizeof(right_id)>>(right_id);
+        auto vec = pmos::containers::vector<std::byte>();
+        if (!vec.append_range(arr))
+            throw std::bad_alloc();
+        if (!auxvals.push_back({AT_POSIX_RIGHT, std::move(vec)}))
+            throw std::bad_alloc();
+    }
+
+    if (fs_object_right) {
+        auto fs_result = pass_filesystem(std::move(fs_object_right), std::move(task_group_right), group_id, page_table_id, auxvec_builder);
+        if (!fs_result)
+            co_return std::unexpected(fs_result.error());
+    }
+
+    auto s_reg = create_normal_region(PAGE_TABLE_SELF, NULL, stack_size, PROT_READ | PROT_WRITE | CREATE_FLAG_COW);
+    if (s_reg.result)
+        co_return std::unexpected((int)s_reg.result);
+    pmos::utility::scope_guard s_reg_guard([=]{
+        release_memory_range(PAGE_TABLE_SELF, s_reg.virt_addr, stack_size);
+    });
+
+    auto data = auxvec_builder.serialize(stack_result.virt_addr_intptr + stack_size);
+    if (!data)
+        throw std::bad_alloc();
+    auto vec = std::move(data.value());
+
+    memcpy((void *)(s_reg.virt_addr_intptr + stack_size - vec.size()), vec.data(), vec.size());
+
+    auto t_res = transfer_region(page_table_id, s_reg.virt_addr, stack_result.virt_addr_intptr, PROT_READ | PROT_WRITE | CREATE_FLAG_FIXED);
+    if (t_res.result)
+        co_return std::unexpected((int)t_res.result);
+    s_reg_guard.release();
+
+    auto sr = init_stack(task_id, stack_result.virt_addr_intptr + stack_size - vec.size());
+    if (sr.result)
+        co_return std::unexpected((int)sr.result);
+
+    // kernelLogger() << "processd: load_executable: assigned page table " << page_table_id << " for task " << task_id << "\n" << frg::endlog;
+    if (interp)
+        co_return interp_entry_point;
+    else
+        co_return entry_point;
 }
 
-void preregister_process_try_reply(pmos::Right &reply_right, unsigned flags, pid_t result)
+pmos::async::detached_task execve_handle(std::shared_ptr<Process> process, std::vector<std::byte> data, pmos::Right reply_right, pmos::Right fs_right, pmos::Right task_group_right)
 {
-    IPC_Preregister_Process_Reply reply;
-    reply.type   = IPC_Preregister_Process_Reply_NUM;
-    reply.flags  = flags;
-    reply.result = result;
-
-    auto r = pmos::send_message_right_one(reply_right, reply, {}, true);
-    if (!r)
-        printf("processd: Error %d sending message to port %" PRIu64 " for preregister_process\n",
-               r.error(), reply_right.get());
-}
-
-void preregister_process(IPC_Preregister_Process *m, uint64_t sender_task, pmos::Right reply_right)
-{
-    auto it = tasks.find(sender_task);
-    if (it == tasks.end()) {
-        preregister_process_try_reply(reply_right, 0, -ENOENT);
-        return;
+    if (process->running_exec) {
+        execve_reply(std::move(reply_right), -EAGAIN);
+        co_return;
     }
 
-    auto current = it->second.get();
-    auto parent  = current->parent_process;
-    if (!current->present) {
-        preregister_process_try_reply(reply_right, 0, -ENOENT);
-        return;
+    process->running_exec = true;
+    pmos::utility::scope_guard exec_guard([=]{
+        process->running_exec = false;
+        if (process->receive_right_id)
+            delete_process(process);
+    });
+
+    auto msg = reinterpret_cast<IPC_Execve *>(data.data());
+
+    constexpr auto base_length = sizeof(*msg);
+    if (!sum_less_or_equals(base_length, msg->path_length, data.size())) {
+        execve_reply(std::move(reply_right), -EINVAL);
+        co_return;
+    }
+    if (!sum_less_or_equals(base_length + msg->path_length, msg->args_length, data.size())) {
+        execve_reply(std::move(reply_right), -EINVAL);
+        co_return;
+    }
+    if (!sum_less_or_equals(base_length + msg->path_length + msg->args_length, msg->envs_length, data.size())) {
+        execve_reply(std::move(reply_right), -EINVAL);
+        co_return;
     }
 
-    pid_t parent_pid = m->parent_pid == 0 ? parent->process_id : m->parent_pid;
-    if ((parent_pid <= 0) || (uint64_t)parent_pid != parent->process_id) {
-        preregister_process_try_reply(reply_right, 0, -EPERM);
-        return;
+    if (msg->path_length < 1) {
+        execve_reply(std::move(reply_right), -EINVAL);
+        co_return;
     }
 
-    it = tasks.find(m->worker_task_id);
-    if (it == tasks.end()) {
-        it                  = tasks.emplace(m->worker_task_id, std::make_unique<Task>()).first;
-        it->second->task_id = m->worker_task_id;
-    } else if (it->second->present) {
-        preregister_process_try_reply(reply_right, 0, -EEXIST);
-        return;
+    auto path = std::string(msg->data, strnlen(msg->data, msg->path_length - 1));
+    std::vector<std::string> args;
+    
+    auto args_it = msg->data + msg->path_length;
+    auto envs_it = args_it + msg->args_length;
+    auto it = args_it;
+    while (it < envs_it) {
+        auto l = strnlen(it, envs_it - it);
+        args.push_back(std::string(it, l));
+        it += l + 1;
     }
-    auto task = it->second.get();
 
-    auto process                   = std::make_unique<Process>();
-    auto pp                        = process.get();
-    process->process_id            = next_process_id++;
-    processes[process->process_id] = std::move(process);
+    std::vector<std::string> envs;
+    auto envs_end = envs_it + msg->envs_length;
+    it = envs_it;
+    while (it < envs_end) {
+        auto l = strnlen(it, envs_end - it);
+        envs.push_back(std::string(it, l));
+        it += l + 1;
+    }
 
-    pp->parent_pid = parent_pid;
-    pp->parent     = parent;
-    parent->children.insert(pp);
+    auto file_handle = co_await get_file_handle(path, process);
+    if (!file_handle) {
+        execve_reply(std::move(reply_right), file_handle.error());
+        co_return;
+    }
 
-    pp->parent_group = parent->parent_group;
-    pp->parent_group->processes.insert(pp);
+    auto new_task = syscall_new_task(PROCESS_RIGHT_NEW);
+    if (new_task.result != SUCCESS) {
+        execve_reply(std::move(reply_right), (int)new_task.result);
+        co_return;
+    }
+    pmos::utility::scope_guard guard([&]{
+        syscall_kill_task(new_task.value);
+    });
 
-    pp->tasks.insert(task);
-    task->parent_process = pp;
-    task->present        = true;
+    syscall_set_task_name(new_task.value, path.c_str(), path.size());
 
-    preregister_process_try_reply(reply_right, 0, pp->process_id);
+    auto process_result = process_for_task(new_task.value, 0);
+    if (process_result.result != SUCCESS) {
+        execve_reply(std::move(reply_right), (int)process_result.result);
+        co_return;
+    }
+    auto process_right = pmos::Right(process_result.right, pmos::RightType::Process);
 
-    process_requests(task);
-}
-
-pmos::async::detached_task get_messages()
-{
     auto right = main_port.create_right(pmos::RightType::SendMany);
-    auto [r, recieve_right] = std::move(right.value());
-    auto result = pmos::name_right(std::move(r), processd_port_name);
+    auto [send_right, receive_right] = std::move(right.value());
+
+    auto exec_result = co_await load_executable(new_task.value, file_handle.value(), process, std::move(args), std::move(envs), std::move(send_right), std::move(fs_right), std::move(task_group_right));
+    if (!exec_result) {
+        execve_reply(std::move(reply_right), exec_result.error());
+        co_return;
+    }
+    auto entry_point = exec_result.value();
+
+    terminate_process(process->process_right.get(), 0);
+    process->process_right = std::move(process_right);
+
+    auto start_result = syscall_start_task(new_task.value, entry_point, 0, 0, 0);
+    if (start_result != SUCCESS) {
+        execve_reply(std::move(reply_right), (int)start_result);
+        co_return;
+    }
+    guard.release();
+
+    delete_receive_right(main_port.get(), process->receive_right_id, 0);
+
+    // kernelLogger() << "processd: execve_handle: starting new task " << new_task.value << " for process " << process->pid << "\n" << frg::endlog;
+
+    process->running_exec = false;
+    process->ran_exec = true;
+    exec_guard.release();
+
+    handle_process_messages(std::move(receive_right), process);
+
+    co_return;
+}
+
+void get_id_reply(pmos::Right reply_right, int result, uint32_t id)
+{
+    IPC_Get_ID_Reply reply = {
+        .type = IPC_Get_ID_Reply_NUM,
+        .flags = 0,
+        .result = static_cast<int16_t>(result),
+        .id = id,
+    };
+    auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+    if (!result_send)
+        kernelLogger() << "processd: get_id_reply: Failed to send reply message\n" << frg::endlog;
+}
+
+void get_id_handle(std::shared_ptr<Process> process, pmos::Right reply_right, short type)
+{
+    uint32_t id = 0;
+    bool invalid_type = false;
+
+    switch (type) {
+    case IPC_GET_ID_TYPE_RUID:
+        id = process->uid;
+        break;
+    case IPC_GET_ID_TYPE_EUID:
+        id = process->euid;
+        break;
+    case IPC_GET_ID_TYPE_SUID:
+        id = process->suid;
+        break;
+    case IPC_GET_ID_TYPE_RGID:
+        id = process->gid;
+        break;
+    case IPC_GET_ID_TYPE_EGID:
+        id = process->egid;
+        break;
+    case IPC_GET_ID_TYPE_SGID:
+        id = process->sgid;
+        break;
+    case IPC_GET_ID_TYPE_PID:
+        id = process->pid;
+        break;
+    case IPC_GET_ID_TYPE_PPID: {
+        auto parent = process->parent;
+        if (parent)
+            id = parent->pid;
+    }
+        break;
+    default:
+        invalid_type = true;
+        kernelLogger() << "processd: get_id_handle: Unknown type " << type << "\n" << frg::endlog;
+        break;
+    }
+
+    get_id_reply(std::move(reply_right), invalid_type ? -ENOSYS : 0, id);
+}
+
+void get_id_for_handle(const std::shared_ptr<Process> &process, pmos::Right reply_right, short type, pid_t pid)
+{
+    uint32_t id = 0;
+    int error = 0;
+
+    if (pid < 0) {
+        get_id_reply(std::move(reply_right), -EINVAL, 0);
+        return;
+    }
+
+    std::shared_ptr<Process> target_process;
+    if (pid == 0)
+        target_process = process;
+    else
+        target_process = process_for_pid(pid);
+
+    if (!target_process) {
+        get_id_reply(std::move(reply_right), -ESRCH, 0);
+        return;
+    }
+
+    if (target_process->process_group->session != process->process_group->session) {
+        get_id_reply(std::move(reply_right), -EPERM, 0);
+        return;
+    }
+
+    switch (type) {
+    case IPC_GET_ID_FOR_TYPE_PGID:
+        id = target_process->process_group->pgid;
+        break;
+    default:
+        error = -ENOSYS;
+        kernelLogger() << "processd: get_id_handle: Unknown type " << type << "\n" << frg::endlog;
+        break;
+    }
+
+    get_id_reply(std::move(reply_right), error, id);
+}
+
+void getcwd_handle(std::shared_ptr<Process> process, pmos::Right reply_right)
+{
+    std::string cwd = process->get_cwd();
+
+    IPC_Getcwd_Reply reply = {
+        .type = IPC_Getcwd_Reply_NUM,
+        .flags = 0,
+        .result_code = 0,
+    };
+    std::vector<std::byte> msg_bytes{};
+    msg_bytes.insert(msg_bytes.end(), reinterpret_cast<const std::byte *>(&reply), reinterpret_cast<const std::byte *>(&reply) + sizeof(reply));
+    msg_bytes.insert(msg_bytes.end(), reinterpret_cast<const std::byte *>(cwd.c_str()), reinterpret_cast<const std::byte *>(cwd.c_str()) + cwd.size());
+
+    auto result_send = pmos::send_message_right(reply_right, std::span(msg_bytes), {}, true);
+    if (!result_send)
+        kernelLogger() << "processd: getcwd_handle: Failed to send reply message\n" << frg::endlog;
+}
+
+void kill_reply(pmos::Right reply_right, int result)
+{
+    IPC_Kill_Reply reply = {
+        .type = IPC_Kill_Reply_NUM,
+        .flags = 0,
+        .result = result,
+    };
+    auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+    if (!result_send)
+        kernelLogger() << "processd: kill_reply: Failed to send reply message\n" << frg::endlog;
+}
+
+void kill_handle(std::shared_ptr<Process> process, pmos::Right reply_right, pid_t pid, int sig)
+{
+    if (sig < 0 || sig >= NSIG) {
+        kill_reply(std::move(reply_right), -EINVAL);
+        return;
+    }
+
+    std::set<std::shared_ptr<Process>> target_processes;
+    bool found_at_least_one = false;
+
+    if (pid > 0) {
+        auto target_process = process_for_pid(pid);
+        if (!target_process) {
+            kill_reply(std::move(reply_right), -ESRCH);
+            return;
+        }
+
+        found_at_least_one = true;
+
+        if (target_process->can_send_signal(*process, sig))
+            target_processes.insert(target_process);
+    } else if (pid == 0) {
+        for (const auto &p : process->process_group->processes) {
+            if (p.second->can_send_signal(*process, sig)) {
+                target_processes.insert(p.second);
+            }
+        }
+    } else if (pid == -1) {
+        for (const auto &p : processes) {
+            found_at_least_one = true;
+            if (p.second != process && p.second->can_send_signal(*process, sig))
+                target_processes.insert(p.second);
+        }
+    } else if (pid < -1) {
+        pid_t pgid = -pid;
+        auto target_group = group_for_pgid(pgid);
+        if (!target_group) {
+            kill_reply(std::move(reply_right), -ESRCH);
+            return;
+        }
+
+        for (const auto &p : target_group->processes) {
+            found_at_least_one = true;
+            if (p.second->can_send_signal(*process, sig)) {
+                target_processes.insert(p.second);
+            }
+        }
+    }
+
+    if (target_processes.empty()) {
+        kill_reply(std::move(reply_right), found_at_least_one ? -EPERM : -ESRCH);
+        return;
+    }
+
+    auto waiter = std::make_shared<SignalWaiter>();
+    waiter->remaining_signals = target_processes.size();
+    waiter->reply_right = std::move(reply_right);
+    for (const auto &p : target_processes)
+        send_signal(p, sig, waiter);
+}
+
+static void chdir_reply(pmos::Right reply_right, int result)
+{
+    IPC_Chdir_Reply reply = {
+        .type = IPC_Chdir_Reply_NUM,
+        .flags = 0,
+        .result_code = result,
+    };
+    auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+    if (!result_send)
+        kernelLogger() << "processd: chdir_reply: Failed to send reply message\n" << frg::endlog;
+}
+
+pmos::async::detached_task chdir_handle(std::shared_ptr<Process> process, pmos::Right reply_right, std::string path)
+{
+    auto vnode = co_await resolve_path(path, process);
+    if (!vnode) {
+        chdir_reply(std::move(reply_right), vnode.error());
+        co_return;
+    }
+
+    auto result = process->set_cwd(vnode.value());
+    if (!result) {
+        chdir_reply(std::move(reply_right), result.error());
+        co_return;
+    }
+
+    chdir_reply(std::move(reply_right), 0);
+}
+
+static void uname_handle(pmos::Right reply_right)
+{
+    auto uname = get_uname();
+    IPC_Uname_Reply reply = {
+        .type = IPC_Uname_Reply_NUM,
+        .flags = 0,
+        .result_code = 0,
+        .sysname = {},
+        .nodename = {},
+        .release = {},
+        .version = {},
+        .machine = {},
+        .domainname = {},
+    };
+
+    memcpy(reply.sysname, uname.sysname, sizeof(uname.sysname));
+    memcpy(reply.nodename, uname.nodename, sizeof(uname.nodename));
+    memcpy(reply.release, uname.release, sizeof(uname.release));
+    memcpy(reply.version, uname.version, sizeof(uname.version));
+    memcpy(reply.machine, uname.machine, sizeof(uname.machine));
+    memcpy(reply.domainname, uname.domainname, sizeof(uname.domainname));
+
+    auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+    if (!result_send)
+        kernelLogger() << "processd: uname_handle: Failed to send reply message\n" << frg::endlog;
+}
+
+pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::shared_ptr<Process> process)
+{
+    process->receive_right_id = rr.get();
+    auto saved_right_id = rr.get();
 
     while (1) {
-        auto [msg, message, reply_right, _] = (co_await dispatcher.get_message_default()).value();
+        auto [msg, message, reply_right, extra_rights] = (co_await dispatcher.get_message(rr)).value();
     
         if (msg.size < sizeof(IPC_Generic_Msg)) {
-            printf("Warning: recieved very small message\n");
+            kernelLogger() << "processd: Received very small message\n" << frg::endlog;
             break;
         }
-
+        
         IPC_Generic_Msg *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(message.data());
         switch (ipc_msg->type) {
+        case IPC_Kernel_Receive_Right_Destroyed_NUM:
+            goto finish;
+
+        case IPC_Open_NUM: {
+            if (message.size() < sizeof(IPC_Open)) {
+                kernelLogger() << "posixd: Received IPC_Open that is too small from task " << msg.sender << " of size " << message.size() << "\n" << frg::endlog;
+                break;
+            }
+
+            auto *m = reinterpret_cast<IPC_Open *>(message.data());
+            std::string path(m->path, message.size() - sizeof(IPC_Open));
+            open_file(std::move(reply_right), path, process, m->flags);
+        } break;
+
+        case IPC_Stat_NUM: {
+            if (message.size() < sizeof(IPC_Stat)) {
+                kernelLogger() << "posixd: Received IPC_Stat that is too small while attending file\n" << frg::endlog;
+                break;
+            }
+            auto *stat_msg = reinterpret_cast<IPC_Stat *>(message.data());
+
+            std::string stat_msg_path(stat_msg->path, message.size() - sizeof(IPC_Stat));
+
+            stat_handle(nullptr, std::move(reply_right), stat_msg->flags, std::move(stat_msg_path));
+        }
+            break;
+        
+        case IPC_Openpt_NUM: {
+            if (message.size() < sizeof(IPC_Openpt)) {
+                kernelLogger() << "posixd: Received IPC_Openpt that is too small while attending file\n" << frg::endlog;
+                break;
+            }
+            auto *openpt_msg = reinterpret_cast<IPC_Openpt *>(message.data());
+
+            openpt_handle(std::move(reply_right), openpt_msg->flags);
+        }
+            break;
         case IPC_Register_Process_NUM: {
             if (msg.size < sizeof(IPC_Register_Process)) {
-                printf("processd: Recieved IPC_Register_Process that is too small from task "
-                       "%li of "
-                       "size %li\n",
-                       msg.sender, msg.size);
+                kernelLogger() << "processd: Received IPC_Register_Process that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 
             IPC_Register_Process *m = reinterpret_cast<IPC_Register_Process *>(ipc_msg);
-            register_process(m, msg.sender, std::move(reply_right));
+            register_process(m, std::move(reply_right), process, std::move(extra_rights[0]));
             break;
         }
-        case IPC_PID_For_Task_NUM: {
-            if (msg.size < sizeof(IPC_PID_For_Task)) {
-                printf("processd: Recieved IPC_PID_For_Task that is too small from task %li of "
-                       "size "
-                       "%li\n",
-                       msg.sender, msg.size);
+        case IPC_Setsid_NUM: {
+            if (msg.size < sizeof(IPC_Setsid)) {
+                kernelLogger() << "processd: Received IPC_Setsid that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 
-            IPC_PID_For_Task *m = reinterpret_cast<IPC_PID_For_Task *>(ipc_msg);
-            pid_for_task(m, msg.sender, std::move(reply_right));
+            // IPC_Setsid *m = reinterpret_cast<IPC_Setsid *>(ipc_msg);
+            setsid_handle(process, std::move(reply_right));
             break;
         }
-        case IPC_Set_Process_Group_NUM: {
-            if (msg.size < sizeof(IPC_Set_Process_Group)) {
-                printf("processd: Recieved IPC_Set_Process_Group that is too small from task %li "
-                       "of size "
-                       "%li\n",
-                       msg.sender, msg.size);
+        case IPC_Setpgid_NUM: {
+            if (msg.size < sizeof(IPC_Setpgid)) {
+                kernelLogger() << "processd: Received IPC_Setpgid that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 
-            IPC_Set_Process_Group *m = reinterpret_cast<IPC_Set_Process_Group *>(ipc_msg);
-            set_group(m, msg.sender, std::move(reply_right));
+            IPC_Setpgid *m = reinterpret_cast<IPC_Setpgid *>(ipc_msg);
+            setpgid_handle(process, std::move(reply_right), m->pid, m->pgid);
             break;
         }
-        case IPC_Preregister_Process_NUM: {
-            if (msg.size < sizeof(IPC_Preregister_Process)) {
-                printf("processd: Recieved IPC_Preregister_Process that is too small from task "
-                       "%li "
-                       "of size "
-                       "%li\n",
-                       msg.sender, msg.size);
+        case IPC_Execve_NUM: {
+            if (msg.size < sizeof(IPC_Execve)) {
+                kernelLogger() << "processd: Received IPC_Execve that is too small from task " << msg.sender << " (pid " << process->pid << ") of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 
-            IPC_Preregister_Process *m = reinterpret_cast<IPC_Preregister_Process *>(ipc_msg);
-            preregister_process(m, msg.sender, std::move(reply_right));
+            execve_handle(process, std::move(message), std::move(reply_right), std::move(extra_rights[0]), std::move(extra_rights[1]));
             break;
         }
-        case IPC_Kernel_Group_Task_Changed_NUM: {
-            if (msg.size < sizeof(IPC_Kernel_Group_Task_Changed)) {
-                printf("processd: Recieved IPC_Kernel_Group_Task_Changed that is too small "
-                       "from task "
-                       "%li of size %li\n",
-                       msg.sender, msg.size);
+        case IPC_Get_ID_NUM: {
+            if (msg.size < sizeof(IPC_Get_ID)) {
+                kernelLogger() << "processd: Received IPC_Get_ID that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 
-            IPC_Kernel_Group_Task_Changed *m =
-                reinterpret_cast<IPC_Kernel_Group_Task_Changed *>(ipc_msg);
-            if (m->event_type == Event_Group_Task_Added_NUM) {
-                add_task_to_process(m->task_group_id, m->task_id);
-            } else if (m->event_type == Event_Group_Task_Removed_NUM) {
-                remove_task_from_process(m->task_group_id, m->task_id);
-            }
+            IPC_Get_ID *m = reinterpret_cast<IPC_Get_ID *>(ipc_msg);
+
+            get_id_handle(process, std::move(reply_right), m->id_type);
             break;
         }
-        case IPC_Kernel_Group_Destroyed_NUM: {
-            if (msg.size < sizeof(IPC_Kernel_Group_Destroyed)) {
-                printf("processd: Recieved IPC_Kernel_Group_Destroyed that is too small from task "
-                       "%li of size %li\n",
-                       msg.sender, msg.size);
+        case IPC_Get_ID_For_NUM: {
+            if (msg.size < sizeof(IPC_Get_ID_For)) {
+                kernelLogger() << "processd: Received IPC_Get_ID_For that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 
-            IPC_Kernel_Group_Destroyed *msg =
-                reinterpret_cast<IPC_Kernel_Group_Destroyed *>(ipc_msg);
-            destroy_process(msg->task_group_id);
+            IPC_Get_ID_For *m = reinterpret_cast<IPC_Get_ID_For *>(ipc_msg);
+
+            get_id_for_handle(process, std::move(reply_right), m->id_type, m->pid);
+            break;
+        }
+        case IPC_Pipe_Open_NUM: {
+            if (msg.size < sizeof(IPC_Pipe_Open)) {
+                kernelLogger() << "processd: Received IPC_Pipe_Open that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            IPC_Pipe_Open *m = reinterpret_cast<IPC_Pipe_Open *>(ipc_msg);
+            pipe_open(*m, std::move(reply_right));
+            break;
+        }
+        case IPC_Waitpid_NUM: {
+            if (msg.size < sizeof(IPC_Waitpid)) {
+                kernelLogger() << "processd: Received IPC_Waitpid that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            IPC_Waitpid *m = reinterpret_cast<IPC_Waitpid *>(ipc_msg);
+            waitpid_handle(process, std::move(reply_right), m->pid, m->flags);
+            break;
+        }
+        case IPC_Getcwd_NUM: {
+            if (msg.size < sizeof(IPC_Getcwd)) {
+                kernelLogger() << "processd: Received IPC_Getcwd that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            getcwd_handle(process, std::move(reply_right));
+            break;
+        }
+        case IPC_Kill_NUM: {
+            if (msg.size < sizeof(IPC_Kill)) {
+                kernelLogger() << "processd: Received IPC_Kill that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            IPC_Kill *m = reinterpret_cast<IPC_Kill *>(ipc_msg);
+            kill_handle(process, std::move(reply_right), m->pid, m->signal);
+            break;
+        }
+        case IPC_Chdir_NUM: {
+            if (msg.size < sizeof(IPC_Chdir)) {
+                kernelLogger() << "processd: Received IPC_Chdir that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            IPC_Chdir *m = reinterpret_cast<IPC_Chdir *>(ipc_msg);
+            std::string path(m->path, message.size() - sizeof(IPC_Chdir));
+            chdir_handle(process, std::move(reply_right), std::move(path));
+            break;
+        }
+        case IPC_Uname_NUM: {
+            if (msg.size < sizeof(IPC_Uname)) {
+                kernelLogger() << "processd: Received IPC_Uname that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            uname_handle(std::move(reply_right));
+            break;
+        }
+
+        default:
+            kernelLogger() << "processd: Unknown message type " << ipc_msg->type << " from process\n" << frg::endlog;
+            break;
+        }
+    }
+finish:
+
+    if (process->receive_right_id == saved_right_id) {
+        process->receive_right_id = 0;
+        if (!process->running_exec)
+            delete_process(process);
+    }
+}
+
+void register_process(IPC_Register_Process *msg, pmos::Right reply_right, std::shared_ptr<Process> process, pmos::Right process_right)
+{
+    (void)msg;
+    (void)process;
+
+    if (!process_right || process_right.type() != pmos::RightType::Process) {
+        kernelLogger() << "processd: Received invalid process right for register_process\n" << frg::endlog;
+        IPC_Register_Process_Reply reply = {
+            .type = IPC_Register_Process_Reply_NUM,
+            .flags = 0,
+            .result = -EINVAL,
+            .pid = 0,
+        };
+
+        auto r = pmos::send_message_right_one(reply_right, reply, {}, true);
+        if (!r)
+            kernelLogger() << "processd: Error " << r.error().first << " sending message to right " << reply_right.get() << " for register_process\n" << frg::endlog;
+        return;
+    }
+    auto process_id = process_right.process_id();
+    if (!process_id) {
+        kernelLogger() << "processd: Received process right for register_process with no process id\n" << frg::endlog;
+        IPC_Register_Process_Reply reply = {
+            .type = IPC_Register_Process_Reply_NUM,
+            .flags = 0,
+            .result = -EINVAL,
+            .pid = 0,
+        };
+
+        auto r = pmos::send_message_right_one(reply_right, reply, {}, true);
+        if (!r)
+            kernelLogger() << "processd: Error " << r.error().first << " sending message to right " << reply_right.get() << " for register_process\n" << frg::endlog;
+        return;
+    }
+    if (get_process_kernel_id(process_id.value())) {
+        kernelLogger() << "processd: Received process right for register_process with already registered process id " << process_id.value() << "\n" << frg::endlog;
+        IPC_Register_Process_Reply reply = {
+            .type = IPC_Register_Process_Reply_NUM,
+            .flags = 0,
+            .result = -EEXIST, // TODO!
+            .pid = 0,
+        };
+
+        auto r = pmos::send_message_right_one(reply_right, reply, {}, true);
+        if (!r)
+            kernelLogger() << "processd: Error " << r.error().first << " sending message to right " << reply_right.get() << " for register_process\n" << frg::endlog;
+        return;
+    }
+
+    auto new_process = create_process(process, std::move(process_right), process_id.value());
+
+    auto right = main_port.create_right(pmos::RightType::SendMany);
+    auto [send_right, receive_right] = std::move(right.value());
+    handle_process_messages(std::move(receive_right), new_process);
+
+    IPC_Register_Process_Reply reply = {
+        .type = IPC_Register_Process_Reply_NUM,
+        .flags = 0,
+        .result = 0,
+        .pid = new_process->pid,
+    };
+
+    auto r = pmos::send_message_right_one(reply_right, reply, {}, true, std::move(send_right));
+    if (!r)
+        kernelLogger() << "processd: Error " << r.error().first << " sending message to right " << reply_right.get() << " for register_process\n" << frg::endlog;
+}
+
+pmos::async::detached_task get_messages_bootstrapd(pmos::ReceiveRight rr)
+{
+    auto process = create_first_process();
+    assert(process);
+
+    while (1) {
+        auto [msg, message, reply_right, rights] = (co_await dispatcher.get_message(rr)).value();
+    
+        if (msg.size < sizeof(IPC_Generic_Msg)) {
+            kernelLogger() << "processd: Received very small message\n" << frg::endlog;
+            break;
+        }
+        
+        IPC_Generic_Msg *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(message.data());
+        switch (ipc_msg->type) {
+        case IPC_Kernel_Receive_Right_Destroyed_NUM:
+            co_return;
+
+        case IPC_Pipe_Open_NUM: {
+            if (msg.size < sizeof(IPC_Pipe_Open)) {
+                kernelLogger() << "processd: Received IPC_Pipe_Open that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            IPC_Pipe_Open *m = reinterpret_cast<IPC_Pipe_Open *>(ipc_msg);
+            pipe_open(*m, std::move(reply_right));
+            break;
+        }
+        case IPC_Mount_FS_NUM: {
+            if (message.size() < sizeof(IPC_Mount_FS)) {
+                kernelLogger() << "posixd: Received IPC_Mount_FS that is too small from task " << msg.sender << " of size " << message.size() << "\n" << frg::endlog;
+                break;
+            }
+
+            auto *m = reinterpret_cast<IPC_Mount_FS *>(message.data());
+            std::string mountpoint(m->mount_path, message.size() - sizeof(IPC_Mount_FS));
+            mount_filesystem(std::move(reply_right), std::move(rights[0]), mountpoint, m->root_fd);
+        } break;
+        case IPC_Register_Process_NUM: {
+            if (msg.size < sizeof(IPC_Register_Process)) {
+                kernelLogger() << "processd: Received IPC_Register_Process that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            IPC_Register_Process *m = reinterpret_cast<IPC_Register_Process *>(ipc_msg);
+            register_process(m, std::move(reply_right), process, std::move(rights[0]));
             break;
         }
         default:
-            printf("processd: Unknown message type %d\n", ipc_msg->type);
+            kernelLogger() << "processd: Unknown message type " << ipc_msg->type << " from bootstrapd\n" << frg::endlog;
             break;
         }
     }
 }
 
-pmos::async::detached_task vfs_handle_messages();
-
-int main()
+void parse_args(int argc, char *argv[])
 {
-    get_messages();
+    if (argc != 3) {
+        kernelLogger() << "processd: Unexpected number of arguments " << argc << " (expected 3). Not replying to bootstrapd...\n" << frg::endlog;
+        return;
+    }
+
+    if (std::string_view(argv[1]) != "--bootstrapd_right") {
+        kernelLogger() << "processd: Unexpected argument " << argv[1] << " (expected --bootstrapd_right)\n" << frg::endlog;
+        return;
+    }
+
+    const auto numb = argv[2];
+    const auto numb_end = numb + strlen(numb);
+
+    pmos_right_t right_number;
+    auto [ptr, ec] = std::from_chars(numb, numb_end, right_number);
+    if (ec != std::errc()) {
+        kernelLogger() << "processd: Error parsing the reply port " << std::make_error_code(ec).message() << "\n" << frg::endlog;
+        return;
+    }
+    if (ptr != numb_end) {
+        kernelLogger() << "processd: Error parsing the reply port, symbols after number\n" << frg::endlog;
+        return;
+    }
+
+    auto pr = pmos::Right::from(right_number);
+    if (!pr) {
+        kernelLogger() << "processd: Error getting right from the arguments " << pr.error() << "\n" << frg::endlog;
+        return;
+    }
+
+    auto right = main_port.create_right(pmos::RightType::SendMany);
+    auto [send_right, receive_right] = std::move(right.value());
+    get_messages_bootstrapd(std::move(receive_right));
+
+    IPC_Request_Right_Reply reply = {
+        .type = IPC_Request_Right_Reply_NUM,
+        .flags = 0,
+        .result = 0,
+    };
+
+    auto r = send_message_right_one(pr.value(), reply, {}, true, std::move(send_right));
+    if (!r) {
+        kernelLogger() << "processd: Error " << r.error().first << " sending message to right " << pr.value().get() << " for bootstrapd\n" << frg::endlog;
+        return;
+    }
+}
+
+int main(int argc, char *argv[])
+{
+    kernelLogger() << "processd started\n" << frg::endlog;
+    parse_args(argc, argv);
+
+    init_devfs();
+    init_pty_filesystem();
     vfs_handle_messages();
-    dispatcher.dispatch();
+    (void)dispatcher.dispatch();
     return 0;
 }

@@ -212,10 +212,6 @@ public:
 
     virtual kresult_t map(u64 page_addr, void *virt_addr,
                           kernel::paging::Page_Table_Arguments arg) override;
-    virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr,
-                          kernel::paging::Page_Table_Arguments arg) override;
-
-    kresult_t resolve_anonymous_page(void *virt_addr, unsigned access_type) override;
 
     virtual ~RISCV64_Page_Table() override;
 
@@ -223,12 +219,6 @@ public:
     void invalidate_tlb(void *page) override;
     void invalidate_tlb(void *start, size_t size) override;
     void tlb_flush_all() override;
-
-    ReturnStr<bool> atomic_copy_to_user(void *to, const void *from, size_t size) override;
-
-    virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, void *from_addr,
-                                           void *to_addr, size_t size_bytes,
-                                           unsigned new_access) override;
 
     bool is_32bit() const noexcept { return false; }
 

@@ -95,3 +95,71 @@ failure: # failure is a bit misleading, but I couldn't come up with a better lab
     addi.d $sp, $sp, 128
 
     ret
+
+
+    .globl fast_atomic_read_from_user
+    .type fast_atomic_read_from_user, @function
+fast_atomic_read_from_user:
+    addi.d $sp, $sp, -128
+
+    st.d   $fp, $sp, 112
+    st.d   $ra, $sp, 120
+    addi.d $fp, $sp, 128
+
+    st.d   $s0, $sp, 32
+    st.d   $s1, $sp, 40
+    st.d   $s2, $sp, 48
+    st.d   $s3, $sp, 56
+    st.d   $s4, $sp, 64
+    st.d   $s5, $sp, 72
+    st.d   $s6, $sp, 80
+    st.d   $s7, $sp, 88
+    st.d   $s8, $sp, 96
+
+    # Args
+    st.d   $a0, $sp, 0 # uint32_t *to
+    st.d   $a1, $sp, 8 # const uint32_t *from
+
+    la.local $t0, read_on_failure
+    st.d   $t0, $tp, 48 # CPU_Info::jumpto_func
+    st.d   $sp, $tp, 56 # CPU_Info::jumpto_arg
+
+    ld.w   $t0, $a1, 0
+    dbar   0x14
+    st.w   $t0, $a0, 0
+
+    # Success
+    xor    $a0, $a0, $a0
+    li.d   $a1, 1
+
+    ld.d   $ra, $sp, 120
+    ld.d   $fp, $sp, 112
+    addi.d $sp, $sp, 128
+    ret
+
+read_on_failure:
+    move   $sp, $a0
+    addi.d $fp, $sp, 128
+
+    # Pass arguments
+    li.d   $a0, 1 # unsigned access
+    # faulting addr in a1
+    xor    $a2, $a2, $a2 # void *&dst = nullptr
+    xor    $a3, $a3, $a3 # const void *src = nullptr
+    xor    $a4, $a4, $a4 # size_t *size = 0
+
+    bl     user_access_page_fault
+
+    bne    $a0, $zero, failure
+    beq    $a1, $zero, failure
+
+    ld.d   $a0, $sp, 0 # uint32_t *to
+    ld.d   $a1, $sp, 8 # const uint32_t *from
+
+    ld.w   $t0, $a1, 0
+    dbar   0x14
+    st.w   $t0, $a0, 0
+
+    xor   $a0, $a0, $a0
+    li.d  $a1, 1
+    b     failure

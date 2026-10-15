@@ -17,7 +17,9 @@
 #include <syscall.hh>
 #include <pmos/containers/set.hh>
 #include <time/timers.hh>
+#include <time/x86_timers.hh>
 #include <memory/pmm.hh>
+#include <processes/syscalls.hh>
 
 using namespace kernel;
 using namespace kernel::x86;
@@ -49,8 +51,11 @@ extern "C" void fred_ring3_entry();
 extern "C" void fred_kernel_entry();
 #endif
 
-constexpr sched::CPU_Info __seg_gs const *c = nullptr;
-kernel::sched::CPU_Info *sched::get_cpu_struct() { return c->self; }
+CPU_Info *sched::get_cpu_struct() {
+    CPU_Info *cpu;
+    asm("mov %%gs:0, %0" : "=r"(cpu));
+    return cpu;
+}
 
 extern "C" void double_fault_isr();
 
@@ -481,7 +486,7 @@ void init_scheduling_on_bsp()
     prepare_apic_bsp();
 
     serial_logger.printf("Initializing interrupts and timers\n");
-    time::init_timers();
+    x86::time::init_timers();
     init_interrupts();
 
     serial_logger.printf("Initializing per-CPU structures\n");
@@ -490,7 +495,7 @@ void init_scheduling_on_bsp()
     serial_logger.printf("Initializing I/O APICs\n");
     IOAPIC::init_ioapics();
 
-    time::init_after_lapic();
+    x86::time::init_after_lapic();
 
     serial_logger.printf("Initializing ACPI trampoline\n");
     init_acpi_trampoline();
@@ -617,4 +622,10 @@ u64 arch_phys_addr_limit()
     return (u64)1 << max_memory_bits;
 }
 
+}
+
+extern "C" void x86_syscall_handler()
+{
+    syscalls::syscall_handler();
+    kernel::sched::handle_scheduling();
 }

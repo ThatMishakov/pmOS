@@ -136,3 +136,95 @@ failure:
     popl %ebp
     movl 4(%esp), %eax
     ret $4
+
+
+    .type fast_atomic_read_from_user, @function
+    .globl fast_atomic_read_from_user
+fast_atomic_read_from_user:
+    pushl %ebp
+    movl %esp, %ebp
+    pushl %esi
+    pushl %edi
+    pushl %ebx
+
+    movl %esp, %gs:28
+    leal read_failure, %eax
+    movl %eax, %gs:24
+
+    # Args:
+    # 8(%ebp) = ReturnStr<bool> *return_value
+    # 12(%ebp) = void *dst
+    # 16(%ebp) = const void *src
+
+    movl 12(%ebp), %eax
+    movl 16(%ebp), %ecx
+
+    enable_user
+    movl (%ecx), %edx
+    disable_user_fast
+
+    movl %edx, (%eax)
+
+    # Return on success
+    movl 8(%ebp), %eax
+    xorl %edx, %edx
+    movl %edx, (%eax)
+    movl %edx, 4(%eax)
+    addl $1, %edx
+    movl %edx, 8(%eax)
+
+    xorl %eax, %eax
+    movl %eax, %gs:24
+
+    popl %ebx
+    popl %edi
+    popl %esi
+    popl %ebp
+    movl 4(%esp), %eax
+    ret $4
+
+read_failure:
+    movl %eax, %esp
+    leal 16(%esp), %ebp
+
+    # Push arguments
+    pushl $0 # alignment
+    pushl $0 # size_t *size = nullptr
+    pushl $0 # const void **src = nullptr
+    pushl $0 # void **dst = nullptr
+    pushl %ecx          # const void *faultung_addr
+    pushl $1     # unsigned access = Protection::Readable
+    pushl 8(%ebp)       # ReturnStr<bool> *return_value
+
+    disable_user
+    call user_access_page_fault
+
+    leal -16(%ebp), %esp
+    movl (%eax), %ecx
+    orl  4(%eax), %ecx
+    jnz failure
+    cmpb $1, 8(%eax)
+    jne failure
+
+    movl 12(%ebp), %eax
+    movl 16(%ebp), %ecx
+
+    enable_user
+    movl (%ecx), %edx
+    disable_user_fast
+
+    movl %edx, (%eax)
+
+    # Success
+    movl 8(%ebp), %eax
+    movl $0, (%eax)
+    movl $0, 4(%eax)
+    movl $1, 8(%eax)
+    
+    movl $0, %gs:24
+    popl %ebx
+    popl %edi
+    popl %esi
+    popl %ebp
+    movl 4(%esp), %eax
+    ret $4

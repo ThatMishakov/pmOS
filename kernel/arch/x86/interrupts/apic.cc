@@ -46,6 +46,7 @@
 #include <uacpi/acpi.h>
 #include <uacpi/tables.h>
 #include <time/tsc.hh>
+#include <time/x86_timers.hh>
 #include <time/timers.hh>
 
 using namespace kernel;
@@ -267,8 +268,8 @@ bool lapic_freq_from_cpuid()
         auto c = cpuid(0x015);
         if (c.ecx) {
             u32 clock = c.ecx;
-            apic_freq = computeFreqFraction(clock, 1e9 * divisor);
-            apic_inverted_freq = computeFreqFraction(1e9 * divisor, clock);
+            apic_freq = computeFreqFraction(clock, 1'000'000'000 * divisor);
+            apic_inverted_freq = computeFreqFraction(1'000'000'000 * divisor, clock);
             return true;
         }
     }
@@ -277,8 +278,8 @@ bool lapic_freq_from_cpuid()
         auto c = cpuid(0x16);
         u16 bus_freq_mhz = c.ecx & 0xffff;
         if (bus_freq_mhz) {
-            apic_freq = computeFreqFraction(bus_freq_mhz, 1e3 * divisor);
-            apic_inverted_freq = computeFreqFraction(1e3 * divisor, bus_freq_mhz);
+            apic_freq = computeFreqFraction(bus_freq_mhz, 1'000 * divisor);
+            apic_inverted_freq = computeFreqFraction(1'000 * divisor, bus_freq_mhz);
             return true;
         }
     }
@@ -304,7 +305,7 @@ void discover_apic_freq()
     // TODO: APIC timer has a flag indicating it stops in C states on some system, use HPET instead in those cases...
     // (but this was not yet implemented by the kernel, so don't bother...)
 
-    if (!time::kernel_calibration_source)
+    if (!kernel::time::kernel_calibration_source)
         panic("No calibration source for LAPIC timer!");
 
     // Enable APIC Timer and map to dummy ISR
@@ -313,14 +314,14 @@ void discover_apic_freq()
     // Set up divide value to 16
     apic_write_reg(APIC_REG_TMRDIV, 0x03);
 
-    time::kernel_calibration_source->prepare_for_calibration();
+    kernel::time::kernel_calibration_source->prepare_for_calibration();
     // Reset APIC counter
     apic_write_reg(APIC_REG_TMRINITCNT, (u32)-1);
 
-    serial_logger.printf("[Kernel] Calibrating LAPIC with %s...\n", time::kernel_calibration_source->name());
+    serial_logger.printf("[Kernel] Calibrating LAPIC with %s...\n", kernel::time::kernel_calibration_source->name());
 
     constexpr u64 wait_time_ns = 10'000'000; // 10ms
-    u64 actual_time = time::kernel_calibration_source->wait_for_nanoseconds(wait_time_ns);
+    u64 actual_time = kernel::time::kernel_calibration_source->wait_for_nanoseconds(wait_time_ns);
 
     // Get how many ticks have passed
     u32 ticks   = -apic_read_reg(APIC_REG_TMRCURRCNT);
@@ -559,21 +560,21 @@ extern "C" void programmable_interrupt(u32 intno)
         apic_eoi();
         tpr_write(0);
         // panic?? this can't really be handled without iommu
-        return;
-    }
-
-    if (handler->send_interrupt_notification() != kernel::interrupts::NotificationResult::Success) {
-        global_logger.printf("[Kernel] Warning: Failed to send interrupt notification for interrupt %h\n", intno);
-
-        // TODO if I end up sopporting MSIs
-        auto ioapic_handler = static_cast<IOAPIC_Handler *>(handler);
-        ioapic_handler->mask_interrupt();
-        apic_eoi();
-        tpr_write(0);
-        return;
     } else {
-        tpr_write(14);
+        if (handler->send_interrupt_notification() != kernel::interrupts::NotificationResult::Success) {
+            global_logger.printf("[Kernel] Warning: Failed to send interrupt notification for interrupt %h\n", intno);
+
+            // TODO if I end up sopporting MSIs
+            auto ioapic_handler = static_cast<IOAPIC_Handler *>(handler);
+            ioapic_handler->mask_interrupt();
+            apic_eoi();
+            tpr_write(0);
+        } else {
+            tpr_write(14);
+        }
     }
+
+    kernel::sched::handle_scheduling();
 }
 
 void ::kernel::interrupts::interrupt_complete(InterruptHandler *handler)

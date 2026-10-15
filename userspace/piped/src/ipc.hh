@@ -21,7 +21,7 @@ void send_message(pmos_port_t port, const auto &data)
         throw std::system_error(-r, std::system_category());
 }
 
-void recieve_message(pmos_port_t port);
+void receive_message(pmos_port_t port);
 
 constexpr unsigned IPCRegisterConsumerType = 0xff000000;
 struct IPCPipeRegisterConsumer {

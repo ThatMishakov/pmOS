@@ -1,0 +1,49 @@
+cmake_minimum_required(VERSION 3.22)
+
+set(CMAKE_INSTALL_PREFIX "/usr")
+
+set(CMAKE_CXX_STANDARD 23)
+
+set(COMMON_FLAGS
+    -Wall -Wextra -O3 -g
+    -fPIC
+    -flto
+    -ffat-lto-objects
+)
+
+project(pmos-helpers
+    VERSION 0.1
+    DESCRIPTION "C helper library for pmOS"
+    LANGUAGES C)
+
+if (${TARGET_ARCH} STREQUAL "riscv64")
+    list(APPEND COMMON_FLAGS -march=rva20u64 -mabi=lp64d)
+endif()
+
+add_compile_options(${COMMON_FLAGS})
+add_link_options(${COMMON_FLAGS})
+
+add_library(objlib OBJECT)
+
+set(SRC_FOLDER "src")
+
+file(GLOB_RECURSE SRC
+    "${SRC_FOLDER}/*.c"
+)
+
+target_sources(objlib PRIVATE ${SRC})
+target_include_directories(objlib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+set_property(TARGET objlib PROPERTY POSITION_INDEPENDENT_CODE 1)
+
+add_library(pmos-helpers-static STATIC $<TARGET_OBJECTS:objlib>)
+add_library(pmos-helpers-shared SHARED $<TARGET_OBJECTS:objlib>)
+
+set_target_properties(pmos-helpers-static PROPERTIES OUTPUT_NAME "pmos-helpers")
+set_target_properties(pmos-helpers-shared PROPERTIES OUTPUT_NAME "pmos-helpers")
+
+install(TARGETS pmos-helpers-static pmos-helpers-shared)
+install(DIRECTORY include/ DESTINATION include)

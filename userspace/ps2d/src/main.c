@@ -29,7 +29,6 @@
 #include "ports.h"
 #include "timer.h"
 
-#include <pmos/helpers.h>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
 #include <stdio.h>
@@ -57,7 +56,7 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
 
     switch (IPC_TYPE(buff)) {
     default:
-        fprintf(stderr, "[PS2d] Warning: Recieved message of unknown type %" PRIu32 " (right %" PRIu64 "\n", IPC_TYPE(buff), desc->sent_with_right);
+        fprintf(stderr, "[PS2d] Warning: Received message of unknown type %" PRIu32 " (right %" PRIu64 "\n", IPC_TYPE(buff), desc->sent_with_right);
         break;
     }
 
@@ -119,7 +118,7 @@ int port_msg_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_
     switch (IPC_TYPE(buff)) {
     case IPC_PS2_Notify_Data_NUM: {
         if (desc->size < sizeof(IPC_PS2_Notify_Data)) {
-            fprintf(stderr, "[PS2d] Warning: Recieved IPC_PS2_Notify_Data of unexpected size %lx\n",
+            fprintf(stderr, "[PS2d] Warning: Received IPC_PS2_Notify_Data of unexpected size %lx\n",
                     desc->size);
             break;
         }
@@ -132,7 +131,7 @@ int port_msg_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_
     }
 
     default:
-        fprintf(stderr, "[PS2d] Warning: Recieved message of unknown type %" PRIu32 " from the port...\n", IPC_TYPE(buff));
+        fprintf(stderr, "[PS2d] Warning: Received message of unknown type %" PRIu32 " from the port...\n", IPC_TYPE(buff));
         break;
     }
 }
@@ -195,7 +194,7 @@ void register_with_controller()
 
     port_send_right = extra_rights[0];
     if (!port_send_right) {
-        fprintf(stderr, "[PS2d] Recieved no send right in the PS/2 register reply\n");
+        fprintf(stderr, "[PS2d] Received no send right in the PS/2 register reply\n");
         exit(1);
     }
 

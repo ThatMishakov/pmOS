@@ -26,7 +26,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <acpi/acpi.h>
 #include <alloca.h>
 #include <assert.h>
 #include <errno.h>
@@ -48,6 +47,8 @@
 #include <uacpi/utilities.h>
 #include <pmos/pmbus_helper.h>
 #include <pmos/helpers.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
 extern pmos_port_t main_port;
 
@@ -86,7 +87,7 @@ void parse_interrupt_table(struct PCIHostBridge *g, int bus, uacpi_pci_routing_t
 void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_t function,
                     struct PCIDevice *parent_bridge, uacpi_namespace_node *node)
 {
-    struct PCIDevicePtr p;
+    struct PCIDevicePtr p = {};
     fill_device(&p, g, bus, device, function);
     printf("!! PCI group %i bus %i device %i function %i vendor %x device %x", g->group_number, bus,
            device, function, pci_vendor_id(&p), pci_device_id(&p));
@@ -492,10 +493,12 @@ static void pci_setup_ecam(struct PCIHostBridge *b, uacpi_namespace_node *node)
         uint64_t phys_start = start;
         uint64_t phys_end   = phys_start + size;
 
+        const uint64_t page_size = getpagesize();
+
         // Align to page just in case
-        static const uint64_t page_mask = ~((uint64_t)PAGE_SIZE - 1);
+        const uint64_t page_mask = ~(page_size - 1);
         phys_start &= page_mask;
-        phys_end = (phys_end + PAGE_SIZE - 1) & page_mask;
+        phys_end = (phys_end + page_size - 1) & page_mask;
 
         mem_request_ret_t t = create_phys_map_region(0, NULL, phys_end - phys_start,
                                                      PROT_READ | PROT_WRITE, phys_start);
@@ -504,7 +507,7 @@ static void pci_setup_ecam(struct PCIHostBridge *b, uacpi_namespace_node *node)
             return;
         }
         // printf("ECAM %lx %lx\n", t.virt_addr, phys_end - phys_start);
-        void *ptr = (char *)t.virt_addr + (ecam_base_0 % PAGE_SIZE) - (start - ecam_base_0);
+        void *ptr = (char *)t.virt_addr + (ecam_base_0 % page_size) - (start - ecam_base_0);
 
         b->ecam.base_addr = ecam_base_0;
         b->ecam.base_ptr  = ptr;
@@ -735,71 +738,71 @@ int pcicdevice_compare(const void *aa, const void *bb)
     return (*a)->function - (*b)->function;
 }
 
-void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d)
-{
-    int e;
-    size_t requests = (desc->size - sizeof(IPC_Request_PCI_Devices)) / sizeof(struct IPC_PCIDevice);
-    VECTOR(struct IPC_PCIDeviceLocation) devices = VECTOR_INIT;
+// void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d)
+// {
+//     int e;
+//     size_t requests = (desc->size - sizeof(IPC_Request_PCI_Devices)) / sizeof(struct IPC_PCIDevice);
+//     VECTOR(struct IPC_PCIDeviceLocation) devices = VECTOR_INIT;
 
-    struct PCIDevice *dd;
-    int result = 0;
-    VECTOR_FOREACH(pci_devices, dd)
-    {
-        for (size_t i = 0; i < requests; ++i) {
-            if (d->devices[i].vendor_id != 0xffff && d->devices[i].vendor_id != dd->vendor_id)
-                continue;
+//     struct PCIDevice *dd;
+//     int result = 0;
+//     VECTOR_FOREACH(pci_devices, dd)
+//     {
+//         for (size_t i = 0; i < requests; ++i) {
+//             if (d->devices[i].vendor_id != 0xffff && d->devices[i].vendor_id != dd->vendor_id)
+//                 continue;
 
-            if (d->devices[i].device_id != 0xffff && d->devices[i].device_id != dd->device_id)
-                continue;
+//             if (d->devices[i].device_id != 0xffff && d->devices[i].device_id != dd->device_id)
+//                 continue;
 
-            if (d->devices[i].class_code != 0xff && d->devices[i].class_code != dd->class_code)
-                continue;
+//             if (d->devices[i].class_code != 0xff && d->devices[i].class_code != dd->class_code)
+//                 continue;
 
-            if (d->devices[i].subclass != 0xff && d->devices[i].subclass != dd->subclass)
-                continue;
+//             if (d->devices[i].subclass != 0xff && d->devices[i].subclass != dd->subclass)
+//                 continue;
 
-            // if (d->devices[i].prog_if != 0xff &&
-            //     d->devices[i].prog_if != dd.prog_if)
-            //     continue;
+//             // if (d->devices[i].prog_if != 0xff &&
+//             //     d->devices[i].prog_if != dd.prog_if)
+//             //     continue;
 
-            VECTOR_PUSH_BACK_CHECKED(devices,
-                                     ((struct IPC_PCIDeviceLocation) {
-                                         .group    = dd->group,
-                                         .bus      = dd->bus,
-                                         .device   = dd->device,
-                                         .function = dd->function,
-                                     }),
-                                     result);
-            if (result != 0)
-                goto error;
-            break;
-        }
-    }
+//             VECTOR_PUSH_BACK_CHECKED(devices,
+//                                      ((struct IPC_PCIDeviceLocation) {
+//                                          .group    = dd->group,
+//                                          .bus      = dd->bus,
+//                                          .device   = dd->device,
+//                                          .function = dd->function,
+//                                      }),
+//                                      result);
+//             if (result != 0)
+//                 goto error;
+//             break;
+//         }
+//     }
 
-    size_t reply_size =
-        sizeof(IPC_Request_PCI_Devices_Reply) + devices.size * sizeof(struct IPC_PCIDeviceLocation);
-    IPC_Request_PCI_Devices_Reply *reply = alloca(reply_size);
+//     size_t reply_size =
+//         sizeof(IPC_Request_PCI_Devices_Reply) + devices.size * sizeof(struct IPC_PCIDeviceLocation);
+//     IPC_Request_PCI_Devices_Reply *reply = alloca(reply_size);
 
-    reply->type                  = IPC_Request_PCI_Devices_NUM;
-    reply->flags                 = 0;
-    reply->result_num_of_devices = devices.size;
-    memcpy(reply->devices, devices.data, devices.size * sizeof(struct IPC_PCIDeviceLocation));
+//     reply->type                  = IPC_Request_PCI_Devices_NUM;
+//     reply->flags                 = 0;
+//     reply->result_num_of_devices = devices.size;
+//     memcpy(reply->devices, devices.data, devices.size * sizeof(struct IPC_PCIDeviceLocation));
 
-    send_message_port(d->reply_port, reply_size, (char *)reply);
-    return;
-error:
-    e = -errno;
+//     send_message_port(d->reply_port, reply_size, (char *)reply);
+//     return;
+// error:
+//     e = -errno;
 
-    fprintf(stderr, "Error: Could not allocate IPC_PCIDeviceLocation: %i\n", errno);
+//     fprintf(stderr, "Error: Could not allocate IPC_PCIDeviceLocation: %i\n", errno);
 
-    IPC_Request_PCI_Devices_Reply reply_e = {
-        .type                  = IPC_Request_PCI_Devices_NUM,
-        .flags                 = 0,
-        .result_num_of_devices = e,
-    };
+//     IPC_Request_PCI_Devices_Reply reply_e = {
+//         .type                  = IPC_Request_PCI_Devices_NUM,
+//         .flags                 = 0,
+//         .result_num_of_devices = e,
+//     };
 
-    send_message_port(d->reply_port, sizeof(reply_e), (char *)&reply_e);
-}
+//     send_message_port(d->reply_port, sizeof(reply_e), (char *)&reply_e);
+// }
 
 struct PCIDevice *find_pci_device_descriptor(struct PCIHostBridge *g, uint8_t bus, uint8_t device,
                                              uint8_t function)
@@ -1079,6 +1082,7 @@ void request_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *
     uint32_t vector = 0;
     bool active_low = false;
     bool level_trig = false;
+    right_request_t irq_right = {};
 
     message_extra_t extra = {0};
 
@@ -1104,7 +1108,7 @@ void request_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *
     if (level_trig)
         flags |= PMOS_INTERRUPT_LEVEL_TRIG;
 
-    right_request_t irq_right = allocate_interrupt(vector, flags);
+    irq_right = allocate_interrupt(vector, flags);
     if (irq_right.result != 0) {
         fprintf(stderr, "Failed to allocate interrupt for GSI %u: %i (%s)\n", vector, (int)irq_right.result,
                strerror(-irq_right.result));

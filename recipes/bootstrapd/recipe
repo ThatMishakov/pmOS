@@ -1,0 +1,23 @@
+#!/bin/sh
+
+version=0.0.1
+revision=1
+
+source_dir=userspace/bootstrapd
+deps="mlibc mlibc-headers pmos-helpers $CXX_DEPS"
+hostdeps="$TOOLCHAIN_DEPS"
+allow_network=yes
+
+# TODO: Move libyaml to a separate recipe
+
+configure() {
+    cmake_configure
+}
+
+build() {
+    make -j ${parallelism}
+}
+
+package() {
+    DESTDIR="${dest_dir}" make install
+}

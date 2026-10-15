@@ -1,5 +1,8 @@
 #include <pmos/ipc/bus_object.hh>
 #include <system_error>
+#include <cerrno>
+#include <cstdlib>
+#include <cstring>
 
 template<class... Ts>
 struct overloads : Ts... { using Ts::operator()...; };
@@ -47,7 +50,7 @@ std::vector<uint8_t> BUSObject::serialize_properties()
             buffer.insert(buffer.end(), alignment, 0);
 
             result.insert(result.end(), buffer.begin(), buffer.end());
-        } else {
+        } else if (auto val = std::get_if<uint64_t>(&p.second); val) {
             const uint64_t i = std::get<uint64_t>(p.second);
 
             auto name_length = p.first.size() + 1;
@@ -70,6 +73,35 @@ std::vector<uint8_t> BUSObject::serialize_properties()
             auto val_ptr = reinterpret_cast<const uint8_t *>(&i);
             buffer.insert(buffer.end(), val_ptr, val_ptr + sizeof(uint64_t));
 
+            result.insert(result.end(), buffer.begin(), buffer.end());
+        } else if (auto val = std::get_if<std::vector<std::string>>(&p.second); val) {
+            auto &vec = std::get<std::vector<std::string>>(p.second);
+
+            auto name_length = p.first.size() + 1;
+            auto entries_length = 0;
+            for (const auto &s: vec) {
+                entries_length += s.size() + 1;
+            }
+            auto total_size = struct_size + name_length + entries_length;
+            auto alignment = (8 - (total_size % 8)) % 8;
+        
+            std::vector<uint8_t> buffer;
+            buffer.reserve(total_size + alignment);
+
+            IPC_Object_Property prop = {
+                .length = static_cast<uint16_t>(total_size + alignment),
+                .type = PROPERTY_TYPE_LIST,
+                .data_start = static_cast<uint8_t>(struct_size + name_length),
+            };
+            auto ptr = reinterpret_cast<const uint8_t *>(&prop);
+            buffer.insert(buffer.end(), ptr, ptr + sizeof(prop));
+            auto name_ptr = reinterpret_cast<const uint8_t *>(p.first.c_str());
+            buffer.insert(buffer.end(), name_ptr, name_ptr + name_length);
+            for (const auto &s: vec) {
+                auto str_ptr = reinterpret_cast<const uint8_t *>(s.c_str());
+                buffer.insert(buffer.end(), str_ptr, str_ptr + s.size() + 1);
+            }
+            buffer.resize(buffer.size() + alignment, 0);
             result.insert(result.end(), buffer.begin(), buffer.end());
         }
     }
@@ -230,6 +262,68 @@ static void filter_serialize_push_back(std::vector<uint8_t> &vec, const AnyFilte
     std::visit(visitor, filter);
 }
 
+AnyFilter deserialize_filter(std::span<const uint8_t> data)
+{
+    if (data.empty())
+        return NoFilter{};
+
+    if (data.size() < sizeof(uint32_t))
+        throw std::system_error(EINVAL, std::system_category(), "filter data too small for type");
+
+    const auto type = *reinterpret_cast<const uint32_t *>(data.data());
+    switch (type) {
+    case PMOS_BUS_FILTER_EQUALS_TYPE: {
+        if (data.size() < sizeof(EqualsFilterBinary))
+            throw std::system_error(EINVAL, std::system_category(), "filter data too small for EqualsFilterBinary");
+
+        const auto *binary = reinterpret_cast<const EqualsFilterBinary *>(data.data());
+        if (data.size() < binary->total_size)
+            throw std::system_error(EINVAL, std::system_category(), "filter data too small for total size");
+
+        const char *key_ptr = reinterpret_cast<const char *>(data.data() + sizeof(EqualsFilterBinary));
+        const char *value_ptr = key_ptr + binary->key_len + 1;
+
+        if (sizeof(EqualsFilterBinary) + binary->key_len + 1 + binary->value_len + 1 > binary->total_size)
+            throw std::system_error(EINVAL, std::system_category(), "filter data too small for key and value");
+
+        return EqualsFilter(std::string(key_ptr, binary->key_len), std::string(value_ptr, binary->value_len));
+    }
+    case PMOS_BUS_FILTER_CONJUNCTION_TYPE:
+    case PMOS_BUS_FILTER_DISJUNCTION_TYPE: {
+        if (data.size() < sizeof(ConDisFilterBinary))
+            throw std::system_error(EINVAL, std::system_category(), "filter data too small for ConDisFilterBinary");
+
+        const auto *binary = reinterpret_cast<const ConDisFilterBinary *>(data.data());
+        if (data.size() < binary->total_size)
+            throw std::system_error(EINVAL, std::system_category(), "filter data too small for total size");
+
+        std::vector<AnyFilter> operands;
+        size_t offset = sizeof(ConDisFilterBinary);
+        while (offset < binary->total_size) {
+            if (offset + sizeof(ConDisFilterBinary) > binary->total_size)
+                throw std::system_error(EINVAL, std::system_category(), "filter data too small for next operand type");
+
+            auto next_binary = reinterpret_cast<const ConDisFilterBinary *>(data.data() + offset);
+            if (next_binary->total_size < sizeof(ConDisFilterBinary))
+                throw std::system_error(EINVAL, std::system_category(), "filter operand too small");
+            if (next_binary->total_size > binary->total_size - offset)
+                throw std::system_error(EINVAL, std::system_category(), "filter operand overflows parent");
+
+            auto operand = deserialize_filter(data.subspan(offset));
+            operands.push_back(std::move(operand));
+            offset += next_binary->total_size;
+        }
+
+        if (type == PMOS_BUS_FILTER_CONJUNCTION_TYPE)
+            return Conjunction(std::move(operands));
+        else
+            return Disjunction(std::move(operands));
+    }
+    default:
+        throw std::system_error(EINVAL, std::system_category(), "unknown filter type");
+    }
+}
+
 std::vector<uint8_t> serialize_filter_ipc(const AnyFilter &filter, uint64_t from_sequence_number)
 {
     std::vector<uint8_t> result;
@@ -247,14 +341,14 @@ std::vector<uint8_t> serialize_filter_ipc(const AnyFilter &filter, uint64_t from
     return result;
 }
 
-BUSObject BUSObject::deserialize(std::span<uint8_t> data)
+BUSObject BUSObject::deserialize(std::span<const uint8_t> data)
 {
     BUSObject ret{};
 
     if (data.size() < sizeof(IPC_Bus_Object))
         throw std::system_error(EINTR, std::system_category());
 
-    IPC_Bus_Object *object = reinterpret_cast<IPC_Bus_Object *>(data.data());
+    const IPC_Bus_Object *object = reinterpret_cast<const IPC_Bus_Object *>(data.data());
 
     size_t size = object->size;
     size_t name_length = object->name_length;
@@ -278,15 +372,13 @@ BUSObject BUSObject::deserialize(std::span<uint8_t> data)
         if (size - properties_offset < sizeof(IPC_Object_Property))
             throw std::system_error(EINTR, std::system_category(), "last property smaller than its header");
 
-        auto property = reinterpret_cast<IPC_Object_Property *>(data.data() + properties_offset);
+        auto property = reinterpret_cast<const IPC_Object_Property *>(data.data() + properties_offset);
         if (size - properties_offset < property->length)
             throw std::system_error(EINTR, std::system_category(), "property size overflows object");
 
-        // Bad length (namely, this would loop infinitely if it's 0 for some reason, and this slips through other checks...)
         if (property->length < sizeof(IPC_Object_Property))
             throw std::system_error(EINTR, std::system_category(), "property length too small");
 
-        // data_start beyong the length
         if (property->data_start < sizeof(IPC_Object_Property) || property->data_start > property->length)
             throw std::system_error(EINTR, std::system_category(), "property data start beyond the length");
 
@@ -343,5 +435,49 @@ std::optional<BUSObject::property> BUSObject::get_property(std::string_view name
 }
 
 Conjunction::Conjunction(std::vector<AnyFilter> operands): operands_(std::move(operands)) {}
+Disjunction::Disjunction(std::vector<AnyFilter> operands): operands_(std::move(operands)) {}
+
+bool filter_matches(const AnyFilter &filter, const BUSObject &object) noexcept
+{
+    const auto visitor = overloads
+    {
+        [&](const EqualsFilter &f) -> bool {
+            auto prop = object.get_property(f.name());
+            if (!prop)
+                return false;
+
+            if (auto val = std::get_if<std::string>(&*prop); val)
+                return *val == f.value();
+            else if (auto val = std::get_if<uint64_t>(&*prop); val) {
+                const char *s = f.value().c_str();
+                char *end = nullptr;
+                errno = 0;
+                unsigned long long parsed = std::strtoull(s, &end, 0);
+                if (errno != 0 || end == s || *end != '\0')
+                    return false;
+                return *val == static_cast<uint64_t>(parsed);
+            } else if (auto val = std::get_if<std::vector<std::string>>(&*prop); val)
+                return std::find(val->begin(), val->end(), f.value()) != val->end();
+            else
+                return false;
+        },
+        [&](const Conjunction &f) -> bool {
+            for (const auto &operand: f.operands())
+                if (!filter_matches(operand, object))
+                    return false;
+            return true;
+        },
+        [&](const Disjunction &f) -> bool {
+            for (const auto &operand: f.operands())
+                if (filter_matches(operand, object))
+                    return true;
+            return false;
+        },
+        [&](const NoFilter &) -> bool {
+            return true;
+        },
+    };
+    return std::visit(visitor, filter);
+}
 
 }

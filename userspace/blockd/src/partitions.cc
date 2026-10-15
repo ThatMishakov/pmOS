@@ -1,6 +1,7 @@
 #include "partitions.hh"
 
 #include <array>
+#include <cstring>
 
 bool guid_zero(const uint8_t *guid)
 {

@@ -135,3 +135,19 @@ kresult_t TaskDescriptor::init_fp_state()
 
     return 0;
 }
+
+kresult_t TaskDescriptor::inherit_registers_from_current()
+{
+    auto current = sched::get_current_task();
+    assert(current);
+
+    current->before_task_switch();
+
+    regs = current->regs;
+    memcpy(fp_registers.get(), current->fp_registers.get(),
+           fp_register_size(max_supported_fp_level) * 2 * sizeof(u64));
+
+    current->after_task_switch();
+
+    return 0;
+}

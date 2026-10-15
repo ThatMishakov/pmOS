@@ -37,6 +37,7 @@
 #include <types.hh>
 #include <errno.h>
 #include <string_view>
+#include <cstring>
 
 namespace klib
 {

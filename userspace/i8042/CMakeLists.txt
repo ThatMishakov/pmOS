@@ -1,22 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
-set(TOOLCHAIN_PREFIX "${TARGET_ARCH}-pmos")
-
-SET(CMAKE_C_COMPILER_TARGET ${TOOLCHAIN_PREFIX})
-SET(CMAKE_ASM_COMPILER_TARGET ${TOOLCHAIN_PREFIX})
-SET(CMAKE_CXX_COMPILER_TARGET ${TOOLCHAIN_PREFIX})
-
-set(CMAKE_C_COMPILER "clang")
-set(CMAKE_CXX_COMPILER "clang++")
-set(CMAKE_ASM_COMPILER "clang")
-set(CMAKE_AR "llvm-ar")
-
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -O2 -pipe")
 set(CMAKE_C_FLAGS "-Wall -Wextra -O2 -pipe")
-
-if(CMAKE_C_COMPILER_TARGET MATCHES "^i[3-6]86-pmos$")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lclang_rt.builtins-i386")
-endif()
 
 project(i8042 C)
 
@@ -27,5 +12,7 @@ file(GLOB_RECURSE GENERIC_SRC
 
 add_executable(i8042 ${GENERIC_SRC})
 set_property(TARGET i8042 PROPERTY C_STANDARD 23)
+
+target_link_libraries(i8042 PRIVATE pmos-helpers)
 
 install(TARGETS i8042 RUNTIME DESTINATION "/boot")

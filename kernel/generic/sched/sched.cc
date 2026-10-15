@@ -60,36 +60,9 @@ sched_queue paused;
 memory::RCU paging_rcu;
 memory::RCU heap_rcu;
 
-klib::vector<CPU_Info *> cpus;
+pmos::containers::vector<CPU_Info *> cpus;
 
 size_t get_cpu_count() noexcept { return cpus.size(); }
-
-ReturnStr<u64> block_current_task(ipc::Port *ptr)
-{
-    // TODO: This function has a strange return value
-    auto task = get_cpu_struct()->current_task;
-
-    // t_print_bochs("Blocking %i (%s) by port\n", task->pid, task->name.c_str());
-
-    Auto_Lock_Scope scope_lock(task->sched_lock);
-    // If the task is dying, don't block it
-    if (task->status == TaskStatus::TASK_DYING)
-        return {0, 0};
-
-    task->status       = TaskStatus::TASK_BLOCKED;
-    task->blocked_by   = ptr;
-    task->parent_queue = &blocked;
-
-    {
-        Auto_Lock_Scope scope_l(blocked.lock);
-        blocked.push_back(task);
-    }
-
-    // Task switch
-    find_new_process();
-
-    return {0, 0};
-}
 
 size_t number_of_cpus = 1;
 
@@ -106,9 +79,7 @@ size_t number_of_cpus = 1;
 
 void push_ready(TaskDescriptor *p)
 {
-    if (p->status != TaskStatus::TASK_DYING)
-        // Carry dying status, set to ready otherwise
-        p->status = TaskStatus::TASK_READY;
+    p->status = TaskStatus::TASK_READY;
 
     const auto priority           = p->priority;
     const priority_t priority_lim = global_sched_queues.size();
@@ -168,12 +139,6 @@ void CPU_Info::SchedulerTimerNode::fire()
     } else {
         c->sched_timer(assign_quantum_on_priority(current->priority));
     }
-
-    while (c->current_task->status == TaskStatus::TASK_DYING) {
-        c->current_task->cleanup();
-
-        find_new_process();
-    }
 }
 
 void cpu_timer_interrupt()
@@ -213,6 +178,34 @@ void start_scheduler()
     s->sched_timer(assign_quantum_on_priority(t->priority));
 }
 
+void handle_scheduling()
+{
+    auto c = get_cpu_struct();
+    do {
+        auto current_task = c->current_task;
+        u32 mask;
+
+        {
+            Auto_Lock_Scope lock(current_task->sched_lock);
+            mask = current_task->sched_pending_mask;
+        }
+        
+        if (!(mask & (TaskDescriptor::SCHED_FLAG_PAUSE | TaskDescriptor::SCHED_FLAG_TERMINATE)) && !current_task->continuation_func)
+            break;
+
+        if (mask & TaskDescriptor::SCHED_FLAG_TERMINATE) {
+            current_task->cleanup();
+            continue;
+        }
+
+        if (mask & TaskDescriptor::SCHED_FLAG_PAUSE)
+            panic("SCHED_FLAG_PAUSE not implemented");
+
+        if (current_task->continuation_func)
+            current_task->continuation_func(current_task);
+    } while (true);
+}
+
 void reschedule()
 {
     auto *const cpu_str         = get_cpu_struct();
@@ -229,19 +222,12 @@ void reschedule()
         push_ready(current_task);
     }
 
-    while (cpu_str->current_task->status == TaskStatus::TASK_DYING) {
-        auto t = cpu_str->current_task;
-        t->cleanup();
-
-        find_new_process();
-    }
-
-    while (cpu_str->current_task->sched_pending_mask & TaskDescriptor::SCHED_PENDING_PAUSE) {
+    while (cpu_str->current_task->sched_pending_mask & TaskDescriptor::SCHED_FLAG_PAUSE) {
         auto current_task = cpu_str->current_task;
 
         {
             Auto_Lock_Scope l(current_task->sched_lock);
-            if (current_task->status != TaskStatus::TASK_DYING) {
+            if (!current_task->is_terminating()) {
                 current_task->status = TaskStatus::TASK_PAUSED;
 
                 current_task->parent_queue = &paused;
@@ -309,11 +295,6 @@ void find_new_process()
 
     TaskDescriptor *next_task = cpu_str.atomic_pick_highest_priority();
 
-    while (next_task and next_task->status == TaskStatus::TASK_DYING) {
-        next_task->cleanup();
-        next_task = cpu_str.atomic_pick_highest_priority();
-    }
-
     if (not next_task)
         next_task = cpu_str.idle_task;
 
@@ -327,12 +308,12 @@ void find_new_process()
 
 quantum_t assign_quantum_on_priority(priority_t priority)
 {
-    static const quantum_t quantums[16] = {50, 50, 20, 20, 10, 10, 10, 5, 5, 5, 5, 5, 5, 5, 5, 5};
+    static const quantum_t quantums[16] = {50, 50, 20, 20, 20, 20, 20, 20, 10, 10, 10, 10, 5, 5, 5, 5};
 
     if (priority < 16)
         return quantums[priority];
 
-    return 100;
+    return 0;
 }
 
 TaskDescriptor *CPU_Info::atomic_get_front_priority(priority_t priority)
@@ -348,11 +329,6 @@ TaskDescriptor *CPU_Info::atomic_get_front_priority(priority_t priority)
     }
 
     return nullptr;
-}
-
-bool unblock_if_needed(TaskDescriptor *p, ipc::Port *compare_blocked_by)
-{
-    return p->atomic_unblock_if_needed(compare_blocked_by);
 }
 
 bool cpu_struct_works  = false;
@@ -377,32 +353,20 @@ void check_synchronous_ipis()
 
 } // namespace kernel::sched
 
-void TaskDescriptor::atomic_block_by_page(void *page, sched_queue *blocked_ptr)
+void TaskDescriptor::atomic_block_by_page(void *page)
 {
     assert(status != TaskStatus::TASK_BLOCKED && "task cannot be blocked twice");
 
     // t_print_bochs("Blocking %i (%s) by page. CPU %i\n", this->pid, this->name.c_str(),
     // get_cpu_struct()->cpu_id);
+    
+    assert(page_table);
+    page_table->atomic_push_blocked_task(this, page);
 
-    Auto_Lock_Scope scope_lock(sched_lock);
-    // If the task is dying, don't actually block it
-    if (status == TaskStatus::TASK_DYING)
-        return;
+    atomic_block_self(TaskDescriptor::SCHED_WAKE_MEMORY);
 
-    status          = TaskStatus::TASK_BLOCKED;
-    page_blocked_by = page;
-
-    if (get_cpu_struct()->current_task == this) {
-        find_new_process();
-    } else if (parent_queue) {
-        Auto_Lock_Scope scope_l(parent_queue->lock);
-        parent_queue->erase(this);
-    }
-
-    {
-        Auto_Lock_Scope scope_l(blocked_ptr->lock);
-        blocked_ptr->push_back(this);
-    }
+    if (!page_table->page_pending(page))
+        atomic_handle_unblock(TaskDescriptor::SCHED_WAKE_MEMORY);
 }
 
 void TaskDescriptor::unblock() noexcept
@@ -416,11 +380,6 @@ void TaskDescriptor::unblock() noexcept
         TaskDescriptor *current_task = get_cpu_struct()->current_task;
 
         if (current_task->priority > priority) {
-            if (status == TaskStatus::TASK_DYING) {
-                cleanup();
-                return;
-            }
-
             {
                 Auto_Lock_Scope scope_l(current_task->sched_lock);
                 switch_to();
@@ -461,10 +420,7 @@ void TaskDescriptor::switch_to()
     c->current_task->before_task_switch();
 
     // Switch task
-    if (status != TaskStatus::TASK_DYING)
-        // If the task is dying, don't change its status and let the scheduler handle it when
-        // returning from the kernel
-        status = TaskStatus::TASK_RUNNING;
+    status = TaskStatus::TASK_RUNNING;
 
     c->current_task_priority = priority;
     c->current_task          = this;
@@ -474,39 +430,20 @@ void TaskDescriptor::switch_to()
     c->sched_timer(assign_quantum_on_priority(priority));
 }
 
-bool TaskDescriptor::atomic_try_unblock_by_page(void *page)
-{
-    Auto_Lock_Scope scope_lock(sched_lock);
+// bool TaskDescriptor::atomic_try_unblock_by_page(void *page)
+// {
+//     Auto_Lock_Scope scope_lock(sched_lock);
 
-    if (status != TaskStatus::TASK_BLOCKED)
-        return false;
+//     if (status != TaskStatus::TASK_BLOCKED)
+//         return false;
 
-    if (page_blocked_by != page)
-        return false;
+//     if (page_blocked_by != page)
+//         return false;
 
-    page_blocked_by = 0;
-    unblock();
-    return true;
-}
-
-bool TaskDescriptor::atomic_unblock_if_needed(ipc::Port *ptr)
-{
-    bool unblocked = false;
-    Auto_Lock_Scope scope_lock(sched_lock);
-
-    if (status != TaskStatus::TASK_BLOCKED)
-        return unblocked;
-
-    if (page_blocked_by != 0)
-        return unblocked;
-
-    if (ptr and blocked_by == ptr) {
-        unblocked = true;
-
-        unblock();
-    }
-    return unblocked;
-}
+//     page_blocked_by = 0;
+//     unblock();
+//     return true;
+// }
 
 void TaskDescriptor::atomic_erase_from_queue(sched_queue *q) noexcept
 {

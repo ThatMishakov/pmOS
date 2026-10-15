@@ -1,7 +1,6 @@
 #include "pci.hh"
 
 #include <errno.h>
-#include <pmos/helpers.h>
 #include <pmos/helpers.hh>
 #include <pmos/ipc.h>
 #include <pmos/memory.h>
@@ -18,15 +17,15 @@ extern pmos::PortDispatcher dispatcher;
 
 // TODO: pthread stuff
 
-pmos::RecieveRight send_devicesd(auto &request, pmos::Port *reply_port)
+pmos::ReceiveRight send_devicesd(auto &request, pmos::Port *reply_port)
 {
     auto r =
         send_message_right_one(device_right, request, {reply_port, pmos::RightType::SendOnce});
     if (!r) {
         // TODO: Eventually don't throw
-        printf("Failed to send message to devicesd: %i (%s)\n", (int)r.error(),
-               strerror(r.error()));
-        throw std::system_error(r.error(), std::generic_category(),
+        printf("Failed to send message to devicesd: %i (%s)\n", (int)r.error().first,
+               strerror(r.error().first));
+        throw std::system_error(r.error().first, std::generic_category(),
                                 "Failed to send message to devicesd");
     }
     return std::move(*r);
@@ -110,7 +109,7 @@ pmos::async::task<uint8_t> PCIDevice::readb(uint16_t offset)
 
 pmos::async::task<uint8_t> PCIDevice::interrupt_pin() noexcept { return readb(0x3d); }
 
-pmos::async::task<pmos::RecieveRight> PCIDevice::register_interrupt()
+pmos::async::task<pmos::ReceiveRight> PCIDevice::register_interrupt()
 {
     auto int_pin = co_await interrupt_pin();
     if (int_pin < 1 or int_pin > 4)

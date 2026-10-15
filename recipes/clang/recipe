@@ -1,0 +1,5 @@
+#!/bin/sh
+
+version=23.1.2
+git_url=https://gitlab.com/mishakov/llvm-pmos.git
+commit="dbc6c8cbd5f0836361244c6b968d5c50f4a28c03"

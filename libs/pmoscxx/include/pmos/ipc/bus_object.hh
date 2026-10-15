@@ -31,7 +31,7 @@ public:
     std::vector<uint8_t> serialize();
     std::vector<uint8_t> serialize_into_ipc();
 
-    static BUSObject deserialize(std::span<uint8_t> serialized_data);
+    static BUSObject deserialize(std::span<const uint8_t> serialized_data);
 private:
     std::string name;
     std::map<std::string, property, std::less<>> properties;
@@ -93,5 +93,9 @@ std::vector<uint8_t> serialize_filter(const AnyFilter &filter);
 std::vector<uint8_t> serialize_filter_ipc(const AnyFilter &filter, uint64_t from_sequence_number);
 
 size_t filter_serialized_size(const AnyFilter &filter);
+
+AnyFilter deserialize_filter(std::span<uint8_t const> span);
+
+bool filter_matches(const AnyFilter &filter, const BUSObject &object) noexcept;
 
 } // namespace pmos::ipc

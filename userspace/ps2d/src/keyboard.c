@@ -155,7 +155,7 @@ extern struct pmbus_helper *main_pmbus_helper;
 static int keyboard_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right,
                      pmos_right_t *extra_rights, void *ctx, struct pmos_msgloop_data *)
 {
-    printf("Keyboard callback recieved a message...\n");
+    printf("Keyboard callback received a message...\n");
     return PMOS_MSGLOOP_CONTINUE;
 }
 
@@ -178,15 +178,15 @@ static void pmbus_callback(int status, uint64_t sequence_number, void *ctx, stru
 
 void register_keyboard()
 {
-    pmos_right_t recieve_right;
-    right_request_t req = create_right(main_port, &recieve_right, 0);
+    pmos_right_t receive_right;
+    right_request_t req = create_right(main_port, &receive_right, 0);
     if (req.result) {
         fprintf(stderr, "[PS2d] Failed to create right for a keyboard: %i (%s)...\n", (int)req.result, strerror(-(int)req.result));
         exit(1);
     }
-    kb_state.receive_right = recieve_right;
+    kb_state.receive_right = receive_right;
 
-    pmos_msgloop_node_set(&kb_state.node, recieve_right, keyboard_callback, NULL);
+    pmos_msgloop_node_set(&kb_state.node, receive_right, keyboard_callback, NULL);
     pmos_msgloop_insert(&msgloop_data, &kb_state.node);
 
     pmos_bus_object_t *obj = pmos_bus_object_create();
@@ -215,7 +215,7 @@ void register_keyboard()
         fprintf(stderr, "[PS2d] Failed to allocate memory\n");
         exit(1);
     }
-    *right = recieve_right;
+    *right = receive_right;
 
     int result = pmbus_helper_publish(main_pmbus_helper, obj, req.right, pmbus_callback, right);
     if (result) {
@@ -227,7 +227,7 @@ void register_keyboard()
 
 void unregister_keyboard() {
     if (kb_state.receive_right) {
-        delete_receive_right(main_port, kb_state.receive_right);
+        delete_receive_right(main_port, kb_state.receive_right, 0);
         pmos_msgloop_erase(&msgloop_data, &kb_state.node);
         kb_state.receive_right = 0;
     }

@@ -29,6 +29,7 @@
 #pragma once
 #include "defs.hh"
 #include "sched_queue.hh"
+#include "timer_node.hh"
 
 #include <array>
 #include <interrupts/interrupt_handler.hh>
@@ -38,7 +39,7 @@
 #include <lib/splay_tree_map.hh>
 #include <lib/stack.hh>
 #include <lib/string.hh>
-#include <lib/vector.hh>
+#include <pmos/containers/vector.hh>
 #include <memory/rcu.hh>
 #include <memory/temp_mapper.hh>
 #include <messaging/messaging.hh>
@@ -55,19 +56,14 @@
 #elif defined(__riscv)
     #include <cpus/floating_point.hh>
     #include <paging/riscv64_temp_mapper.hh>
+#elif defined(__m68k__)
+    #include <paging/m68k_temp_mapper.hh>
 #elif defined(__loongarch64)
     struct EIOPIC;
 #endif
 
 namespace kernel::sched
 {
-
-// Checks the mask and unblocks the task if needed
-// This function needs to be axed
-bool unblock_if_needed(proc::TaskDescriptor *p, ipc::Port *compare_blocked_by);
-
-// Blocks current task, setting blocked_by to *ptr*.
-ReturnStr<u64> block_current_task(ipc::Port *ptr);
 
 extern sched_queue blocked;
 extern sched_queue uninit;
@@ -77,12 +73,6 @@ inline klib::array<sched_queue, sched_queues_levels> global_sched_queues;
 
 extern memory::RCU paging_rcu;
 extern memory::RCU heap_rcu;
-
-struct TimerNode {
-    pmos::containers::RBTreeNode<TimerNode> node;
-    u64 fire_at_ns = 0;
-    virtual void fire() = 0;
-};
 
 struct AttentionNode {
     pmos::containers::DoubleListHead<AttentionNode> attention_list_node;
@@ -99,9 +89,6 @@ struct CPU_Info {
     proc::TaskDescriptor *idle_task    = nullptr; // 40 20
     void *jumpto_func                  = nullptr; // 48 24
     ulong jumpto_arg                   = 0;       // 56 28
-    // u64 jumpto_from              = 0;       // 48 24
-    // u64 jumpto_to                = 0;       // 56 28
-    Task_Regs nested_int_regs; // 64 32
 
     klib::array<sched_queue, sched_queues_levels> sched_queues;
 
@@ -153,6 +140,9 @@ struct CPU_Info {
     riscv64::paging::RISCV64_Temp_Mapper &get_temp_mapper() { return temp_mapper; }
 #elif defined(__loongarch__)
     paging::Temp_Mapper &get_temp_mapper();
+#elif defined(__m68k__)
+    m68k::paging::M68K_Temp_Mapper *temp_mapper;
+    m68k::paging::M68K_Temp_Mapper &get_temp_mapper() { return *temp_mapper; }
 #endif
 
     constexpr static unsigned pthread_once_size                       = 16;
@@ -251,14 +241,14 @@ struct CPU_Info {
 extern u64 ticks_since_bootup;
 u64 get_ns_since_bootup();
 
-extern klib::vector<CPU_Info *> cpus;
+extern pmos::containers::vector<CPU_Info *> cpus;
 
 size_t get_cpu_count() noexcept;
 
 /**
  * This vector holds the data of all of the CPUs
  */
-extern klib::vector<CPU_Info *> cpus;
+extern pmos::containers::vector<CPU_Info *> cpus;
 
 quantum_t assign_quantum_on_priority(priority_t);
 
@@ -299,5 +289,8 @@ void park_self();
 
 // Should get called from IPI handler, this runs the attention routines stuff...
 void get_attention();
+
+// Handles continuations and such before returning to userspace
+void handle_scheduling();
 
 }; // namespace kernel::sched

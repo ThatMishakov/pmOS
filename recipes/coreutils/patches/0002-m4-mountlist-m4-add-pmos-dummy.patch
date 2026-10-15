@@ -1,0 +1,22 @@
+--- a/m4/mountlist.m4
++++ b/m4/mountlist.m4
+@@ -319,7 +319,7 @@
+ 
+   if test -z "$ac_list_mounted_fs"; then
+     case "$host_os" in
+-      mingw* | windows*) ac_list_mounted_fs=found ;;
++      mingw* | windows* | pmos*) ac_list_mounted_fs=found ;;
+     esac
+   fi
+ 
+--- a/configure
++++ b/configure
+@@ -72873,7 +72873,7 @@
+ 
+   if test -z "$ac_list_mounted_fs"; then
+     case "$host_os" in
+-      mingw* | windows*) ac_list_mounted_fs=found ;;
++      mingw* | windows* | pmos*) ac_list_mounted_fs=found ;;
+     esac
+   fi
+ 

@@ -1,6 +1,6 @@
 #pragma once
 #include <interrupts/interrupt_handler.hh>
-#include <lib/vector.hh>
+#include <pmos/containers/vector.hh>
 #include <sched/sched.hh>
 #include <types.hh>
 #include <optional>
@@ -47,7 +47,7 @@ private:
     u32 phys_addr;
     u32 int_base;
     u32 *virt_addr;
-    klib::vector<IOAPIC_Handler *> mappings;
+    pmos::containers::vector<IOAPIC_Handler *> mappings;
     u32 int_count;
     unsigned ioapic_id;
     Spinlock io_lock;

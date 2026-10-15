@@ -387,9 +387,9 @@ void x86_Page_Table::invalidate(TLBShootdownContext &ctx, void *virt_addr, bool 
     ::invalidate(ctx, virt_addr, free, (u64)pt_top_phys);
 }
 
-kresult_t kernel::paging::unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
+kresult_t kernel::paging::unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr, bool free)
 {
-    invalidate(ctx, virt_addr, false, idle_cr3);
+    invalidate(ctx, virt_addr, free, idle_cr3);
     return 0;
 }
 
@@ -692,183 +692,6 @@ kresult_t x86_Page_Table::map(u64 physical_addr, void *virtual_addr,
     return 0;
 }
 
-kresult_t x86_Page_Table::map(pmm::Page_Descriptor page, void *virtual_addr,
-                                     kernel::paging::Page_Table_Arguments arg) noexcept
-{
-    auto p = page.page_struct_ptr;
-    assert(p && "page must be present");
-    assert(p->type == pmm::Page::PageType::Allocated);
-
-    assert((p->get_phys_addr() < x86_phys_addr_limit) && "above max physical address for PAE paging");
-
-    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
-    u64 pml4_phys = pt_top_phys;
-     if (use_5lvl_paging) {
-        mapper.map(pt_top_phys);
-        auto idx = pml5_index(virtual_addr);
-        auto pml5e = x86_PAE_Entry::atomic_load(mapper.ptr + idx);
-        if (not pml5e.present) {
-            pml5e  = {};
-            auto p = pmm::get_memory_for_kernel(1);
-            if (pmm::alloc_failure(p))
-                return -ENOMEM;
-            
-            pml5e.page_ppn    = p >> 12;
-            pml5e.present     = 1;
-            pml5e.writeable   = 1;
-            pml5e.user_access = arg.user_access;
-            clear_page(p);
-            pml5e.atomic_store(mapper.ptr + idx);
-        }
-        pml4_phys = pml5e.page();
-    }
-
-    mapper.map((u64)pml4_phys);
-    auto pml4_idx = pml4_index(virtual_addr);
-    auto pml4e = x86_PAE_Entry::atomic_load(mapper.ptr + pml4_idx);
-    if (not pml4e.present) {
-        auto p = pmm::get_memory_for_kernel(1);
-        if (pmm::alloc_failure(p))
-            return -ENOMEM;
-
-        pml4e             = x86_PAE_Entry();
-        pml4e.page_ppn    = p >> 12;
-        pml4e.present     = 1;
-        pml4e.writeable   = 1;
-        pml4e.user_access = arg.user_access;
-        clear_page(p);
-        pml4e.atomic_store(mapper.ptr + pml4_idx);
-    }
-
-    mapper.map(pml4e.page_ppn << 12);
-    auto pdpt_idx = pdpt_index(virtual_addr);
-    auto pdpte = x86_PAE_Entry::atomic_load(mapper.ptr + pdpt_idx);
-    if (pdpte.pat_size) // 1GB page is already present
-        return -EEXIST;
-
-    if (not pdpte.present) {
-        auto p = pmm::get_memory_for_kernel(1);
-        if (pmm::alloc_failure(p))
-            return -ENOMEM;
-
-        pdpte             = x86_PAE_Entry();
-        pdpte.page_ppn    = p >> 12;
-        pdpte.present     = 1;
-        pdpte.writeable   = 1;
-        pdpte.user_access = arg.user_access;
-        clear_page(p);
-        pdpte.atomic_store(mapper.ptr + pdpt_idx);
-    }
-
-    mapper.map(pdpte.page_ppn << 12);
-    auto pd_idx = pd_index(virtual_addr);
-    auto pde = x86_PAE_Entry::atomic_load(mapper.ptr + pd_idx);
-    if (pde.pat_size)
-        return -EEXIST;
-
-    if (not pde.present) {
-        auto p = pmm::get_memory_for_kernel(1);
-        if (pmm::alloc_failure(p))
-            return -ENOMEM;
-
-        pde             = x86_PAE_Entry();
-        pde.page_ppn    = p >> 12;
-        pde.present     = 1;
-        pde.writeable   = 1;
-        pde.user_access = arg.user_access;
-        clear_page(p);
-        pde.atomic_store(mapper.ptr + pd_idx);
-    }
-
-    mapper.map(pde.page_ppn << 12);
-    auto pt_idx = pt_index(virtual_addr);
-    auto pte = x86_PAE_Entry::atomic_load(mapper.ptr + pt_idx);
-    if (pte.present)
-        return -EEXIST;
-
-    pte             = x86_PAE_Entry();
-    pte.present     = 1;
-    pte.user_access = arg.user_access;
-    pte.writeable   = arg.writeable;
-    // assert(arg.extra & PAGING_FLAG_STRUCT_PAGE);
-    pte.avl         = arg.extra | PAGING_FLAG_STRUCT_PAGE;
-    pte.set_cache_bits(arg.cache_policy);
-    u64 page_ppn     = page.takeout_page() >> 12;
-    pte.page_ppn    = page_ppn;
-
-    if (support_nx)
-        pte.execution_disabled = arg.execution_disabled;
-
-    pte.atomic_store(mapper.ptr + pt_idx);
-
-    return 0;
-}
-
-kresult_t x86_Page_Table::resolve_anonymous_page(void *virt_addr, unsigned access_type)
-{
-    assert(access_type & Writeable);
-
-    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
-    mapper.map(pt_top_phys);
-    for (int i = use_5lvl_paging ? 4 : 3; i > 0; --i) {
-        int offset      = 12 + i * 9;
-        int index       = ((u64)virt_addr >> offset) & 0x1ff;
-        auto p          = x86_PAE_Entry::atomic_load(mapper.ptr + index);
-        assert(p.present && "page must be present");
-        mapper.map(p.page_ppn << 12);
-    }
-
-    auto i = pt_index(virt_addr);
-    auto p = x86_PAE_Entry::atomic_load(mapper.ptr + i);
-    assert(p.present && "page must be present");
-    assert(p.avl & PAGING_FLAG_STRUCT_PAGE && "page must be a struct page");
-    assert(!p.writeable && "page must be read-only");
-
-    auto page = pmm::Page_Descriptor::find_page_struct(p.page_ppn << 12);
-    assert(page.page_struct_ptr && "page struct not found");
-
-    if (__atomic_load_n(&page.page_struct_ptr->l.refcount, __ATOMIC_ACQUIRE) == 2) {
-        // only owner of the page
-        p.writeable   = 1;
-        p.atomic_store(mapper.ptr + i);
-        return 0;
-    }
-
-    auto owner = page.page_struct_ptr->l.owner;
-    assert(owner && "page owner not found");
-
-    auto new_descriptor =
-        owner->atomic_request_anonymous_page(page.page_struct_ptr->l.offset, true);
-    if (!new_descriptor.success())
-        return new_descriptor.result;
-
-    p.present     = 0;
-    p.atomic_store(mapper.ptr + i);
-    // Fun!
-    {
-        auto tlb_ctx = TLBShootdownContext::create_userspace(*this);
-        tlb_ctx.invalidate_page((void *)((u64)virt_addr & ~0xffful));
-    }
-
-    u64 new_page_phys = new_descriptor.val.takeout_page();
-
-    Temp_Mapper_Obj<void> old_page(request_temp_mapper());
-    old_page.map(p.page_ppn << 12);
-    Temp_Mapper_Obj<void> new_page(request_temp_mapper());
-    new_page.map(new_page_phys);
-
-    __builtin_memcpy(new_page.ptr, old_page.ptr, 4096);
-
-    page.release_taken_out_page();
-
-    p.page_ppn  = new_page_phys >> 12;
-    p.writeable = 1;
-    p.present   = 1;
-    p.atomic_store(mapper.ptr + i);
-
-    return 0;
-}
-
 void x86_Page_Table::free_pt(u64 pt_phys)
 {
     Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
@@ -944,6 +767,9 @@ void x86_Page_Table::free_user_pages()
                 free_pdpt(p.page_ppn << 12);
                 pmm::free_memory_for_kernel(p.page_ppn << 12, 1);
             }
+            
+            p.clear_nofree();
+            p.atomic_store(mapper.ptr + i);
         }
     }
 }
@@ -1015,6 +841,12 @@ klib::shared_ptr<x86_Page_Table> x86_Page_Table::create_clone()
             it = new_table->paging_regions.begin();
         }
     });
+
+    free_user_pages();
+    {
+        auto ctx = TLBShootdownContext::create_userspace(*this);
+        ctx.invalidate_all();
+    }
 
     for (auto &reg: this->paging_regions) {
         auto r = reg.clone_to(new_table, reg.start_addr, reg.access_type);
@@ -1101,31 +933,6 @@ void kernel::paging::invalidate_tlb_kernel(void *addr, size_t size)
         invlpg((void *)((char *)addr + i));
 }
 
-ReturnStr<bool> x86_Page_Table::atomic_copy_to_user(void *to, const void *from, u64 size)
-{
-    Auto_Lock_Scope l(lock);
-
-    Temp_Mapper_Obj<char> mapper(request_temp_mapper());
-    for (char *i = (char *)((u64)to & ~0xfffUL); i < (char *)to + size; i += 0x1000) {
-        const auto b = prepare_user_page(i, Writeable);
-        if (!b.success())
-            return b.propagate();
-
-        if (not b.val)
-            return false;
-
-        const auto page = get_page_mapping(i);
-        assert(page.is_allocated);
-
-        char *ptr   = mapper.map(page.page_addr);
-        char *start = i < to ? (char *)to : i;
-        char *end   = i + 0x1000 < (char *)to + size ? i + 0x1000 : (char *)to + size;
-        memcpy(ptr + (start - i), (const char *)from + (start - (char *)to), end - start);
-    }
-
-    return true;
-}
-
 klib::shared_ptr<x86_Page_Table> x86_Page_Table::get_page_table(u64 id)
 {
     Auto_Lock_Scope local_lock(page_table_index_lock);
@@ -1206,31 +1013,6 @@ kresult_t x86_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Table> &
     }
 
     return 0;
-}
-
-kresult_t x86_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to,
-                                                      void *from_addr, void *to_addr,
-                                                      size_t size_bytes, unsigned access)
-{
-    u64 offset = 0;
-
-    auto guard = pmos::utility::make_scope_guard([&]() {
-        auto ctx = TLBShootdownContext::create_userspace(*to);
-        to->invalidate_range(ctx, (void *)to_addr, offset, true);
-    });
-
-    kresult_t result;
-
-    {
-        TLBShootdownContext ctx = TLBShootdownContext::create_userspace(*this);
-        result = copy_to_recursive(to, pt_top_phys, (u64)from_addr, (u64)to_addr, size_bytes, access,
-                                   (u64)from_addr, use_5lvl_paging ? 5 : 4, offset, ctx);
-    }
-
-    if (result == 0)
-        guard.dismiss();
-
-    return result;
 }
 
 static bool check_level(void *ptr, unsigned level, u64 phys_page_level, ulong err)

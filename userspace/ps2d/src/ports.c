@@ -158,7 +158,7 @@ void port_react_timer()
 
     case PORT_STATE_DISABLE_SCANNING:
         fprintf(stderr,
-                "[PS2d] Warning: Did not recieve the ACK for DISABLE_SCANNING command for port. Resetting the port...\n");
+                "[PS2d] Warning: Did not receive the ACK for DISABLE_SCANNING command for port. Resetting the port...\n");
         state = PORT_STATE_WAIT;
         port_start_timer(5000);
         break;

@@ -2,22 +2,64 @@
 #include <vector>
 #include <string>
 #include <pmos/async/coroutines.hh>
+#include <pmos/containers/intrusive_list.hh>
+#include <map>
 #include <cassert>
 #include <variant>
+#include <expected>
+#include <pmos/helpers.hh>
 
 struct VNode;
+struct Process;
+
+struct StatData {
+    uint64_t st_size;
+    uint64_t st_nlink;
+    uint64_t st_atim_tv_nsec;
+    uint64_t st_mtim_tv_nsec;
+    uint64_t st_ctim_tv_nsec;
+    uint64_t st_btim_tv_nsec;
+    uint64_t st_blocks;
+};
 
 struct Filesystem {
-    pmos::Right fs_right;
-    std::string mountpoint;
+    uint64_t device_id = 0;
 
     std::shared_ptr<VNode> root;
+
+    // nullptr -> block
+    virtual std::expected<std::shared_ptr<VNode>, int> resolve_child(std::shared_ptr<VNode> parent, const std::string &name) = 0;
+    virtual pmos::async::task<std::expected<pmos::Right, int>> open_file(std::shared_ptr<VNode> vnode, std::shared_ptr<Process> process) = 0;
+    virtual pmos::async::task<std::expected<StatData, int>> get_file_stat_dynamic(std::shared_ptr<VNode> vnode) = 0;
+    virtual pmos::async::task<std::expected<std::string, int>> read_symlink(std::shared_ptr<VNode> vnode)
+    {
+        (void)vnode;
+        co_return std::unexpected(-ENOSYS);
+    }
+    virtual pmos::async::task<std::expected<void, int>> unlockpt(std::shared_ptr<VNode> vnode)
+    {
+        (void)vnode;
+        co_return std::unexpected(-ENOSYS);
+    }
+
+    virtual ~Filesystem() = default;
+};
+
+struct ExternalFilesystem: public Filesystem {
+    pmos::Right fs_right;
+
+    std::expected<std::shared_ptr<VNode>, int> resolve_child(std::shared_ptr<VNode> parent, const std::string &name) override;
+    pmos::async::task<std::expected<pmos::Right, int>> open_file(std::shared_ptr<VNode> vnode, std::shared_ptr<Process> process) override;
+    pmos::async::task<std::expected<StatData, int>> get_file_stat_dynamic(std::shared_ptr<VNode> vnode) override;
+    pmos::async::task<std::expected<std::string, int>> read_symlink(std::shared_ptr<VNode> vnode) override;
 };
 
 enum class FileType {
     None,
     File,
     Directory,
+    CharacterDevice,
+    Symlink,
     // TODO
 };
 
@@ -52,6 +94,13 @@ struct VNode: public std::enable_shared_from_this<VNode> {
 
     FileType type = FileType::None;
 
+    uint32_t st_mode = 0;
+    uint32_t st_blksize = 0;
+
+    uint32_t st_uid = 0;
+    uint32_t st_gid = 0;
+    uint64_t st_rdev = 0;
+
     using vnode_ptr = std::shared_ptr<VNode>;
 
     std::map<std::string, std::variant<vnode_ptr, VNodeAwaitersList>> children_cache;
@@ -60,8 +109,16 @@ struct VNode: public std::enable_shared_from_this<VNode> {
     {
         return type == FileType::Directory;
     }
+    inline bool is_link() const
+    {
+        return type == FileType::Symlink;
+    }
 
     pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> resolve_child(const std::string &name);
+
+    std::string path() const;
+
+    bool is_tty = false;
 };
 
 extern std::vector<std::shared_ptr<Filesystem>> filesystems;
@@ -89,3 +146,13 @@ struct Path {
     bool _trailing_slash = false;
     std::vector<std::string> _components;
 };
+
+pmos::async::detached_task open_file(pmos::Right reply_right, std::string path, std::shared_ptr<Process> process, unsigned flags = 0);
+pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right fs_right, const std::string &mountpoint, int64_t root_inode);
+pmos::async::detached_task stat_handle(std::shared_ptr<VNode> vnode, pmos::Right reply_right, unsigned flags, std::string path);
+
+pmos::async::task<std::expected<pmos::Right /* io_right */, int>> get_file_handle(std::string path, std::shared_ptr<Process> process);
+
+pmos::async::detached_task attend_open_file(std::shared_ptr<VNode> vnode, pmos::ReceiveRight right);
+
+pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> resolve_path(std::string path, std::shared_ptr<Process> process);

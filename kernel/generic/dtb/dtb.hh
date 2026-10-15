@@ -45,7 +45,7 @@ struct fdt_header {
 
 constexpr u32 FDT_MAGIC = 0xD00DFEED;
 
-void init_dtb(unsigned long dtb_phys_addr);
+void init_dtb(phys_addr_t dtb_phys_addr);
 
 bool have_dtb();
 

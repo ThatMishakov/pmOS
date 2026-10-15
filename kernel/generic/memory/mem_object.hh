@@ -32,7 +32,7 @@
 #include <lib/list.hh>
 #include <lib/memory.hh>
 #include <lib/splay_tree_map.hh>
-#include <lib/vector.hh>
+#include <pmos/containers/vector.hh>
 #include <memory/mem_protection.hh>
 #include <memory/paging.hh>
 #include <messaging/rights.hh>
@@ -150,7 +150,7 @@ public:
      * checking
      * @param write If the page is mapped for writing
      * @param cow_region If the region is CoW. This enables extra "optimizations", where CoW
-     * (private mapping) regions requesting pages from anonymous objects would directly recieve
+     * (private mapping) regions requesting pages from anonymous objects would directly receive
      * anonymous pages, instead of allocating them inside the object and copying them, never to
      * be used.
      * @return first - page is immediately available and can be maped. Otherwise, the request to
@@ -217,9 +217,8 @@ protected:
      */
     static inline id_type create_id() noexcept
     {
-        static id_type id = 0;
-
-        return __atomic_add_fetch(&id, 1, 0);
+        static AtomicCounter counter;
+        return counter.atomic_next();
     }
 
     /**

@@ -11,6 +11,9 @@
 #include <pmos/utility/scope_guard.hh>
 #include "blockd.hh"
 #include <cinttypes>
+#include <sys/user.h>
+#include <cstring>
+#include <cstdlib>
 
 extern pmos::Port cmd_port;
 
@@ -60,8 +63,8 @@ pmos::async::detached_task handle_device(AHCIPort &parent)
     }
 
     parent.port_right = std::move(e->first);
-    parent.port_recieve_right = std::make_shared<RRWrapper>(RRWrapper{std::move(e->second), false});
-    parent.port_recieve_rights.insert(parent.port_recieve_right);
+    parent.port_receive_right = std::make_shared<RRWrapper>(RRWrapper{std::move(e->second), false});
+    parent.port_receive_rights.insert(parent.port_receive_right);
 
     auto disk = co_await publish_disk(parent, sector_count, logical_sector_size, physical_sector_size);
     

@@ -126,15 +126,8 @@ public:
 
     static klib::shared_ptr<x86_Page_Table> create_empty(int flags = 0);
 
-    virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, void *from_addr,
-                                           void *to_addr, size_t size_bytes,
-                                           unsigned new_access) override;
-
     // Maps the page with the appropriate permissions
     virtual kresult_t map(u64 page_addr, void *virt_addr,
-                          Page_Table_Arguments arg) noexcept override;
-
-    virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr,
                           Page_Table_Arguments arg) noexcept override;
 
     virtual void invalidate(kernel::paging::TLBShootdownContext &ctx, void *virt_addr,
@@ -178,8 +171,6 @@ public:
 
     klib::shared_ptr<x86_Page_Table> create_clone();
 
-    virtual ReturnStr<bool> atomic_copy_to_user(void *to, const void *from, size_t size) override;
-
     constexpr static u64 l4_align = 4096UL * 512 * 512 * 512;
     constexpr static u64 l3_align = 4096UL * 512 * 512;
     constexpr static u64 l2_align = 4096UL * 512;
@@ -190,8 +181,6 @@ public:
     void apply() noexcept;
 
     bool is_32bit() const { return flags & FLAG_32BIT; }
-
-    kresult_t resolve_anonymous_page(void *virt_addr, unsigned access_type) override;
 
     void *user_addr_max() const override;
 

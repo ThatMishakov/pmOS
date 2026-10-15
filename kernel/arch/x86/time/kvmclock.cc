@@ -1,4 +1,4 @@
-#include "timers.hh"
+#include "x86_timers.hh"
 #include <paravirt/kvm.hh>
 #include <x86_utils.hh>
 #include <x86_asm.hh>

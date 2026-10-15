@@ -82,35 +82,21 @@ ReturnStr<bool> syscalls::syscall_args_checked(TaskDescriptor *d, int i, int l, 
     return Success(true);
 }
 
-void syscalls::syscall_success(TaskDescriptor *s) { s->regs.a0 = 0; }
-
-u64 syscalls::SyscallRetval::operator=(unsigned long val)
+void syscalls::syscall_ret_low(TaskDescriptor *task, i64 value)
 {
-    task->regs.a0 = 0;
-    task->regs.a1 = val;
-    return val;
+    task->regs.a0 = static_cast<u64>(value);
+}
+i64 syscalls::syscall_ret_low(TaskDescriptor *task)
+{
+    return static_cast<i64>(task->regs.a0);
 }
 
-i64 syscalls::SyscallError::operator=(long v)
+void syscalls::syscall_ret_high(TaskDescriptor *task, u64 value)
 {
-    task->regs.a0 = v;
-    return v;
+    task->regs.a1 = value;
 }
 
-std::pair<long, u64> syscalls::SyscallError::operator=(std::pair<long, u64> p)
-{
-    task->regs.a0 = p.first;
-    task->regs.a1 = p.second;
-    return p;
-}
-
-unsigned syscalls::syscall_number(TaskDescriptor *t) { return t->regs.a0 & 0xff; }
-
-ulong syscalls::syscall_flags(TaskDescriptor *t) { return t->regs.a0 >> 8; }
-
-ulong syscalls::syscall_flags_reg(TaskDescriptor *task)
+unsigned syscalls::call_flags(TaskDescriptor *task)
 {
     return task->regs.a0;
 }
-
-syscalls::SyscallError::operator int() const { return (i64)task->regs.a0; }

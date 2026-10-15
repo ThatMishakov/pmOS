@@ -14,14 +14,14 @@
 pmos_port_t main_port = create_port();
 
 std::string piped_port_name = "/pmos/piped";
-pmos_right_t recieve_right  = 0;
+pmos_right_t receive_right  = 0;
 
 int main()
 {
     printf("Hello from piped! My PID: %li\n", get_task_id());
 
     {
-        auto rr = create_right(main_port, &recieve_right, 0);
+        auto rr = create_right(main_port, &receive_right, 0);
         if (rr.result != SUCCESS) {
             fprintf(stderr, "terminald: Error %i creating right\n", (int)rr.result);
             return 1;
@@ -43,7 +43,7 @@ int main()
         get_first_message(msg_buff.get(), 0, main_port);
 
         if (msg.size < sizeof(IPC_Generic_Msg)) {
-            fprintf(stderr, "Warning: recieved very small message\n");
+            fprintf(stderr, "Warning: received very small message\n");
             break;
         }
 
@@ -101,12 +101,12 @@ int main()
 
             if (t->task_group_id == 0) {
                 fprintf(stderr,
-                        "Warning: Recieved IPC_Kernel_Group_Task_Changed with group_id 0\n");
+                        "Warning: Received IPC_Kernel_Group_Task_Changed with group_id 0\n");
                 break;
             }
 
             if (msg.sender != 0) {
-                fprintf(stderr, "Warning: Recieved IPC_Kernel_Group_Task_Changed from userspace\n");
+                fprintf(stderr, "Warning: Received IPC_Kernel_Group_Task_Changed from userspace\n");
                 break;
             }
 

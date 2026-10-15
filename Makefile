@@ -3,6 +3,7 @@ i686-IMG=build-i686/pmos-hyper.img
 x86_64-IMG=build-x86_64/pmos.img
 x86_64-HYPER-IMG=build-x86_64/pmos-hyper.img
 x86_64-GRUB-ISO=build-x86_64/pmos-grub.iso
+x86_64-HYPER-ISO=build-x86_64/pmos-hyper.iso
 riscv64-IMG=build-riscv64/pmos.img
 loongarch64-IMG=build-loongarch64/pmos.img
 
@@ -43,6 +44,9 @@ $(x86_64-HYPER-IMG): build-x86_64/.jinx-parameters
 
 $(x86_64-GRUB-ISO): build-x86_64/.jinx-parameters
 	@cd build-x86_64 && ../jinx/jinx build grub-iso
+
+$(x86_64-HYPER-ISO): build-x86_64/.jinx-parameters
+	@cd build-x86_64 && ../jinx/jinx build hyper-iso
 
 emul: $(x86_64-HYPER-IMG)
 	bochs-debugger -q -f .bochsrc
@@ -89,7 +93,18 @@ qemu-x86: $(x86_64-HYPER-IMG) ovmf-x86
 		-m 512M\
 	       	-smp 1\
 	       	-serial stdio \
-		-device intel-iommu -cpu max,x2apic=on,+smep,+smap,+fred -no-reboot -smp 2
+		-device intel-iommu -cpu max,x2apic=on,+smep,+smap,+fred -no-reboot -smp 1
+
+qemu-x86-gdb: $(x86_64-HYPER-IMG) ovmf-x86
+	qemu-system-x86_64 \
+		-drive file=$(x86_64-HYPER-IMG),if=none,id=hdd0\
+		-smbios type=0,uefi=on -bios ovmf-x86/OVMF.fd\
+		-device ide-hd,drive=hdd0 \
+		-M q35\
+		-m 512M\
+	       	-smp 1\
+	       	-serial stdio \
+		-device intel-iommu -cpu max,x2apic=on,+smep,+smap,+fred -no-reboot -smp 2 -S -s
 
 qemu-i686: $(i686-IMG) ovmf-x86
 	qemu-system-i386 -serial stdio -m 512M -cpu max,+hypervisor -M q35 -hdd $(i686-IMG) -smp 4
@@ -103,7 +118,7 @@ qemu: $(riscv64-IMG) ovmf-riscv64
 qemu-loongarch64: $(loongarch64-IMG) ovmf-loongarch64
 	qemu-system-loongarch64 -device ramfb -device virtio-keyboard -device qemu-xhci -device usb-kbd -m 2G -drive if=pflash,unit=0,format=raw,file=ovmf-loongarch64/OVMF.fd -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive file=$(loongarch64-IMG),if=none,id=hdd0 -serial stdio -smp 4
 
-qemu-single: $(ISO) ovmf-riscv64
-	qemu-system-riscv64 -M virt -cpu rv64 -device ramfb -device virtio-keyboard -device qemu-xhci -device usb-kbd -m 2G -drive if=pflash,unit=0,format=raw,file=ovmf-riscv64/OVMF.fd -cdrom $(ISO) -serial stdio
+qemu-single: $(riscv64-IMG) ovmf-riscv64
+	qemu-system-riscv64 -M virt -cpu rv64 -device ramfb -device virtio-keyboard -device qemu-xhci -device usb-kbd -m 2G -drive if=pflash,unit=0,format=raw,file=ovmf-riscv64/OVMF.fd -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive file=$(riscv64-IMG),if=none,id=hdd0 -serial stdio
 
-.PHONY: $(x86_64-IMG) $(riscv64-IMG) $(loongarch64-IMG) $(i686-IMG) $(x86_64-HYPER-IMG) $(x86_64-GRUB-ISO)
+.PHONY: $(x86_64-IMG) $(riscv64-IMG) $(loongarch64-IMG) $(i686-IMG) $(x86_64-HYPER-IMG) $(x86_64-GRUB-ISO) $(x86_64-HYPER-ISO)

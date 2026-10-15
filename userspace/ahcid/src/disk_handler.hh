@@ -15,7 +15,7 @@ struct AHCIPort;
 
 pmos::async::detached_task handle_ipc(
     AHCIPort &port,
-    std::shared_ptr<RRWrapper> recieve_right,
+    std::shared_ptr<RRWrapper> receive_right,
     uint64_t sector_count,
     size_t logical_sector_size,
     size_t physical_sector_size,

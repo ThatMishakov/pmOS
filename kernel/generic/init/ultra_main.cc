@@ -234,7 +234,7 @@ void init_memory(ultra_boot_context *ctx)
 
     serial_logger.printf("Paging initialized!\n");
 
-    klib::vector<ultra_memory_map_entry> regions_data;
+    pmos::containers::vector<ultra_memory_map_entry> regions_data;
     if (!regions_data.resize(number_of_entries))
         panic("Failed to reserve memory for regions_data\n");
 
@@ -346,7 +346,7 @@ void init_modules(ultra_boot_context *ctx)
                 serial_logger.printf("Warning: Empty cmdline for module\n");
             }
 
-            module m = {
+            boot_module m = {
                 .path      = klib::move(path),
                 .cmdline   = klib::move(cmdline),
                 .phys_addr = t->address,
@@ -364,10 +364,10 @@ void init_modules(ultra_boot_context *ctx)
     }
 }
 
-klib::vector<klib::unique_ptr<load_tag_generic>>
+pmos::containers::vector<klib::unique_ptr<load_tag_generic>>
     construct_load_tag_framebuffer(ultra_boot_context *ctx)
 {
-    klib::vector<klib::unique_ptr<load_tag_generic>> tags {};
+    pmos::containers::vector<klib::unique_ptr<load_tag_generic>> tags {};
     auto attrh =
         (ultra_framebuffer_attribute *)find_attribute(ctx, ULTRA_ATTRIBUTE_FRAMEBUFFER_INFO);
     if (!attrh) {
@@ -461,7 +461,7 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp(ultra_boot_context *)
 
 void init_task1(ultra_boot_context *ctx)
 {
-    module *task1                = nullptr;
+    boot_module *task1 = nullptr;
     const klib::string bootstrap = "bootstrap";
     for (auto &m: modules) {
         if (m.cmdline == bootstrap) {
@@ -477,7 +477,7 @@ void init_task1(ultra_boot_context *ctx)
 
     serial_logger.printf("Task 1 found: %s\n", task1->path.c_str());
 
-    auto task = proc::TaskDescriptor::create_process(proc::TaskDescriptor::PrivilegeLevel::User);
+    auto task = proc::TaskDescriptor::create(nullptr, proc::TaskDescriptor::PrivilegeLevel::User);
     if (!task)
         panic("Failed to create task");
     task->name = "bootstrap";
@@ -487,11 +487,11 @@ void init_task1(ultra_boot_context *ctx)
     if (!group)
         panic("Failed to create task group for task 1");
 
-    auto object = ipc::MemObjectRight::create_for_group(task1->object, group.val, ipc::MemObjectRight::PERM_READ);
+    auto object = ipc::MemObjectRight::create_for_group(task1->object, group.val, -1);
     if (!object)
         panic("Failed to create memory object right for task 1");
 
-    klib::vector<klib::unique_ptr<load_tag_generic>> tags;
+    pmos::containers::vector<klib::unique_ptr<load_tag_generic>> tags;
     tags = construct_load_tag_framebuffer(ctx);
 
     auto t = construct_load_tag_rsdp(ctx);

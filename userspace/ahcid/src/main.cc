@@ -10,7 +10,6 @@
 #include <cassert>
 #include <inttypes.h>
 #include <memory>
-#include <pmos/helpers.h>
 #include <pmos/interrupts.h>
 #include <pmos/ipc.h>
 #include <pmos/memory.h>
@@ -24,6 +23,9 @@
 #include <pmos/helpers.hh>
 #include <pmos/pmbus_helper.hh>
 #include <pmos/async/coroutines.hh>
+#include <sys/mman.h>
+#include <cstdlib>
+#include <time.h>
 
 pmos::Right device_right;
 
@@ -208,7 +210,7 @@ void AHCIPort::detect_drive()
     // AHCI
 
     state     = State::WaitingForReady;
-    timer_max = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value + 30'000'000'000;
+    timer_max = pmos_get_time(CLOCK_MONOTONIC).value + 30'000'000'000;
     wait(100);
 }
 
@@ -409,7 +411,7 @@ void AHCIPort::port_idle()
     // Wait for 500ms
     state = State::WaitingForIdle1;
 
-    auto time = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP);
+    auto time = pmos_get_time(CLOCK_MONOTONIC);
     timer_max = time.value + 500'000'000;
     wait(10);
 }
@@ -427,7 +429,7 @@ void AHCIPort::port_idle2()
 
         state = State::WaitingForIdle2;
 
-        auto time = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP);
+        auto time = pmos_get_time(CLOCK_MONOTONIC);
         timer_max = time.value + 500'000'000;
         wait(10);
     } else {
@@ -436,11 +438,11 @@ void AHCIPort::port_idle2()
     }
 }
 
-pmos::RecieveRight timer_right;
+pmos::ReceiveRight timer_right;
 
 void react_timer()
 {
-    auto current_time = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP);
+    auto current_time = pmos_get_time(CLOCK_MONOTONIC);
     auto it           = timer_tree.begin();
     while ((it != timer_tree.end()) && (it->timer_time < current_time.value)) {
         timer_tree.erase(it);
@@ -479,7 +481,7 @@ pmos::async::detached_task init_timer()
 
 void TimerWaiter::wait(int time_ms)
 {
-    auto time = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP);
+    auto time = pmos_get_time(CLOCK_MONOTONIC);
     if (time.result != 0) {
         printf("Failed to get time\n");
         return;
@@ -533,7 +535,7 @@ pmos::async::detached_task ahci_controller_main()
 
 std::string pci_string;
 
-pmos::async::detached_task handle_interrupts(pmos::RecieveRight int_right)
+pmos::async::detached_task handle_interrupts(pmos::ReceiveRight int_right)
 {
     while (1) {
         auto msg = co_await dispatcher.get_message(int_right);
@@ -802,7 +804,7 @@ int main(int argc, char **argv)
     ahci_handle();
     ahci_controller_main();
 
-    dispatcher.dispatch();
+    dispatcher.dispatch().value();
 
     printf("!!! ahcid: Exiting... !!!\n");
 }

@@ -16,6 +16,12 @@ copy_service() {
     cp -v "${BOOT_DIR}/${SERVICE}.yaml" "iso_root/${SERVICE}.yaml"
 }
 
+copy_library() {
+    LIBRARY="$1"
+    LIBRARY_FILE=${LIBRARY##*/}
+    cp -v "$SYSROOT/$LIBRARY" "iso_root/$LIBRARY_FILE"
+}
+
 BOOT_DIR="$SYSROOT/boot"
 
 DISK_IMAGE="$1"
@@ -30,6 +36,10 @@ cp -v "$BOOT_DIR/bootstrapd" iso_root/
 # Copy services
 for SERVICE in $SERVICES; do
     copy_service "$SERVICE"
+done
+
+for LIBRARY in $LIBRARIES; do
+    copy_library "$LIBRARY"
 done
 
 mkdir -p iso_root/EFI/BOOT

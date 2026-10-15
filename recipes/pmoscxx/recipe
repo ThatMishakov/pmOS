@@ -1,0 +1,22 @@
+#!/bin/sh
+
+version=0.1
+revision=1
+
+imagedeps="make cmake"
+
+source_dir=libs/pmoscxx
+deps="mlibc-headers mlibc pmos-containers $CXX_DEPS"
+hostdeps="$TOOLCHAIN_DEPS"
+
+configure() {
+    cmake_configure
+}
+
+build() {
+    make -j ${parallelism}
+}
+
+package() {
+    DESTDIR="${dest_dir}" make install
+}

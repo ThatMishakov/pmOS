@@ -1,0 +1,8 @@
+#!/bin/sh
+
+version=1
+revision=1
+
+package() {
+    mkdir -p ${dest_dir}/run/initramfs
+}

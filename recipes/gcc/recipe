@@ -1,0 +1,6 @@
+#!/bin/sh
+
+version=16
+revision=1
+git_url=https://gitlab.com/mishakov/gcc-pmos.git
+commit="122a0d03acf08d064b3e51bd60a76429edcdd2e5"

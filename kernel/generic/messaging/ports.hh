@@ -33,7 +33,7 @@ public:
 
     void enqueue(klib::unique_ptr<GenericMessage> msg);
 
-    kresult_t send_from_system(klib::vector<char> &&msg);
+    kresult_t send_from_system(pmos::containers::vector<char> &&msg);
     kresult_t send_from_system(const char *msg, size_t size);
 
     // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
@@ -53,8 +53,9 @@ public:
     GenericMessage *atomic_get_front();
     void pop_front() noexcept;
     bool is_empty() const noexcept;
+    bool atomic_is_empty() const noexcept;
 
-    RecieveRight *atomic_get_right(u64 right_id);
+    ReceiveRight *atomic_get_right(u64 right_id);
 
     /**
      * @brief Destructor of port
@@ -82,13 +83,18 @@ public:
 
     bool atomic_alive() const;
 
+    /// @brief Deletes all the mssages with the given receive right id. Returns the number of messages deleted
+    /// @param receive_right_id Receive right id to delete messages for
+    /// @return Count of messages deleted
+    size_t atomic_delete_messages(u64 receive_right_id);
+
     static ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
         send_message_right(Right *right, proc::TaskGroup *verify_group, Port *reply_port,
-                           rights_array array, message_buffer data, uint64_t sender_id,
+                           rights_array array, message_buffer data, proc::TaskDescriptor *sender,
                            RightType new_right_type, bool always_destroy_right);
 
-    bool atomic_add_to_rights(RecieveRight *right);
-    void atomic_remove_right(RecieveRight *right);
+    bool atomic_add_to_rights(ReceiveRight *right);
+    void atomic_remove_right(ReceiveRight *right);
 protected:
     using Message_storage = pmos::containers::CircularDoubleList<GenericMessage, &GenericMessage::list_node>;
     Message_storage msg_queue;
@@ -107,19 +113,19 @@ protected:
         pmos::containers::RedBlackTree<Port, &Port::bst_head_global,
                                        detail::TreeCmp<Port, u64, &Port::portno>>;
 
-    static inline u64 biggest_port = 1;
+    static inline AtomicCounter id_counter;
     static inline global_ports_tree::RBTreeHead ports;
     static inline Spinlock ports_lock;
 
     using rights_tree =
-        pmos::containers::RedBlackTree<RecieveRight, &RecieveRight::parent_head,
-                                       detail::TreeCmp<RecieveRight, u64, &RecieveRight::right_parent_id>>;
+        pmos::containers::RedBlackTree<ReceiveRight, &ReceiveRight::parent_head,
+                                       detail::TreeCmp<ReceiveRight, u64, &ReceiveRight::right_parent_id>>;
     rights_tree::RBTreeHead rights;
     Spinlock rights_lock;
 
     friend class proc::TaskGroup;
     friend class proc::TaskDescriptor;
-    friend struct RecieveRight;
+    friend struct ReceiveRight;
     friend struct SendRight;
     friend struct SendManyRight;
     friend struct SendOnceRight;

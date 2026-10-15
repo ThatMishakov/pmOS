@@ -271,7 +271,7 @@ ReturnStr<MemObjectRight *> MemObjectRight::create_for_group(klib::shared_ptr<pa
     new_right->mem_object      = mem_object;
     new_right->parent_group    = group;
     new_right->of_message      = false;
-    new_right->permission_mask = permissions & PERM_ALL;
+    new_right->permissions_mask = permissions & PERM_ALL;
     
 
     Auto_Lock_Scope l(new_right->lock);
@@ -383,7 +383,7 @@ ReturnStr<std::pair<Right *, u64>> MemObjectRight::duplicate(proc::TaskGroup *gr
     new_right->mem_object      = mem_object;
     new_right->parent_group    = parent_group;
     new_right->of_message      = false;
-    new_right->permission_mask = permission_mask;
+    new_right->permissions_mask = permissions_mask;
 
     Auto_Lock_Scope l(lock);
     if (!alive || of_message || parent_group != group)
@@ -430,7 +430,7 @@ RightType SendOnceRight::type() const
     return RightType::SendOnce;
 }
 
-RightType SendOnceRight::recieve_type() const
+RightType SendOnceRight::receive_type() const
 { 
     return RightType::SendOnce;
 }
@@ -440,12 +440,12 @@ RightType SendManyRight::type() const
     return RightType::SendMany;
 }
 
-RightType SendManyRight::recieve_type() const
+RightType SendManyRight::receive_type() const
 {
     return RightType::SendMany;
 }
 
-RightType SendManyRightShared::recieve_type() const
+RightType SendManyRightShared::receive_type() const
 {
     return RightType::SendMany;
 }
@@ -470,32 +470,41 @@ unsigned Right::type_as_int() const
         return RIGHT_TYPE_INT_NOTIFICATION;
     case RightType::Timer:
         return RIGHT_TYPE_TIMER;
+    case RightType::Process:
+        return RIGHT_TYPE_PROCESS;
+    case RightType::TaskGroup:
+        return RIGHT_TYPE_TASK_GROUP;
     default:
         return 0;
     }
 }
 
-u64 RecieveRight::sender_task_id() const
+u64 ReceiveRight::sender_task_id() const
 {
     return 0; // Kernel
 }
 
-u64 RecieveRight::sent_with_right() const
+u64 ReceiveRight::sender_process_id() const
+{
+    return 0; // Kernel
+}
+
+u64 ReceiveRight::sent_with_right() const
 {
     return right_parent_id;
 }
 
-static IPC_Kernel_Recieve_Right_Destroyed destroyed_msg = {
-    .type  = IPC_Kernel_Recieve_Right_Destroyed_NUM,
+static IPC_Kernel_Receive_Right_Destroyed destroyed_msg = {
+    .type  = IPC_Kernel_Receive_Right_Destroyed_NUM,
     .flags = 0,
 };
 
-size_t RecieveRight::size() const
+size_t ReceiveRight::size() const
 {
     return sizeof(destroyed_msg);
 }
 
-ReturnStr<bool> RecieveRight::copy_to_user_buff(char *buff) const
+ReturnStr<bool> ReceiveRight::copy_to_user_buff(char *buff) const
 {
     return copy_to_user(reinterpret_cast<const char *>(&destroyed_msg), buff, sizeof(destroyed_msg));
 }
@@ -506,8 +515,8 @@ static constinit IPC_Kernel_Right_Destroyed send_destroyed_msg = {
     .right_type = 2, // SendMany
 };
 
-// With send many, it can only be sent as the right destroyed message, the shared struct will be sent as the recieve right
-// destroyed notification (also, one port can recieve both, or even multiple messages of this type)
+// With send many, it can only be sent as the right destroyed message, the shared struct will be sent as the receive right
+// destroyed notification (also, one port can receive both, or even multiple messages of this type)
 size_t SendManyRight::size() const
 {
     return sizeof(send_destroyed_msg);
@@ -518,7 +527,7 @@ ReturnStr<bool> SendManyRight::copy_to_user_buff(char *buff) const
     return copy_to_user(reinterpret_cast<const char *>(&send_destroyed_msg), buff, sizeof(send_destroyed_msg));
 }
 
-bool SendRight::destroy_recieve_right()
+bool SendRight::destroy_receive_right()
 {
     return destroy(DestroyReason::DeletedByReceiver);
 }
@@ -541,19 +550,19 @@ Port *SendManyRight::parent_port()
     return shared->parent;
 }
 
-u64 SendRight::right_id_in_reciever() const
+u64 SendRight::right_id_in_receiver() const
 {
     // Again, the same todo as in rights.hh applies here...
     return right_parent_id;
 }
 
-u64 SendManyRight::right_id_in_reciever() const
+u64 SendManyRight::right_id_in_receiver() const
 {
     assert(shared);
     return shared->right_parent_id;
 }
 
-std::pair<klib::unique_ptr<SendRight>, klib::unique_ptr<RecieveRight>> SendManyRight::create_for_message()
+std::pair<klib::unique_ptr<SendRight>, klib::unique_ptr<ReceiveRight>> SendManyRight::create_for_message()
 {
     auto send_right = klib::make_unique<SendManyRight>();
     if (!send_right)
@@ -588,6 +597,7 @@ ReturnStr<std::pair<Right *, u64>> SendManyRight::duplicate(proc::TaskGroup *gro
     new_right->shared       = shared;
     new_right->parent_group = parent_group;
     new_right->of_message   = false;
+    new_right->permissions_mask = permissions_mask;
 
     auto parent = shared->parent;
     assert(parent);
@@ -629,7 +639,7 @@ void SendManyRightShared::rcu_push()
     sched::get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
 }
 
-bool SendManyRightShared::destroy_recieve_right()
+bool SendManyRightShared::destroy_receive_right()
 {
     // Note: the locking situation here is difficult. But basically, the rules are that you don't attempt
     // to acquire a lock on a right while holding the lock on this struct
@@ -663,9 +673,9 @@ bool SendManyRightShared::destroy_recieve_right()
     // message won't be read, or because youserspace is calling this explicitly, at which point
     // you don't have to have notifications.
     //
-    // It might have been useful to use this to know when you've recieved the last message on the right,
+    // It might have been useful to use this to know when you've received the last message on the right,
     // but at this point, this wasn't needed, abd if someone is deleting this right, it id because
-    // the caller doesn't want to recieve any more recieve messages on the right...
+    // the caller doesn't want to receive any more receive messages on the right...
 
     rcu_push();
     return true;
@@ -756,6 +766,16 @@ void SendManyRightShared::delete_self()
     }
 
     rcu_push();
+}
+
+u32 Right::atomic_get_permissions_mask() const
+{
+    return __atomic_load_n(&permissions_mask, __ATOMIC_ACQUIRE);
+}
+
+u32 Right::atomic_set_permissions_mask(u32 mask_to_and)
+{
+    return __atomic_fetch_and(&permissions_mask, mask_to_and, __ATOMIC_ACQUIRE);
 }
 
 } // namespace kernel::ipc

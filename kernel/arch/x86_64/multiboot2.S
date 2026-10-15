@@ -49,14 +49,14 @@ multiboot_map_kernel:
     popl %edi
 
     // Detect CPUID
-    pushfd // Save EFLAGS
-    pushfd // Save eflags again
+    pushfl // Save EFLAGS
+    pushfl // Save eflags again
     xorl $0x200000, (%esp) // Toggle ID bit in EFLAGS
-    popfd // Restore EFLAGS
-    pushfd // Get EFLAGS again
+    popfl // Restore EFLAGS
+    pushfl // Get EFLAGS again
     popl %eax // Store EFLAGS in EAX
     xorl (%esp), %eax // Check if ID bit changed
-    popfd // Restore original EFLAGS
+    popfl // Restore original EFLAGS
     andl $0x200000, %eax // Check if ID bit is set
     jz unsupported_cpu // There's no CPUID, CPU is not supported
 

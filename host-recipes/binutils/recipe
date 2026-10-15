@@ -1,0 +1,17 @@
+#!/bin/sh
+
+revision=1
+from_source=binutils
+imagedeps="gcc build-essential pkg-config libreadline-dev texinfo file libgmp-dev bison flex m4 libmpfr-dev"
+
+configure() {
+    ${source_dir}/configure --target=${JINX_ARCH}-pmos --with-sysroot=${sysroot} --disable-werror
+}
+
+build() {
+    make -j ${parallelism}
+}
+
+package() {
+    make install DESTDIR="${dest_dir}"
+}

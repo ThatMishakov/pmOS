@@ -26,6 +26,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+// Nice code!
+#if defined(__x86_64__) || defined(__riscv) || defined(__loongarch64) || defined(__m68k__)
+
+
 #include "limine.h"
 
 #include "../memory/paging.hh"
@@ -38,15 +42,16 @@
 #include <memory/mem_object.hh>
 #include <paging/arch_paging.hh>
 #include <processes/tasks.hh>
+
+#ifdef ENABLE_ACPI
 #include <uacpi/uacpi.h>
 #include <uacpi/event.h>
 #include <uacpi/uacpi.h>
 #include <uacpi/kernel_api.h>
+#endif
+
 #include "kernel_pages.hh"
 #include "common.hh"
-
-// Nice code!
-#if defined(__x86_64__) || defined(__riscv) || defined(__loongarch64)
 
 using namespace kernel;
 using namespace kernel::pmm;
@@ -109,22 +114,26 @@ extern void hcf();
 
 Direct_Mapper init_mapper;
 
+static Temp_Mapper *temp_temp_mapper = nullptr;
+
     // Temporary temporary mapper
     #ifdef __x86_64__
         #include <paging/x86_temp_mapper.hh>
         #include <x86_asm.hh>
 using Arch_Temp_Mapper = x86_64::paging::x86_PAE_Temp_Mapper;
-Arch_Temp_Mapper temp_temp_mapper;
+Arch_Temp_Mapper temp_temp_mapper_instance;
 
     #elif defined(__riscv)
         #include <paging/riscv64_temp_mapper.hh>
 using Arch_Temp_Mapper = kernel::riscv64::paging::RISCV64_Temp_Mapper;
-Arch_Temp_Mapper temp_temp_mapper;
+Arch_Temp_Mapper temp_temp_mapper_instance;
 
     #elif defined(__loongarch64)
         #include <paging/loong_temp_mapper.hh>
 
-    #endif
+    #elif defined(__m68k__)
+#include <paging/m68k_temp_mapper.hh>
+#endif
 
 u64 hhdm_offset = 0;
 
@@ -155,7 +164,7 @@ extern u8 _kernel_end;
 
 ptable_top_ptr_t kernel_ptable_top = 0;
 
-static klib::vector<limine_memmap_entry> *limine_memory_regions = nullptr;
+static pmos::containers::vector<limine_memmap_entry> *limine_memory_regions = nullptr;
 
     #ifdef __x86_64__
 extern ulong idle_cr3;
@@ -240,11 +249,20 @@ void construct_paging()
     riscv64::paging::idle_pt = kernel_ptable_top;
     #endif
 
-    #ifndef __loongarch64
+    #ifdef __loongarch64
+
+    #elif defined(__m68k__)
+    void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(
+        16, 4); // 16 pages aligned to 16 pages boundary
+    temp_temp_mapper = kernel::m68k::paging::get_temp_temp_mapper(temp_mapper_start, kernel_ptable_top);
+    #else
     // Init temp mapper with direct map, while it is still available
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(
         16, 4); // 16 pages aligned to 16 pages boundary
-    temp_temp_mapper = Arch_Temp_Mapper(temp_mapper_start, kernel_ptable_top);
+    temp_temp_mapper_instance = Arch_Temp_Mapper(temp_mapper_start, kernel_ptable_top);
+    // TODO: This stuff should really be unified between the boot protocols
+
+    temp_temp_mapper = &temp_temp_mapper_instance;
     #endif
 
     kernel_phys_base = kernel_address_request.response->physical_base;
@@ -256,7 +274,7 @@ void construct_paging()
 
     // Set up the right mapper (since there is no direct map anymore) and bitmap
     #ifndef __loongarch64
-    global_temp_mapper = &temp_temp_mapper;
+    global_temp_mapper = temp_temp_mapper;
     #else
     loongarch64::paging::set_dmws();
     global_temp_mapper = &loongarch64::paging::temp_mapper;
@@ -264,7 +282,7 @@ void construct_paging()
 
     serial_logger.printf("Paging initialized!\n");
 
-    klib::vector<limine_memmap_entry *> regions;
+    pmos::containers::vector<limine_memmap_entry *> regions;
     if (!regions.resize(resp.entry_count))
         panic("Failed to reserve memory for regions");
 
@@ -273,11 +291,11 @@ void construct_paging()
     copy_from_phys((u64)resp.entries - hhdm_offset, regions.data(),
                    resp.entry_count * sizeof(limine_memmap_entry *));
 
-    limine_memory_regions = new klib::vector<limine_memmap_entry> {};
+    limine_memory_regions = new pmos::containers::vector<limine_memmap_entry> {};
     if (!limine_memory_regions)
         panic("Failed to allocate memory for memory_regions");
 
-    klib::vector<limine_memmap_entry> &regions_data = *limine_memory_regions;
+    pmos::containers::vector<limine_memmap_entry> &regions_data = *limine_memory_regions;
     if (!regions_data.resize(resp.entry_count))
         panic("Failed to reserve memory for regions_data");
 
@@ -348,7 +366,7 @@ void init_modules()
     limine_module_response r;
     copy_from_phys(resp_phys, &r, sizeof(r));
 
-    klib::vector<limine_file *> modules;
+    pmos::containers::vector<limine_file *> modules;
     if (!modules.resize(r.module_count))
         panic("Failed to reserve memory for modules");
 
@@ -361,7 +379,7 @@ void init_modules()
     for (auto &mm: modules) {
         limine_file f;
         copy_from_phys((u64)mm - hhdm_offset, &f, sizeof(f));
-        module m = {
+        boot_module m = {
             .path      = capture_from_phys((u64)f.path - hhdm_offset),
             .cmdline   = capture_from_phys((u64)f.string - hhdm_offset),
             .phys_addr = (u64)f.address - hhdm_offset,
@@ -381,9 +399,9 @@ __attribute__((used)) struct limine_framebuffer_request fb_req = {
     .response = nullptr,
 };
 
-klib::vector<klib::unique_ptr<load_tag_generic>> construct_load_tag_framebuffer()
+pmos::containers::vector<klib::unique_ptr<load_tag_generic>> construct_load_tag_framebuffer()
 {
-    klib::vector<klib::unique_ptr<load_tag_generic>> tags {};
+    pmos::containers::vector<klib::unique_ptr<load_tag_generic>> tags {};
 
     if (fb_req.response == nullptr)
         return tags;
@@ -456,14 +474,14 @@ extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 
 void init(void);
 void init_scheduling(u64 boot_cpu_id);
-klib::vector<u64> initialize_cpus(const klib::vector<u64> &hartids);
+pmos::containers::vector<u64> initialize_cpus(const pmos::containers::vector<u64> &hartids);
 void *get_cpu_start_func();
 
 void init_task1()
 {
     // Find task 1 module.
     // For now, just search for "bootstrap"
-    module *task1                = nullptr;
+    boot_module *task1 = nullptr;
     const klib::string bootstrap = "bootstrap";
     for (auto &m: modules) {
         serial_logger.printf("Module %s\n", m.cmdline.c_str());
@@ -481,7 +499,7 @@ void init_task1()
     serial_logger.printf("Task 1 found: %s\n", task1->path.c_str());
 
     // Create new task and load ELF into it
-    auto task = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
+    auto task = TaskDescriptor::create(nullptr, TaskDescriptor::PrivilegeLevel::User);
     if (!task)
         panic("Failed to create task");
     task->name = "bootstrap";
@@ -491,12 +509,12 @@ void init_task1()
     if (!group)
         panic("Failed to create task group for task 1");
 
-    auto object = ipc::MemObjectRight::create_for_group(task1->object, group.val, ipc::MemObjectRight::PERM_READ);
+    auto object = ipc::MemObjectRight::create_for_group(task1->object, group.val, -1);
     if (!object)
         panic("Failed to create memory object right for task 1");
 
     // Pass the modules to the task
-    klib::vector<klib::unique_ptr<load_tag_generic>> tags;
+    pmos::containers::vector<klib::unique_ptr<load_tag_generic>> tags;
     tags = construct_load_tag_framebuffer();
 
     auto t = construct_load_tag_rsdp();
@@ -522,8 +540,10 @@ __attribute__((used)) limine_rsdp_request rsdp_request = {
     .response = nullptr,
 };
 
+
 void init_acpi()
 {
+#ifdef ENABLE_ACPI
     if (rsdp_request.response == nullptr) {
         serial_logger.printf("No RSDP found\n");
         return;
@@ -541,6 +561,7 @@ void init_acpi()
     serial_logger.printf("RSDP found at 0x%x\n", addr);
    
     init_acpi(addr);
+#endif
 }
 
 __attribute__((used)) limine_dtb_request dtb_request = {
@@ -564,10 +585,10 @@ void init_dtb()
     limine_dtb_response resp;
     copy_from_phys((u64)dtb_request.response - hhdm_offset, &resp, sizeof(resp));
 
-    u64 addr = (u64)resp.dtb_ptr - hhdm_offset;
+    phys_addr_t addr = (phys_addr_t)resp.dtb_ptr - hhdm_offset;
     serial_logger.printf("DTB found at 0x%x\n", addr);
 
-    init_dtb((u64)addr);
+    init_dtb(addr);
 }
 
 u64 bsp_cpu_id = 0;
@@ -618,7 +639,7 @@ void limine_main()
     init_dtb();
 
     // Init idle task page table
-    #ifndef __loongarch__
+    #if !defined(__loongarch__) && !defined(__m68k__)
     idle_page_table = Arch_Page_Table::capture_initial(kernel_ptable_top);
     #else
     idle_page_table = Arch_Page_Table::create_empty();

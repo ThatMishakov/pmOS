@@ -24,6 +24,11 @@
 #include <pmos/pmbus_helper.hh>
 #include <pmos/ipc/bus_object.hh>
 #include <pmos/fs_properties.hh>
+#include <sys/user.h>
+#include <memory>
+#include <cstring>
+#include <cstdlib>
+#include <iostream>
 
 using namespace pmos;
 using namespace pmos::ipc;
@@ -107,6 +112,8 @@ std::vector<MountpointRequest> mountpoint_requests = {
     {.mount_path = "/", .label = "pmos-root"},
 };
 
+pmos::ReceiveRight root_right;
+
 pmos::async::detached_task mount_partition(std::shared_ptr<Filesystem> fs, std::shared_ptr<Partition> partition, const std::string &mount_path)
 {
     IPC_Start_Service req = {
@@ -157,6 +164,17 @@ pmos::async::detached_task mount_partition(std::shared_ptr<Filesystem> fs, std::
     } else {
         printf("Failed to mount filesystem %s at mount point %s\n", fs->name.c_str(), mount_path.c_str());
     }
+
+    BUSObject object;
+    object.set_name("pmos.fs.real_root");
+    object.set_property("real_root_mounted", true);
+
+    auto [right, receive_right] = port.create_right(RightType::SendMany).value();
+
+    auto publish_result = co_await bus_helper.publish_object(object, std::move(right));
+    std::cout << "Published real_root object with sequence number " << publish_result << std::endl;
+
+    root_right = std::move(receive_right);
 }
 
 void try_mount_new_fs(std::shared_ptr<Filesystem> fs, std::shared_ptr<Partition> partition)
@@ -206,7 +224,7 @@ pmos::async::task<pmos::Right> read_disk(Disk &disk, uint64_t sector_start, uint
     auto span = std::span<const uint8_t>(reinterpret_cast<const uint8_t *>(&read), sizeof(read));
     auto result = send_message_right(disk.disk_right, span, std::pair{&dispatcher.get_port(), RightType::SendOnce}, false);
     if (!result)
-        throw std::system_error(result.error(), std::system_category());
+        throw std::system_error(result.error().first, std::system_category());
 
     auto msg = co_await dispatcher.get_message(result.value());
     if (!msg)
@@ -393,7 +411,6 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
         .addr_start_uint = 0,
         .size = mbr_size,
         .offset_object = 0,
-        .offset_start = 0,
         .object_size = mbr_size,
         .access_flags = PROT_READ,
     };
@@ -464,7 +481,6 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
                 .addr_start_uint = 0,
                 .size = array_size_aligned,
                 .offset_object = 0,
-                .offset_start = 0,
                 .object_size = array_size_aligned,
                 .access_flags = PROT_READ,
             };
@@ -504,7 +520,7 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
             printf("Partition %i: type %x, start %" PRIu32 ", size %" PRIu32 "\n", i, part.type,
                    part.lba_start, part.num_sectors);
 
-            partitions.push_back(std::make_shared<Partition>(part.lba_start, part.lba_start + part.num_sectors));
+            partitions.push_back(std::make_shared<Partition>(part.lba_start + 0, part.lba_start + part.num_sectors - 1));
         }
         disk.partitions = std::move(partitions);
     }

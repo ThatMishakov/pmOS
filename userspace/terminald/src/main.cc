@@ -34,8 +34,8 @@
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
 #include <pmos/memory.h>
-#include <pmos/helpers.h>
 #include <pmos/helpers.hh>
+#include <sys/mman.h>
 
 #include <src/flanterm.h>
 #include <src/flanterm_backends/fb.h>
@@ -105,13 +105,15 @@ void init_screen()
     };
 
     auto loader_right = pmos::get_right_by_name("/pmos/loader").value();
-    pmos::send_message_right_one(loader_right, req, {&configuration_port, pmos::RightType::SendOnce}).value();
+    auto right = pmos::send_message_right_one(loader_right, req, {&configuration_port, pmos::RightType::SendOnce}).value();
 
     Message_Descriptor desc = {};
     unsigned char* message = NULL;
     auto result = get_message(&desc, &message, configuration_port.get(), nullptr, nullptr);
     if (result != SUCCESS)
         exit(3);
+
+    right.release();
 
     if (desc.size < sizeof(IPC_Framebuffer_Reply))
         exit(4);
@@ -154,6 +156,8 @@ void request_logger_port()
     request_named_port(log_port_name, strlen(log_port_name), main_port.get(), 0);
 }
 
+pmos::ReceiveRight terminal_right;
+
 void react_named_port_notification(char *msg_buff, size_t size, pmos::Right r)
 {
     IPC_Named_Right_Notification *msg = (IPC_Named_Right_Notification *)msg_buff;
@@ -169,8 +173,10 @@ void react_named_port_notification(char *msg_buff, size_t size, pmos::Right r)
     };
 
     auto terminal_right = main_port.create_right(pmos::RightType::SendMany).value();
+    ::terminal_right = std::move(terminal_right.second);
 
-    pmos::send_message_right_one(log_right, reg, {&main_port, pmos::RightType::SendOnce}, false, std::move(terminal_right.first));
+    auto result = pmos::send_message_right_one(log_right, reg, {&main_port, pmos::RightType::SendOnce}, false, std::move(terminal_right.first));
+    result.value().release();
 }
 
 int main() {
@@ -187,7 +193,7 @@ int main() {
         auto [msg, buffer, right, rights] = main_port.get_first_message().value();
 
         if (msg.size < sizeof(IPC_Write_Plain)-1) {
-            write_screen("Warning: recieved very small message from ");
+            write_screen("Warning: received very small message from ");
             print_hex(msg.sender);
             write_screen(" of size ");
             print_hex(msg.size);

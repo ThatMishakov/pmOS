@@ -142,7 +142,7 @@ struct IPCNamedRightNotificationHdr {
     result: i32,
 }
 
-pub const IPC_FLAG_IO_OP_SEEK: u32 = 0x01;
+pub const IPC_FLAG_IO_OP_FIXED: u32 = 0x01;
 
 pub const IPC_READ_NUM: u32 = 0x42;
 #[repr(C)]
@@ -152,6 +152,75 @@ pub struct IPCRead {
     pub flags: u32,
     pub offset: u64,
     pub max_size: u64,
+}
+
+pub const IPC_READDIR_NUM: u32 = 0x32;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCReaddir {
+    msg_type: u32,
+    pub flags: u32,
+}
+
+impl IPCReaddir {
+    pub fn new(flags: u32) -> Self {
+        IPCReaddir {
+            msg_type: IPC_READDIR_NUM,
+            flags,
+        }
+    }
+}
+
+pub const IPC_READDIR_REPLY_NUM: u32 = 0x33;
+pub struct IPCReaddirReply<'a> {
+    pub result: i16,
+    pub file_type: u16,
+    pub inode: u64,
+    pub next_offset: u64,
+    pub name: &'a [u8],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+struct IPCReaddirReplyHdr {
+    msg_type: u32,
+    result: i16,
+    file_type: u16,
+    inode: u64,
+    next_offset: u64,
+}
+
+impl Serializable for IPCReaddirReply<'_> {
+    fn serialize(&self) -> Cow<'_, [u8]> {
+        let mut out = Vec::with_capacity(core::mem::size_of::<IPCReaddirReplyHdr>() + self.name.len());
+        out.extend_from_slice(bytemuck::bytes_of(&IPCReaddirReplyHdr {
+            msg_type: IPC_READDIR_REPLY_NUM,
+            result: self.result,
+            file_type: self.file_type,
+            inode: self.inode,
+            next_offset: self.next_offset,
+        }));
+        out.extend_from_slice(self.name);
+        Cow::<[u8]>::from(out)
+    }
+}
+
+pub const IPC_SEEK_NUM: u32 = 0x43;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCSeek {
+    msg_type: u32,
+    pub flags: u16,
+    pub whence: u16,
+    pub offset: i64,
+}
+
+pub const IPC_GET_OBJECT_NUM: u32 = 0x44;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCGetObject {
+    msg_type: u32,
+    pub flags: u32,
 }
 
 pub const IPC_READ_REPLY_NUM: u32 = 0x50;
@@ -168,6 +237,46 @@ struct IPCReadReplyHdr {
     msg_type: u32,
     flags: u16,
     result: i16,
+}
+
+pub const IPC_SEEK_REPLY_NUM: u32 = 0x52;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCSeekReply {
+    msg_type: u32,
+    pub flags: u16,
+    pub result: i16,
+    pub new_offset: u64,
+}
+
+impl IPCSeekReply {
+    pub fn new(result: i16, new_offset: u64) -> Self {
+        IPCSeekReply {
+            msg_type: IPC_SEEK_REPLY_NUM,
+            flags: 0,
+            result,
+            new_offset,
+        }
+    }
+}
+
+pub const IPC_GET_OBJECT_REPLY_NUM: u32 = 0x53;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCGetObjectReply {
+    msg_type: u32,
+    pub flags: u16,
+    pub result: i16,
+}
+
+impl IPCGetObjectReply {
+    pub fn new(result: i16) -> Self {
+        IPCGetObjectReply {
+            msg_type: IPC_GET_OBJECT_REPLY_NUM,
+            flags: 0,
+            result,
+        }
+    }
 }
 
 impl Serializable for IPCReadReply<'_> {
@@ -337,6 +446,34 @@ pub struct IPCFSResolvePath {
     pub path_component: String,
 }
 
+pub const IPC_FS_STAT_DYNAMIC_NUM: u32 = 0xC7;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCFSStatDynamic {
+    msg_type: u32,
+    pub flags: u32,
+    pub inode: u64,
+}
+
+pub const IPC_FS_READLINK_NUM: u32 = 0xC8;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCFSReadlink {
+    msg_type: u32,
+    pub flags: u32,
+    pub inode: u64,
+}
+
+impl IPCFSReadlink {
+    pub fn new(flags: u32, inode: u64) -> Self {
+        Self {
+            msg_type: IPC_FS_READLINK_NUM,
+            flags,
+            inode,
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct IPCFSResolvePathHdr {
@@ -365,12 +502,12 @@ pub const IPC_FS_OPEN_REPLY_NUM: u32 = 0xD0;
 #[derive(Debug, Copy, Clone, Zeroable, Pod)]
 pub struct IPCFSOpenReply {
     msg_type: u32,
-    pub result_code: i16,
-    pub fs_flags: u16,
+    pub result_code: i32,
+    pub fs_flags: u32,
 }
 
 impl IPCFSOpenReply {
-    pub fn new(result_code: i16, fs_flags: u16) -> Self {
+    pub fn new(result_code: i32, fs_flags: u32) -> Self {
         Self {
             msg_type: IPC_FS_OPEN_REPLY_NUM,
             result_code,
@@ -429,16 +566,76 @@ pub struct IPCFSResolvePathReply {
     pub result: i32,
     pub file_type: u32,
     pub inode: u64,
+    pub st_mode: u64,
+    pub st_uid: u32,
+    pub st_gid: u32,
+    pub st_rdev: u64,
+    pub st_blksize: u64,
 }
 
 impl IPCFSResolvePathReply {
-    pub fn new(result: i32, file_type: u32, inode: u64) -> Self {
+    pub fn new(result: i32, file_type: u32, inode: u64, st_mode: u64, st_uid: u32, st_gid: u32, st_rdev: u64, st_blksize: u64) -> Self {
         IPCFSResolvePathReply {
             msg_type: IPC_FS_RESOLVE_PATH_REPLY,
             flags: 0,
             result,
             file_type,
             inode,
+            st_mode,
+            st_uid,
+            st_gid,
+            st_rdev,
+            st_blksize,
+        }
+    }
+}
+
+pub const IPC_FS_STAT_DYNAMIC_REPLY_NUM: u32 = 0xD9;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Zeroable, Pod)]
+pub struct IPCFSStatDynamicReply {
+    msg_type: u32,
+    pub flags: u16,
+    pub result: i16,
+    pub st_size: u64,
+    pub st_nlink: u64,
+    pub st_atim_tv_nsec: u64,
+    pub st_mtim_tv_nsec: u64,
+    pub st_ctim_tv_nsec: u64,
+    pub st_btim_tv_nsec: u64,
+    pub st_blocks: u64,
+}
+
+pub const IPC_FS_READLINK_REPLY_NUM: u32 = 0xDA;
+pub struct IPCFSReadlinkReply<'a> {
+    pub result: i32,
+    pub link_target: &'a [u8],
+}
+
+impl Serializable for IPCFSReadlinkReply<'_> {
+    fn serialize(&self) -> Cow<'_, [u8]> {
+        let mut out = Vec::with_capacity(core::mem::size_of::<u32>() + core::mem::size_of::<i32>() + self.link_target.len());
+        out.extend_from_slice(&(IPC_FS_READLINK_REPLY_NUM as u32).to_ne_bytes());
+        out.extend_from_slice(&(self.result as i32).to_ne_bytes());
+        out.extend_from_slice(self.link_target);
+        Cow::from(out)
+    }
+}
+
+
+impl IPCFSStatDynamicReply {
+    pub fn new(result: i16, st_size: u64, st_nlink: u64, st_atim_tv_nsec: u64, st_mtim_tv_nsec: u64, st_ctim_tv_nsec: u64, st_btim_tv_nsec: u64, st_blocks: u64) -> Self {
+        IPCFSStatDynamicReply {
+            msg_type: IPC_FS_STAT_DYNAMIC_REPLY_NUM,
+            flags: 0,
+            result,
+            st_size,
+            st_nlink,
+            st_atim_tv_nsec,
+            st_mtim_tv_nsec,
+            st_ctim_tv_nsec,
+            st_btim_tv_nsec,
+            st_blocks,
         }
     }
 }
@@ -512,7 +709,7 @@ pub struct IPCFSProbeResult {
 pub const IPC_KERNEL_RECIEVE_RIGHT_DESTROYED_NUM: u32 = 0x26;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-pub struct IPCKernelRecieveRightDestroyed {
+pub struct IPCKernelReceiveRightDestroyed {
     msg_type: u32,
     pub flags: u32,
 }
@@ -627,11 +824,16 @@ pub enum Message<'a> {
     IPCNameRightReply(IPCNameRightReply),
     IPCDiskDescribeReply(IPCDiskDescribeReply),
     IPCDiskReadReply(IPCDiskReadReply),
-    IPCKernelRecieveRightDestroyed(IPCKernelRecieveRightDestroyed),
+    IPCKernelReceiveRightDestroyed(IPCKernelReceiveRightDestroyed),
     IPCKernelRightDestroyed(IPCKernelRightDestroyed),
     IPCNamedRightNotification(IPCNamedRightNotification),
     IPCRead(IPCRead),
+    IPCReaddir(IPCReaddir),
+    IPCSeek(IPCSeek),
+    IPCGetObject(IPCGetObject),
     IPCFSOpen(IPCFSOpen),
+    IPCFSStatDynamic(IPCFSStatDynamic),
+    IPCFSReadlink(IPCFSReadlink),
     IPCMountFS(IPCMountFS),
     IPCMountFSReply(IPCMountFSReply),
     IPCOpen(IPCOpen),
@@ -675,7 +877,7 @@ impl super::ipc::Message {
                 IPC_KERNEL_RIGHT_DESTROYED_NUM =>
                     try_from_bytes::<IPCKernelRightDestroyed>(data).map(|data| Message::IPCKernelRightDestroyed(data.clone())).unwrap_or(Message::Unknown),
                 IPC_KERNEL_RECIEVE_RIGHT_DESTROYED_NUM =>
-                    try_from_bytes::<IPCKernelRecieveRightDestroyed>(data).map(|data| Message::IPCKernelRecieveRightDestroyed(data.clone())).unwrap_or(Message::Unknown),
+                    try_from_bytes::<IPCKernelReceiveRightDestroyed>(data).map(|data| Message::IPCKernelReceiveRightDestroyed(data.clone())).unwrap_or(Message::Unknown),
                 IPC_NAMED_RIGHT_NOTIFICATION_NUM => {
                     if data.len() < size_of::<IPCNamedRightNotificationHdr>() {
                         return Message::Unknown;
@@ -728,8 +930,18 @@ impl super::ipc::Message {
                             })
                         ).unwrap_or(Message::Unknown)
                 }
+                IPC_FS_STAT_DYNAMIC_NUM =>
+                    try_from_bytes::<IPCFSStatDynamic>(data).map(|data| Message::IPCFSStatDynamic(data.clone())).unwrap_or(Message::Unknown),
+                IPC_FS_READLINK_NUM =>
+                    try_from_bytes::<IPCFSReadlink>(data).map(|data| Message::IPCFSReadlink(data.clone())).unwrap_or(Message::Unknown),
                 IPC_READ_NUM =>
                     try_from_bytes::<IPCRead>(data).map(|data| Message::IPCRead(data.clone())).unwrap_or(Message::Unknown),
+                IPC_READDIR_NUM =>
+                    try_from_bytes::<IPCReaddir>(data).map(|data| Message::IPCReaddir(data.clone())).unwrap_or(Message::Unknown),
+                IPC_SEEK_NUM =>
+                    try_from_bytes::<IPCSeek>(data).map(|data| Message::IPCSeek(data.clone())).unwrap_or(Message::Unknown),
+                IPC_GET_OBJECT_NUM =>
+                    try_from_bytes::<IPCGetObject>(data).map(|data| Message::IPCGetObject(data.clone())).unwrap_or(Message::Unknown),
                 IPC_OPEN_NUM => {
                     if data.len() < size_of::<IPCOpenHdr>() {
                         return Message::Unknown;
@@ -757,8 +969,8 @@ impl super::ipc::Message {
         }
     }
 
-    pub fn is_destroyed_recieve_notification(&self) -> bool {
-        self.sender == 0 && self.get_known_id() == Some(IPC_KERNEL_RECIEVE_RIGHT_DESTROYED_NUM) && matches!(self.deserialize(), Message::IPCKernelRecieveRightDestroyed(_))
+    pub fn is_destroyed_receive_notification(&self) -> bool {
+        self.sender == 0 && self.get_known_id() == Some(IPC_KERNEL_RECIEVE_RIGHT_DESTROYED_NUM) && matches!(self.deserialize(), Message::IPCKernelReceiveRightDestroyed(_))
     }
 }
 

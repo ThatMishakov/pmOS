@@ -4,14 +4,18 @@ use async_trait::async_trait;
 use pmos::ipc_runner::Executor;
 use pmos::ipc::SendRight;
 use pmos::ipc::SendManyRight;
-use pmos::ipc_runner::ManyReciever;
+use pmos::ipc_runner::ManyReceiver;
 use pmos::async_helpers::get_named_right;
 use pmos::ipc_msgs::IPCMountFS;
 use pmos::ipc::send_message_right;
 use pmos::ipc::send_message_right_consume;
-use pmos::ipc_msgs::IPC_FLAG_IO_OP_SEEK;
+use pmos::ipc::MemoryObjectRight;
+use pmos::ipc_msgs::IPC_FLAG_IO_OP_FIXED;
 
 use futures::StreamExt;
+use futures::future::poll_fn;
+use std::task::Poll;
+use std::task::Waker;
 
 use std::num::NonZeroU32;
 
@@ -27,6 +31,9 @@ use ext4plus::prelude::Dir;
 use ext4plus::prelude::Inode;
 use ext4plus::FileType;
 use ext4plus::prelude::File;
+use ext4plus::iters::AsyncIterator;
+
+use std::collections::BTreeMap;
 
 #[derive(PartialEq)]
 enum RunType {
@@ -354,7 +361,13 @@ fn ext4error_to_int(error: Ext4Error) -> i32 {
 }
 
 fn ext4direntry_error_to_int(error: ext4plus::prelude::DirEntryNameError) -> i32 {
-    todo!()
+    use ext4plus::prelude::DirEntryNameError as E;
+    match error {
+        E::Empty => -libc::ENOENT as i32,
+        E::TooLong => -libc::ENAMETOOLONG as i32,
+        E::ContainsNull | E::ContainsSeparator => -libc::EINVAL as i32,
+        _ => -libc::EIO as i32,
+    }
 }
 
 fn ext4filetype_to_int(file_type: FileType) -> u32 {
@@ -369,8 +382,31 @@ fn ext4filetype_to_int(file_type: FileType) -> u32 {
     }
 }
 
-fn ipc_resolve_path_reply(mut reply_right: Option<SendRight>, result: i32, inode: u64, file_type: u32) {
-    let msg = pmos::ipc_msgs::IPCFSResolvePathReply::new(result, file_type, inode);
+fn ipc_resolve_path_reply(mut reply_right: Option<SendRight>, result: i32, _fs: Ext4, inode: Option<Inode>) {
+    let (file_type, inode, st_mode, st_uid, st_gid, st_rdev, st_blksize) = match inode {
+        Some(inode) => (
+            ext4filetype_to_int(inode.file_type()),
+            inode.index.get().into(),
+            inode.mode().bits().into(),
+            inode.uid(),
+            inode.gid(),
+            0,
+            // TODO: block size is private in ext4plus
+            4096,
+        ),
+        None => (0, 0, 0, 0, 0, 0, 4096),
+    };
+
+    let msg = pmos::ipc_msgs::IPCFSResolvePathReply::new(
+        result,
+        file_type,
+        inode,
+        st_mode,
+        st_uid,
+        st_gid,
+        st_rdev,
+        st_blksize,
+    );
     let result = send_message_right(&msg, &mut reply_right, &mut [None, None, None, None]);
     if let Err(e) = result {
         eprintln!("ext4: Failed to send IPCFSResolvePathReply message: {}", e.0);
@@ -380,45 +416,49 @@ fn ipc_resolve_path_reply(mut reply_right: Option<SendRight>, result: i32, inode
 async fn ipc_handle_resolve_path(executor: Executor, reply_right: Option<SendRight>, fs: Ext4, path_component: String, inode: u64) {
     let current_inode = u32::try_from(inode).ok().and_then(NonZeroU32::new);
     if current_inode.is_none() {
-        ipc_resolve_path_reply(reply_right, -ENOENT as i32, 0, 0);
+        ipc_resolve_path_reply(reply_right, -ENOENT as i32, fs, None);
         return;
     }
     let current_inode = current_inode.unwrap();
 
     let entry_name = path_component.as_str().try_into();
     if let Err(e) = entry_name {
-        ipc_resolve_path_reply(reply_right, ext4direntry_error_to_int(e), 0, 0);
+        ipc_resolve_path_reply(reply_right, ext4direntry_error_to_int(e), fs, None);
         return;
     }
     let entry_name = entry_name.unwrap();
 
     let inode = Inode::read(&fs, current_inode).await;
     if let Err(e) = inode {
-        ipc_resolve_path_reply(reply_right, ext4error_to_int(e), 0, 0);
+        ipc_resolve_path_reply(reply_right, ext4error_to_int(e), fs, None);
         return;
     }
     let inode = inode.unwrap();
 
     let dir = Dir::open_inode(&fs, inode);
     if let Err(e) = dir {
-        ipc_resolve_path_reply(reply_right, ext4error_to_int(e), 0, 0);
+        ipc_resolve_path_reply(reply_right, ext4error_to_int(e), fs, None);
         return;
     }
     let dir = dir.unwrap();
 
     let entry = dir.get_entry(entry_name).await;
     if let Err(e) = entry {
-        ipc_resolve_path_reply(reply_right, ext4error_to_int(e), 0, 0);
+        ipc_resolve_path_reply(reply_right, ext4error_to_int(e), fs, None);
         return;
     }
     let entry = entry.unwrap();
 
-    let file_type = entry.file_type();
-    let inode = entry.index.get().into();
-    ipc_resolve_path_reply(reply_right, 0, inode, ext4filetype_to_int(file_type));
+    let inode = Inode::read(&fs, entry.index).await;
+    if let Err(e) = inode {
+        ipc_resolve_path_reply(reply_right, ext4error_to_int(e), fs, None);
+        return;
+    }
+
+    ipc_resolve_path_reply(reply_right, 0, fs, Some(inode.unwrap()));
 }
 
-fn ipc_fs_open_reply(reply_right: Option<SendRight>, result: i16, flags: u16, fs_right: Option<SendRight>) -> Result<(), i32> {
+fn ipc_fs_open_reply(reply_right: Option<SendRight>, result: i32, flags: u32, fs_right: Option<SendRight>) -> Result<(), i32> {
     let msg = pmos::ipc_msgs::IPCFSOpenReply::new(result, flags);
     let rights = [fs_right, None, None, None];
     let reply_right = reply_right.ok_or(libc::ENOENT)?;
@@ -438,10 +478,98 @@ fn ipc_read_reply(reply_right: SendRight, result: i16, flags: u16, data: &[u8]) 
     }
 }
 
-async fn ipc_fs_open(executor: Executor, reply_right: Option<SendRight>, fs: Ext4, _flags: u32, inode: u64) {
+enum ObjectInner {
+    Ready(pmos::ipc::MemoryObjectRight),
+    Pending {
+        waiters: Vec<Waker>,
+    },
+    Failed(i32),
+}
+
+struct State {
+    memory_objects: BTreeMap<u64, ObjectInner>,
+}
+
+type SharedState = Rc<RefCell<State>>;
+
+async fn get_object(state: SharedState, file: &mut File) -> Result<MemoryObjectRight, i32> {
+    let (ino, file_size) = {
+        let inode = file.inode();
+        (inode.index.get() as u64, inode.size_in_bytes())
+    };
+
+    if state.borrow().memory_objects.get(&ino).is_none() {
+        let page_size = get_page_size();
+        let aligned_size = ((file_size + page_size - 1) & !(page_size - 1)).max(page_size);
+        let obj = MemoryObjectRight::create(aligned_size).map_err(|e| e.get())?;
+
+        state.borrow_mut().memory_objects.insert(ino, ObjectInner::Pending { waiters: Vec::new() });
+
+        let mut mmap = unsafe { obj.map(0, aligned_size) }.map_err(|e| e.get())?;
+        let slice = unsafe { mmap.as_mut_slice() };
+        let slice = &mut slice[..file_size as usize];
+
+        let mut copied = 0;
+        while copied < slice.len() {
+            let bytes_read = file.read_bytes_at(&mut slice[copied..], copied as u64).await.map_err(ext4error_to_int)?;
+            if bytes_read == 0 {
+                break;
+            }
+            copied += bytes_read;
+        }
+
+        let waiters = {
+            let mut state = state.borrow_mut();
+            let waiters = match state.memory_objects.get_mut(&ino).unwrap() {
+                ObjectInner::Pending { waiters } => std::mem::take(waiters),
+                _ => unreachable!(),
+            };
+            state.memory_objects.insert(ino, ObjectInner::Ready(obj));
+            waiters
+        };
+
+        for waiter in waiters {
+            waiter.wake();
+        }
+    }
+
+    poll_fn(|cx| {
+        let mut state = state.borrow_mut();
+        match state.memory_objects.get_mut(&ino) {
+            Some(ObjectInner::Ready(obj)) => {
+                Poll::Ready(Ok(obj.clone().expect("dup")))
+            }
+            Some(ObjectInner::Failed(e)) => Poll::Ready(Err(*e)),
+            Some(ObjectInner::Pending { waiters }) => {
+                if !waiters.iter().any(|w| w.will_wake(cx.waker())) {
+                    waiters.push(cx.waker().clone());
+                }
+                Poll::Pending
+            }
+            None => panic!("entry removed while waiting"),
+        }
+    }).await
+}
+
+fn direntry_reply(reply_right: SendRight, result: i16, inode: u64, next_offset: u64, file_type: u16, name: &[u8]) {
+    let msg = pmos::ipc_msgs::IPCReaddirReply {
+        result,
+        inode: inode,
+        next_offset,
+        file_type: file_type.try_into().unwrap(),
+        name,
+    };
+
+    let result = send_message_right(&msg, &mut Some(reply_right), &mut [None, None, None, None]);
+    if let Err(e) = result {
+        eprintln!("ext4: Failed to send IPCReaddirReply message: {}", e.0);
+    }
+}
+
+async fn ipc_fs_open(state: SharedState, executor: Executor, reply_right: Option<SendRight>, fs: Ext4, _flags: u32, inode: u64) {
     let inode = u32::try_from(inode).ok().and_then(NonZeroU32::new);
     if inode.is_none() {
-        _ = ipc_fs_open_reply(reply_right, -ENOENT as i16, 0, None);
+        _ = ipc_fs_open_reply(reply_right, -ENOENT as i32, 0, None);
         return;
     }
     let inode = inode.unwrap();
@@ -453,65 +581,304 @@ async fn ipc_fs_open(executor: Executor, reply_right: Option<SendRight>, fs: Ext
     }
     let inode = inode.unwrap();
 
-    let file = File::open_inode(&fs, inode);
-    if let Err(e) = file {
-        _ = ipc_fs_open_reply(reply_right, ext4error_to_int(e).try_into().unwrap(), 0, None);
-        return;
-    }
-    let mut file = file.unwrap();
-
     let right = executor.create_right_sendmany().expect("Failed to create SendManyRight for the filesystem");
+    let mut receive_right = right.1;
 
-    let result = ipc_fs_open_reply(reply_right, 0, 0, Some(right.0.into()));
-    if let Err(e) = result {
-        println!("Failed to reply to IPC_FS_Open request! {}", e);
-        return;
-    }
+    if inode.file_type() == FileType::Directory {
+        let dir = Dir::open_inode(&fs, inode);
+        if let Err(e) = dir {
+            _ = ipc_fs_open_reply(reply_right, ext4error_to_int(e).try_into().unwrap(), 0, None);
+            return;
+        }
+        let dir = dir.unwrap().read_dir();
+        if let Err(e) = dir {
+            _ = ipc_fs_open_reply(reply_right, ext4error_to_int(e).try_into().unwrap(), 0, None);
+            return;
+        }
+        let mut dir = dir.unwrap();
+        let mut iter_num: u64 = 0;
 
-    let mut recieve_right = right.1;
+        let result = ipc_fs_open_reply(reply_right, 0, 0, Some(right.0.into()));
+        if let Err(e) = result {
+            println!("Failed to reply to IPC_FS_Open request! {}", e);
+            return;
+        }
 
-    while let Some(mut msg) = recieve_right.next().await {
-        let reply_right = msg.reply_right.take();
-        match msg.deserialize() {
-            pmos::ipc_msgs::Message::IPCRead(data) => {
-                if reply_right.is_none() {
-                    println!("ext4: Recieved read with no reply right!");
-                    continue;
-                }
-                let reply_right = reply_right.unwrap();
+        while let Some(mut msg) = receive_right.next().await {
+            let reply_right = msg.reply_right.take();
+            if reply_right.is_none() {
+                println!("ext4: Received message with no reply right!");
+                continue;
+            }
+            let reply_right = reply_right.unwrap();
+            match msg.deserialize() {
+                pmos::ipc_msgs::Message::IPCReaddir(_) => {
+                    if let Some(entry) = dir.next().await {                        
+                        if let Err(e) = entry {
+                            let error_code = ext4error_to_int(e);
+                            direntry_reply(reply_right, error_code.try_into().unwrap(), 0, 0, 0, &[]);
+                        } else {
+                            let entry = entry.unwrap();
+                            // TODO?
+                            let file_type: u16 = ext4filetype_to_int(entry.file_type().unwrap()).try_into().unwrap();
+                            let inode = entry.inode.get();
+                            let name = entry.file_name();
+                            let next_offset = iter_num + 1;
+                            iter_num += 1;
 
-                if (data.flags & IPC_FLAG_IO_OP_SEEK) != 0 {
-                    let mut buffer = vec![0u8; data.max_size as usize];
-
-                    let result = file.read_bytes(buffer.as_mut_slice()).await;
-                    if let Err(e) = result {
-                        let error_code = ext4error_to_int(e);
-                        ipc_read_reply(reply_right, error_code as i16, 0, &[]);
+                            direntry_reply(reply_right, 0, inode.into(), next_offset, file_type, name.as_ref());
+                        }
                     } else {
-                        let bytes_read = result.unwrap();
-                        ipc_read_reply(reply_right, 0, 0, &buffer[..bytes_read as usize]);
+                        direntry_reply(reply_right, 0, 0, 0, 0, &[]);
                     }
-                } else {
-                    // Not implemented
-                    ipc_read_reply(reply_right, -libc::ENOSYS as i16, 0, &[]);
                 }
-            },
-            _ => {
-                println!("Ext4: recieved unknown message in IPC open file consumer");
+                unknown => {
+                    println!("Ext4: received unknown message in IPC open dir consumer: {:?}", unknown);
+                }
+            }
+        }
+    } else {
+        let file = File::open_inode(&fs, inode);
+        if let Err(e) = file {
+            _ = ipc_fs_open_reply(reply_right, ext4error_to_int(e).try_into().unwrap(), 0, None);
+            return;
+        }
+        let mut file = file.unwrap();
+
+        let result = ipc_fs_open_reply(reply_right, 0, 0, Some(right.0.into()));
+        if let Err(e) = result {
+            println!("Failed to reply to IPC_FS_Open request! {}", e);
+            return;
+        }
+
+        while let Some(mut msg) = receive_right.next().await {
+            let reply_right = msg.reply_right.take();
+            match msg.deserialize() {
+                pmos::ipc_msgs::Message::IPCRead(data) => {
+                    if reply_right.is_none() {
+                        println!("ext4: Received read with no reply right!");
+                        continue;
+                    }
+                    let reply_right = reply_right.unwrap();
+
+                    if (data.flags & IPC_FLAG_IO_OP_FIXED) == 0 {
+                        let mut buffer = vec![0u8; data.max_size as usize];
+
+                        let result = file.read_bytes(buffer.as_mut_slice()).await;
+                        if let Err(e) = result {
+                            let error_code = ext4error_to_int(e);
+                            ipc_read_reply(reply_right, error_code as i16, 0, &[]);
+                        } else {
+                            let bytes_read = result.unwrap();
+                            ipc_read_reply(reply_right, 0, 0, &buffer[..bytes_read as usize]);
+                        }
+                    } else {
+                        let mut buffer = vec![0u8; data.max_size as usize];
+
+                        let result = file.read_bytes_at(buffer.as_mut_slice(), data.offset).await;
+                        if let Err(e) = result {
+                            let error_code = ext4error_to_int(e);
+                            ipc_read_reply(reply_right, error_code as i16, 0, &[]);
+                        } else {
+                            let bytes_read = result.unwrap();
+                            ipc_read_reply(reply_right, 0, 0, &buffer[..bytes_read as usize]);
+                        }
+                    }
+                },
+                pmos::ipc_msgs::Message::IPCGetObject(_) => {
+                    if reply_right.is_none() {
+                        println!("ext4: Received IPCGetObject with no reply right!");
+                        continue;
+                    }
+                    let reply_right = reply_right.unwrap();
+
+                    let result = get_object(state.clone(), &mut file).await;
+                    match result {
+                        Ok(obj) => {
+                            let msg = pmos::ipc_msgs::IPCGetObjectReply::new(0);
+                            let result = send_message_right(&msg, &mut Some(reply_right), &mut [Some(obj.into()), None, None, None]);
+                            if let Err(e) = result {
+                                println!("ext4: Failed to send IPCGetObjectReply message: {}", e.0);
+                            }
+                        },
+                        Err(e) => {
+                            let msg = pmos::ipc_msgs::IPCGetObjectReply::new(e as i16);
+                            let result = send_message_right(&msg, &mut Some(reply_right), &mut [None, None, None, None]);
+                            if let Err(e) = result {
+                                println!("ext4: Failed to send IPCGetObjectReply message: {}", e.0);
+                            }
+                        }
+                    }
+                }
+                pmos::ipc_msgs::Message::IPCSeek(seek) => {
+                    if reply_right.is_none() {
+                        println!("ext4: Received IPCSeek with no reply right!");
+                        continue;
+                    }
+                    let reply_right = reply_right.unwrap();
+                    let whence = seek.whence as i32;
+
+                    let position: i64 = if whence == libc::SEEK_SET {
+                        seek.offset
+                    } else if whence == libc::SEEK_CUR {
+                        let current_offset = file.position() as i64;
+                        current_offset + seek.offset
+                    } else if whence == libc::SEEK_END {
+                        let file_size: i64 = file.inode().size_in_bytes().try_into().unwrap();
+                        file_size + seek.offset
+                    } else {
+                        let msg = pmos::ipc_msgs::IPCSeekReply::new(-libc::EINVAL as i16, 0);
+                        let result = send_message_right(&msg, &mut Some(reply_right), &mut [None, None, None, None]);
+                        if let Err(e) = result {
+                            println!("ext4: Failed to send IPCSeekReply message: {}", e.0);
+                        }
+                        continue;
+                    };
+                    let position = position.try_into().unwrap_or(0);
+
+                    let result = file.seek_to(position).await;
+                    match result {
+                        Ok(()) => {
+                            let msg = pmos::ipc_msgs::IPCSeekReply::new(0, position);
+                            let result = send_message_right(&msg, &mut Some(reply_right), &mut [None, None, None, None]);
+                            if let Err(e) = result {
+                                println!("ext4: Failed to send IPCSeekReply message: {}", e.0);
+                            }
+                        },
+                        Err(e) => {
+                            let error_code = ext4error_to_int(e);
+                            let msg = pmos::ipc_msgs::IPCSeekReply::new(error_code as i16, 0);
+                            let result = send_message_right(&msg, &mut Some(reply_right), &mut [None, None, None, None]);
+                            if let Err(e) = result {
+                                println!("ext4: Failed to send IPCSeekReply message: {}", e.0);
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    println!("Ext4: received unknown message in IPC open file consumer");
+                }
             }
         }
     }
 }
 
-async fn ipc_handle(executor: Executor, mut reciever: ManyReciever, fs: Ext4) {
-    while let Some(mut msg) = reciever.next().await {
+async fn ipc_handle_state(executor: Executor, reply_right: Option<SendRight>, fs: Ext4, inode: u64) {
+    let inode = u32::try_from(inode).ok().and_then(NonZeroU32::new);
+    if inode.is_none() {
+        let msg = pmos::ipc_msgs::IPCFSStatDynamicReply::new(-ENOENT as i16, 0, 0, 0, 0, 0, 0, 0);
+        if let Some(reply_right) = reply_right {
+            executor.send_message(&msg, &mut Some(reply_right), &mut [None, None, None, None]).expect("Failed to send IPCFSStatDynamicReply message");
+        }
+        return;
+    }
+    let inode = inode.unwrap();
+
+    let inode = Inode::read(&fs, inode).await;
+    if let Err(e) = inode {
+        let msg = pmos::ipc_msgs::IPCFSStatDynamicReply::new(ext4error_to_int(e) as i16, 0, 0, 0, 0, 0, 0, 0);
+        if let Some(reply_right) = reply_right {
+            executor.send_message(&msg, &mut Some(reply_right), &mut [None, None, None, None]).expect("Failed to send IPCFSStatDynamicReply message");
+        }
+        return;
+    }
+    let inode = inode.unwrap();
+
+    let blocks = inode.file_size_in_blocks(&fs);
+    if let Err(e) = blocks {
+        let msg = pmos::ipc_msgs::IPCFSStatDynamicReply::new(ext4error_to_int(e) as i16, 0, 0, 0, 0, 0, 0, 0);
+        if let Some(reply_right) = reply_right {
+            executor.send_message(&msg, &mut Some(reply_right), &mut [None, None, None, None]).expect("Failed to send IPCFSStatDynamicReply message");
+        }
+        return;
+    }
+    let blocks = blocks.unwrap();
+
+    let msg = pmos::ipc_msgs::IPCFSStatDynamicReply::new(
+        0,
+        inode.size_in_bytes() as u64,
+        inode.links_count() as u64,
+        0,
+        0,
+        0,
+        0,
+        blocks.into(),
+    );
+    if let Some(reply_right) = reply_right {
+        executor.send_message(&msg, &mut Some(reply_right), &mut [None, None, None, None]).expect("Failed to send IPCFSStatDynamicReply message");
+    }
+}
+
+fn ipc_handle_readlink_reply(reply_right: Option<SendRight>, result: i32, link_target: &[u8]) {
+    let msg = pmos::ipc_msgs::IPCFSReadlinkReply{
+        result,
+        link_target,
+    };
+
+    if let Some(reply_right) = reply_right {
+        let result = send_message_right(&msg, &mut Some(reply_right), &mut [None, None, None, None]);
+        if let Err(e) = result {
+            eprintln!("ext4: Failed to send IPCFSReadlinkReply message: {}", e.0);
+        }
+    }
+}
+
+async fn ipc_handle_readlink(executor: Executor, reply_right: Option<SendRight>, fs: Ext4, inode: u64) {
+    let inode = u32::try_from(inode).ok().and_then(NonZeroU32::new);
+    if inode.is_none() {
+        ipc_handle_readlink_reply(reply_right, -libc::ENOENT as i32, &[]);
+        return;
+    }
+    let inode = inode.unwrap();
+
+    let inode = Inode::read(&fs, inode).await;
+    if let Err(e) = inode {
+        ipc_handle_readlink_reply(reply_right, ext4error_to_int(e), &[]);
+        return;
+    }
+    let inode = inode.unwrap();
+
+
+    if inode.file_type() != FileType::Symlink {
+        ipc_handle_readlink_reply(reply_right, -libc::EINVAL as i32, &[]);
+        return;
+    }
+
+    let target = inode.symlink_target(&fs).await;
+    if let Err(e) = target {
+        ipc_handle_readlink_reply(reply_right, ext4error_to_int(e), &[]);
+        return;
+    }
+    let target = target.unwrap();
+
+    let target = inode.symlink_target(&fs).await;
+    if let Err(e) = target {
+        ipc_handle_readlink_reply(reply_right, ext4error_to_int(e), &[]);
+        return;
+    }
+    let target = target.unwrap();
+
+    ipc_handle_readlink_reply(reply_right, 0, target.as_ref());
+}
+
+async fn ipc_handle(executor: Executor, mut receiver: ManyReceiver, fs: Ext4) {
+    let shared_state = Rc::new(RefCell::new(State {
+        memory_objects: BTreeMap::new(),
+    }));
+    while let Some(mut msg) = receiver.next().await {
         let reply_right = msg.reply_right.take();
         match msg.deserialize() {
             pmos::ipc_msgs::Message::IPCFSResolvePath(req) => {
                 executor.spawn(ipc_handle_resolve_path(executor.clone(), reply_right, fs.clone(), req.path_component, req.inode));
             }
             pmos::ipc_msgs::Message::IPCFSOpen(req) => {
-                executor.spawn(ipc_fs_open(executor.clone(), reply_right, fs.clone(), req.flags, req.inode));
+                executor.spawn(ipc_fs_open(shared_state.clone(), executor.clone(), reply_right, fs.clone(), req.flags, req.inode));
+            }
+            pmos::ipc_msgs::Message::IPCFSStatDynamic(req) => {
+                executor.spawn(ipc_handle_state(executor.clone(), reply_right, fs.clone(), req.inode));
+            }
+            pmos::ipc_msgs::Message::IPCFSReadlink(req) => {
+                executor.spawn(ipc_handle_readlink(executor.clone(), reply_right, fs.clone(), req.inode));
             }
             _ => {
                 eprintln!("ext4: Received unexpected message type {}", msg.get_known_id().unwrap_or(0));
@@ -567,8 +934,10 @@ async fn ipc_mount(executor: Executor, reader: ReaderWrapper, mount_point: Optio
     }
 
     if mount.is_err() {
+        eprintln!("ext4: mount failed");
         std::process::exit(1);
     }
+    eprintln!("ext4: mount completed successfully");
 }    
 
 async fn handle_ipc(executor: Executor, run_type: RunType, disk_right: pmos::ipc::SendManyRight, reply_right: Option<pmos::ipc::SendRight>, mount_point: Option<String>) {

@@ -42,11 +42,13 @@
 #include <optional>
 #include <paging/arch_paging.hh>
 #include <pmos/containers/set.hh>
+#include <pmos/containers/intrusive_list.hh>
 #include <pmos/load_data.h>
 #include <registers.hh>
 #include <sched/defs.hh>
 #include <tuple>
 #include <types.hh>
+#include <sched/timer_node.hh>
 
 #if defined(__x86_64__) || defined(__i386__)
     #include <cpus/sse.hh>
@@ -80,6 +82,7 @@ namespace interrupts
 namespace proc
 {
     class TaskGroup;
+    struct Process;
 
     struct TaskPermissions {
     };
@@ -90,7 +93,6 @@ namespace proc
         TASK_BLOCKED,
         TASK_UNINIT,
         TASK_SPECIAL, // Would be used by idle or system tasks
-        TASK_DYING,
         TASK_PAUSED,
         TASK_DEAD
     };
@@ -106,7 +108,7 @@ namespace proc
 
         // Basic process stuff
         Task_Regs regs; // 200 on x86_64
-#if defined(__riscv) || defined(__loongarch__)
+#if defined(__riscv) || defined(__loongarch__) || defined(__m68k__)
         u64 is_system = 0; // 0 if user space task, 1 if kernel task
 #endif
         TaskID task_id;
@@ -137,14 +139,36 @@ namespace proc
         u32 cpu_affinity                 = 0;
         Spinlock sched_lock;
 
+        i64 pending_cancel_reason = -EINTR;
+
         union {
             memory::RCU_Head rcu_head;
             pmos::containers::RBTreeNode<TaskDescriptor> task_tree_head = {};
         };
 
-        static constexpr int SCHED_PENDING_PAUSE = 1;
+        pmos::containers::RBTreeNode<TaskDescriptor> process_tree_head;
+        Process *process = nullptr;
+
+        bool is_terminating() const;
+
+        static constexpr int SCHED_FLAG_PAUSE     = 0x01;
+        static constexpr int SCHED_FLAG_WAKE      = 0x02;
+        static constexpr int SCHED_FLAG_INTERRUPT = 0x04;
+        static constexpr int SCHED_FLAG_TERMINATE = 0x08;
+
+        u32 wake_reason_mask = 0;
+        u32 unblock_mask = 0;
+
+        static constexpr int SCHED_WAKE_PORT = 0x01;
+        static constexpr int SCHED_WAKE_FUTEX = 0x02;
+        static constexpr int SCHED_WAKE_MEMORY = 0x04;
+        static constexpr int SCHED_WAKE_TIMER = 0x08;
+        static constexpr int SCHED_WAKE_ATTENTION = 0x10;
 
         sched::sched_queue waiting_to_pause;
+
+        static void cancel_syscall(TaskDescriptor *task, i64 error_code);
+        static void cancel_noop(TaskDescriptor *task, i64 error_code);
 
         // Paging
         klib::shared_ptr<paging::Arch_Page_Table> page_table;
@@ -155,6 +179,50 @@ namespace proc
 
         // Count of handlers for interrupts. Also using sched_lock
         size_t interrupt_handlers_count = 0;
+
+        struct NoContinuation {
+        };
+        struct GetMessageData {
+            ipc::Port *port;
+        };
+
+        using continuation_func_type = void (*)(TaskDescriptor *task);
+        using cancel_callback_type = void (*)(TaskDescriptor *task, i64 error_code);
+
+        // Continuation..?
+        continuation_func_type continuation_func = nullptr;
+        cancel_callback_type cancel_callback = nullptr;
+        std::variant<NoContinuation, GetMessageData> continuation_data = NoContinuation{};
+
+        // Futex and sleep() syscalls stuff
+        struct TaskWaiter: sched::TimerNode {
+            virtual void fire() override;
+        };
+
+        struct TaskAttention: sched::AttentionNode {
+            virtual void get_attention() override;
+        };
+
+        Spinlock timer_lock;
+        // If timer_cpu == nullptr, then it is not pushed to any CPU's timer queue
+        sched::CPU_Info *timer_cpu = nullptr;
+        bool waiting_for_attention = false;
+        TaskAttention attention_node;
+        TaskWaiter sleep_waiter;
+        u64 timer_deadline = -1;
+
+        // TODO: Replace this with a stack...
+        continuation_func_type attention_saved_continuation = nullptr;
+        cancel_callback_type attention_saved_cancel = nullptr;
+
+        // This can block; in case that happens, false is returned.
+        [[nodiscard]] bool /* continue */ timer_push();
+        void timer_try_remove();
+
+        // Futex stuff. This is protected by a global futex lock
+        ulong futex_addr = 0;
+        bool futex_pushed = false;
+        pmos::containers::DoubleListHead<TaskDescriptor> futex_list_node;
 
         // Creates and assigns an emty valid page table
         kresult_t create_new_page_table();
@@ -167,24 +235,21 @@ namespace proc
         // Inits stack
         ReturnStr<std::tuple<size_t, load_tag_stack_descriptor>> init_stack(klib::shared_ptr<paging::Arch_Page_Table> optional_existing_table = {});
 
-        // Blocks the process by a page (for example in case of a pagefault)
-        void atomic_block_by_page(void *page, sched::sched_queue *push_to_queue);
+        // // Blocks the process by a page (for example in case of a pagefault)
+        void atomic_block_by_page(void *page);
 
-        // Unblocks the task when the page becomes available
-        bool atomic_try_unblock_by_page(void *page);
+        // // Unblocks the task when the page becomes available
+        // bool atomic_try_unblock_by_page(void *page);
 
         /// Tries to atomically erase the task from the queue. If task's parrent queue is not equal
         /// to *queue*, does nothing
         void atomic_erase_from_queue(sched::sched_queue *queue) noexcept;
 
         // Kills the task
-        void atomic_kill();
+        void atomic_kill(bool destoy_process = true);
 
         // Returns 0 if there are no unblocking events pending. Otherwise returns 0.
         u64 check_unblock_immediately(u64 reason, u64 extra);
-
-        // Checks if the process is blocked by the port and unblocks it if needed
-        bool atomic_unblock_if_needed(ipc::Port *compare_blocked_by);
 
         // Sets the entry point to the task
         inline void set_entry_point(u64 entry) { this->regs.program_counter() = entry; }
@@ -253,19 +318,17 @@ namespace proc
 
         ~TaskDescriptor() noexcept;
 
-        // Changes the *task* to repeat the syscall upon reentering the system
-        inline void request_repeat_syscall() noexcept { regs.request_syscall_restart(); }
-        inline void pop_repeat_syscall() noexcept { regs.clear_syscall_restart(); }
-
-        /// Creates a process structure and returns its pid
-        static TaskDescriptor *create_process(PrivilegeLevel level = PrivilegeLevel::User) noexcept;
+        /// Creates the task
+        /// nullptr process -> create a new one for the task
+        /// TODO: Not all the the errors are ENOMEM now...
+        static TaskDescriptor *create(Process *parent, PrivilegeLevel level = PrivilegeLevel::User) noexcept;
 
         /// Loads ELF into the task from the given memory object
         /// Returns true if the ELF was loaded successfully, false if the memory object data is not
         /// immediately available
         ReturnStr<bool>
             atomic_load_elf(ipc::MemObjectRight *obj, klib::string name = "",
-                            const klib::vector<klib::unique_ptr<load_tag_generic>> &tags = {}, TaskGroup *optional_group = nullptr);
+                            const pmos::containers::vector<klib::unique_ptr<load_tag_generic>> &tags = {}, TaskGroup *optional_group = nullptr);
 
         /// Loads ELF into the task from the given memory object. This function does not acquire the
         /// sched_lock. Returns the program header if loaded successfully, empty optional if the
@@ -315,13 +378,24 @@ namespace proc
         // Returns true if the task is a kernel task
         bool is_kernel_task() const;
 
-        // Interrupts restarting syscall, setting the return value to interrupted error
-        void interrupt_restart_syscall();
+        // Blocks self and schedules a different task (if blocked), respecting the flags (i.e. not blocking if wake is already pending, etc.)
+        void atomic_block_self(u32 mask, bool force_block_on_terminate = false);
+
+        // Interrupts the blocked task (setting SCHED_FLAG_INTERRUPT, etc.)
+        void interrupt_blocked(i64 error_code = -EINTR);
 
         // Unblocks the task if it is not already blocked
         void atomic_try_unblock();
 
+        // Pushes and removes (if not already inserted) the task from the futex hash table.
+        void futex_push();
+        void futex_try_remove();
+
+        void futex_wake(ulong futex_addr, bool wake_all);
+
         bool is_32bit() const;
+
+        void set_continuation(continuation_func_type func, cancel_callback_type cancel_func = nullptr);
 
 #if defined(__riscv) || defined(__loongarch__)
         kresult_t init_fp_state();
@@ -335,6 +409,12 @@ namespace proc
         {
             return rights_namespace.load(std::memory_order::consume);
         }
+
+        void atomic_handle_unblock(u32 reason_mask);
+
+        result_t inherit_registers_from_current();
+
+        u64 process_id() const;
 
     protected:
         TaskDescriptor() = default;

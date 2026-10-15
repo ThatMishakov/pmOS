@@ -177,73 +177,73 @@ void term_write(const klib::string &s) { global_logger.log(s); }
 
 ReturnStr<bool> prepare_user_buff_rd(const char *buff, size_t size)
 {
-    u64 addr_start = (u64)buff;
-    u64 end        = addr_start + size;
+    // u64 addr_start = (u64)buff;
+    // u64 end        = addr_start + size;
 
-    TaskDescriptor *current_task = get_current_task();
+    // TaskDescriptor *current_task = get_current_task();
 
-    if (buff > current_task->page_table->user_addr_max() or
-        (void *) end > current_task->page_table->user_addr_max() or buff > (void *)end)
-        return Error(-EFAULT);
+    // if (buff > current_task->page_table->user_addr_max() or
+    //     (void *) end > current_task->page_table->user_addr_max() or buff > (void *)end)
+    //     return Error(-EFAULT);
 
-    current_task->request_repeat_syscall();
+    // current_task->request_repeat_syscall();
 
-    auto result = [&]() -> ReturnStr<bool> {
-        for (u64 i = addr_start; i < end; ++i) {
-            u64 page    = i & ~0xfffULL;
-            auto result = current_task->page_table->prepare_user_page(
-                (void *)page, Page_Table::Protection::Readable);
-            if (!result.success())
-                return result.propagate();
+    // auto result = [&]() -> ReturnStr<bool> {
+    //     for (u64 i = addr_start; i < end; ++i) {
+    //         u64 page    = i & ~0xfffULL;
+    //         auto result = current_task->page_table->prepare_user_page(
+    //             (void *)page, Page_Table::Protection::Readable);
+    //         if (!result.success())
+    //             return result.propagate();
 
-            if (not result.val) {
-                current_task->atomic_block_by_page((void *)page,
-                                                   &current_task->page_table->blocked_tasks);
-                return false;
-            }
-        }
-        return true;
-    }();
+    //         if (not result.val) {
+    //             current_task->atomic_block_by_page((void *)page);
+    //             return false;
+    //         }
+    //     }
+    //     return true;
+    // }();
 
-    if (!result.success() || result.val)
-        current_task->pop_repeat_syscall();
+    // if (!result.success() || result.val)
+    //     current_task->pop_repeat_syscall();
 
-    return result;
+    // return result;
+
+    panic("Not implemented");
 }
 
 ReturnStr<bool> prepare_user_buff_wr(char *buff, size_t size)
 {
-    u64 addr_start = (u64)buff;
-    u64 end        = addr_start + size;
+    // u64 addr_start = (u64)buff;
+    // u64 end        = addr_start + size;
 
-    TaskDescriptor *current_task = get_current_task();
-    void *kern_addr_start        = current_task->page_table->user_addr_max();
+    // TaskDescriptor *current_task = get_current_task();
+    // void *kern_addr_start        = current_task->page_table->user_addr_max();
 
-    if (buff > kern_addr_start or (void *) end > kern_addr_start or buff > (void *)end)
-        return Error(-EFAULT);
+    // if (buff > kern_addr_start or (void *) end > kern_addr_start or buff > (void *)end)
+    //     return Error(-EFAULT);
 
-    auto result = [&]() -> ReturnStr<bool> {
-        current_task->request_repeat_syscall();
-        for (u64 i = addr_start; i < end; ++i) {
-            u64 page = i & ~0xfffULL;
-            auto t   = current_task->page_table->prepare_user_page((void *)page,
-                                                                   Page_Table::Protection::Writeable);
-            if (!t.success())
-                return t.propagate();
+    // auto result = [&]() -> ReturnStr<bool> {
+    //     current_task->request_repeat_syscall();
+    //     for (u64 i = addr_start; i < end; ++i) {
+    //         u64 page = i & ~0xfffULL;
+    //         auto t   = current_task->page_table->prepare_user_page((void *)page,
+    //                                                                Page_Table::Protection::Writeable);
+    //         if (!t.success())
+    //             return t.propagate();
 
-            if (not t.val) {
-                current_task->atomic_block_by_page((void *)page,
-                                                   &current_task->page_table->blocked_tasks);
-                return false;
-            }
-        }
-        return true;
-    }();
+    //         if (not t.val) {
+    //             current_task->atomic_block_by_page((void *)page);
+    //             return false;
+    //         }
+    //     }
+    //     return true;
+    // }();
 
-    if (!result.success() || result.val)
-        current_task->pop_repeat_syscall();
+    // if (!result.success() || result.val)
 
-    return result;
+    // return result;
+    panic("Not implemented");
 }
 
 extern "C" void allow_access_user();
@@ -500,9 +500,9 @@ void clear_page(u64 phys_addr, u64 pattern)
         mapper.ptr[i] = pattern;
 }
 
-int fflush(FILE *) { return 0; }
+extern "C" int fflush(FILE *) { return 0; }
 
-int fprintf(FILE *, const char *format, ...)
+extern "C" int fprintf(FILE *, const char *format, ...)
 {
     va_list args;
     va_start(args, format);
@@ -650,53 +650,61 @@ void hcf(void)
     #define STACK_CHK_GUARD 0x595e9fbd94fda766
 #endif
 
+extern "C" {
+
 uintptr_t __stack_chk_guard = STACK_CHK_GUARD;
 
-__attribute__((noreturn)) extern "C" void __stack_chk_fail(void)
+__attribute__((noreturn)) void __stack_chk_fail(void)
 {
     panic("Stack smashing detected");
 }
 
+}
+
 extern "C" ReturnStr<bool> user_access_page_fault(unsigned access, const char *faulting_addr,
-                                                  char *&dst, char *&src, size_t &size)
+                                                  char **dst, char **src, size_t &size)
 {
     TaskDescriptor *current_task = get_current_task();
 
     ReturnStr<bool> result =
-        current_task->page_table->prepare_user_page((void *)faulting_addr, access);
-    if (!result.success()) {
+        current_task->page_table->atomic_page_fault((void *)faulting_addr, access);
+    if (!result.success())
         return result;
-    }
 
     if (!result.val) {
-        current_task->atomic_block_by_page((void *)faulting_addr,
-                                           &current_task->page_table->blocked_tasks);
+        current_task->atomic_block_by_page((void *)faulting_addr);
         return false;
     }
 
-    if (access == Protection::Readable) {
-        assert(faulting_addr >= src);
-        size_t diff = faulting_addr - src;
-        assert(diff < size);
-        dst += diff;
-        src += diff;
-        size += diff;
-    } else {
-        assert(access == Protection::Writeable);
-        assert(faulting_addr >= dst);
-        size_t diff = faulting_addr - dst;
-        assert(diff < size);
-        dst += diff;
-        src += diff;
-        size += diff;
-    }
+    if (!dst || !src)
+        return result;
+
+    // if (access == Protection::Readable) {
+    //     assert(faulting_addr >= *src);
+    //     size_t diff = faulting_addr - *src;
+    //     assert(diff < size);
+    //     *dst += diff;
+    //     *src += diff;
+    //     size -= diff;
+    // } else {
+    //     assert(access == Protection::Writeable);
+    //     assert(faulting_addr >= *dst);
+    //     size_t diff = faulting_addr - *dst;
+    //     assert(diff < size);
+    //     *dst += diff;
+    //     *src += diff;
+    //     size -= diff;
+    // }
+    (void)dst;
+    (void)src;
+    (void)size;
 
     return result;
 }
 
-ReturnStr<std::optional<klib::vector<char>>> to_buffer_from_user(void *ptr, size_t size)
+ReturnStr<std::optional<pmos::containers::vector<char>>> to_buffer_from_user(void *ptr, size_t size)
 {
-    klib::vector<char> data;
+    pmos::containers::vector<char> data;
     if (!data.resize(size))
         return Error(-ENOMEM);
 
@@ -708,4 +716,42 @@ ReturnStr<std::optional<klib::vector<char>>> to_buffer_from_user(void *ptr, size
         return Success(std::nullopt);
 
     return Success(std::move(data));
+}
+
+extern "C" ReturnStr<bool> fast_atomic_read_from_user(u32 *to, const u32 *from);
+
+ReturnStr<bool> atomic_read_from_user(u32 *to, const u32 *from)
+{
+    auto current_task = get_current_task();
+    auto max_addr     = (uintptr_t)current_task->page_table->user_addr_max();
+    uintptr_t addr    = (uintptr_t)from;
+    constexpr size_t size = sizeof(*from);
+    if (addr + size > max_addr or addr > (UINTPTR_MAX - size))
+        return Error(-EFAULT);
+
+    return fast_atomic_read_from_user(to, from);
+}
+
+U128 u128_shr(U128 x, unsigned int shift)
+{
+    U128 r;
+    if (shift == 0) {
+        return x;
+    } else if (shift < 64) {
+        r.lo = (x.lo >> shift) | (x.hi << (64 - shift));
+        r.hi = x.hi >> shift;
+    } else if (shift < 128) {
+        r.lo = x.hi >> (shift - 64);
+        r.hi = 0;
+    } else {
+        r.lo = 0;
+        r.hi = 0;
+    }
+    return r;
+}
+
+u64 AtomicCounter::atomic_next() noexcept
+{
+    Auto_Lock_Scope l(lock);
+    return ++value;
 }

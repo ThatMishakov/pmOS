@@ -613,7 +613,7 @@ void init_smp()
     start_aps();
 }
 
-klib::vector<u64> initialize_cpus(const klib::vector<u64> &hartids)
+pmos::containers::vector<u64> initialize_cpus(const pmos::containers::vector<u64> &hartids)
 {
     u64 satp;
     asm volatile("csrr %0, satp" : "=r"(satp));
@@ -622,7 +622,7 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &hartids)
     if (!cpus.reserve(hartids.size() + 1))
         panic("Failed to reserve memory for cpus vector in initialize_cpus()\n");
 
-    klib::vector<u64> temp_vals;
+    pmos::containers::vector<u64> temp_vals;
     if (!temp_vals.reserve(hartids.size()))
         panic("Failed to reserve memory for temp_vals vector\n");
 

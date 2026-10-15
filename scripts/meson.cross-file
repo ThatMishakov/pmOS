@@ -1,0 +1,26 @@
+[binaries]
+c = '$C_COMPILER'
+cpp = '$CXX_COMPILER'
+ar = '$TOOLS_PREFIX-ar'
+nm = '$TOOLS_PREFIX-nm'
+objcopy = '$TOOLS_PREFIX-objcopy'
+ranlib = '$TOOLS_PREFIX-ranlib'
+strip = '$TOOLS_PREFIX-strip'
+pkg-config = '$TOOLS_PREFIX-pkg-config'
+llvm-config = '/base_dir/support/llvm-config'
+
+[host_machine]
+system = 'pmos'
+cpu_family = '${CPU_FAMILY}'
+cpu = '${JINX_ARCH}'
+endian = '${ENDIAN}'
+
+[built-in options]
+libdir = 'lib'
+c_args = ['--target=${JINX_ARCH}-unknown-pmos', '--sysroot=${sysroot}']
+cpp_args = ['--target=${JINX_ARCH}-unknown-pmos', '--sysroot=${sysroot}']
+c_link_args = ['--target=${JINX_ARCH}-unknown-pmos', '--sysroot=${sysroot}']
+cpp_link_args = ['--target=${JINX_ARCH}-unknown-pmos', '--sysroot=${sysroot}']
+
+[properties]
+sys_root = '${sysroot}'

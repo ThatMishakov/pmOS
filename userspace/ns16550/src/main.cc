@@ -4,8 +4,9 @@
 #include <cstring>
 #include <inttypes.h>
 #include <memory>
-#include <pmos/helpers.h>
 #include <pmos/helpers.hh>
+#include <pmos/pmbus_helper.hh>
+#include <pmos/async/coroutines.hh>
 #include <pmos/interrupts.h>
 #include <pmos/ipc.h>
 #include <pmos/memory.h>
@@ -15,6 +16,10 @@
 #include <queue>
 #include <stdio.h>
 #include <string>
+#include <sys/mman.h>
+#include <sys/user.h>
+#include <pty.h>
+#include <stdlib.h>
 
 // Either physcial memory base or I/O port base
 uint64_t terminal_base = 0x0;
@@ -45,6 +50,9 @@ auto new_port()
 
 auto serial_port = pmos::Port::create().value();
 auto reply_port  = pmos::Port::create().value();
+
+auto dispatcher = pmos::PortDispatcher(serial_port);
+auto pmbus_helper = pmos::PMBUSHelper(dispatcher);
 
 constexpr auto devicesd_port_name = "/pmos/devicesd";
 auto devicesd_right               = pmos::get_right_by_name(devicesd_port_name).value();
@@ -146,7 +154,7 @@ void clear_register(int index, uint8_t mask)
     io_rw->write_register(index, val);
 }
 
-pmos::RecieveRight interrupt_right;
+pmos::ReceiveRight interrupt_right;
 
 void set_up_interrupt()
 {
@@ -181,8 +189,8 @@ void set_up_interrupt()
     auto send_result = pmos::send_message_right_one(devicesd_right, r,
                                                     {&reply_port, pmos::RightType::SendOnce});
     if (!send_result) {
-        printf("Failed to send message to set up interrupt: %i (%s)\n", send_result.error(),
-                strerror(send_result.error()));
+        printf("Failed to send message to set up interrupt: %i (%s)\n", send_result.error().first,
+                strerror(send_result.error().first));
         return;
     }
 
@@ -191,6 +199,13 @@ void set_up_interrupt()
         printf("Failed to get message to set up interrupt: %i\n", msg.error());
         return;
     }
+
+    if (msg->descriptor.sent_with_right != send_result->get()) {
+        printf("Received message with unexpected right: %" PRIx64 ", expected: %" PRIx64 "\n",
+                msg->descriptor.sent_with_right, send_result->get());
+        return;
+    }
+    send_result.value().release();
 
     if (msg->data.size() < sizeof(IPC_Request_Int_Reply)) {
         printf("Invalid message size: %zu\n", msg->data.size());
@@ -204,7 +219,7 @@ void set_up_interrupt()
     }
 
     if (reply->status < 0) {
-        printf("Failed to set up interrupt: recieved error %i\n", -reply->status);
+        printf("Failed to set up interrupt: received error %i\n", -reply->status);
         return;
     }
 
@@ -220,13 +235,15 @@ void set_up_interrupt()
     have_interrupts = true;
 }
 
-pmos::RecieveRight timer_right;
+void set_interrupts();
+
+pmos::ReceiveRight timer_right;
 
 void ns16550_init()
 {
     // Request a high priority, since we are a driver
     // TODO: There is a bug where setting a priority makes the task disappear after some time :)
-    request_priority(4);
+    //request_priority(4);
 
     IPC_Request_Serial request = {
         .type      = IPC_Request_Serial_NUM,
@@ -259,7 +276,7 @@ void ns16550_init()
     }
 
     if (reply->result < 0) {
-        printf("Failed to initialize ns16550: recieved error %i\n", -reply->result);
+        printf("Failed to initialize ns16550: received error %i\n", -reply->result);
         throw std::runtime_error("Failed to initialize ns16550");
     }
 
@@ -275,7 +292,7 @@ void ns16550_init()
     gsi_num             = reply->gsi_number;
     pc_irq              = reply->pc_int_number;
 
-    printf("Initialized ns16550 with base address 0x%lx, access type %i, interface type %i, baud "
+    printf("Initialized ns16550 with base address 0x%" PRIx64 ", access type %i, interface type %i, baud "
            "rate %u, parity %i, stop bits %i, flow control %i, terminal type %i, interrupt type "
            "mask %i, gsi num %i, pc irq %i\n",
            terminal_base, access_type, interface_type, baud_rate, parity, stop_bits, flow_control,
@@ -349,7 +366,7 @@ void ns16550_init()
 
     if (have_interrupts) {
         // Enable interrupts
-        set_register(IER, IER_RLS | IER_RX_DATA | IER_TX_EMPTY);
+        set_interrupts();
     } else {
         timer_right = create_timer_right(serial_port);
         poll();
@@ -357,13 +374,26 @@ void ns16550_init()
 
     // Enable FIFO
     // TODO: Be compatible with 16450
-    set_register(FCR, FIFO_ENABLE | RX_FIFO_RESET | TX_FIFO_RESET | TRIGGER_8CHAR);
+    io_rw->write_register(FCR, FIFO_ENABLE | RX_FIFO_RESET | TX_FIFO_RESET | TRIGGER_8CHAR);
 }
 
 int buff_length             = 0;
 constexpr int buff_capacity = 16;
 
 bool writing = false;
+bool reading = false;
+
+void set_interrupts()
+{
+    u8 mask = IER_RLS;
+    if (reading)
+        mask |= IER_RX_DATA;
+    if (writing)
+        mask |= IER_TX_EMPTY;
+
+    io_rw->write_register(IER, mask);
+}
+
 struct buffer {
     std::vector<std::byte> data;
     size_t pos;
@@ -394,12 +424,21 @@ void write_blind(const char *str, size_t size)
 
 void check_tx()
 {
-    if ((io_rw->read_register(LSR) & LSR_TX_EMPTY) == 0)
-        return;
+    auto move_data = []{
+        if (active_buffer.data.empty() and not write_queue.empty()) {
+            active_buffer = std::move(write_queue.front());
+            write_queue.pop();
+        }
+    };
 
-    if (active_buffer.data.empty() and not write_queue.empty()) {
-        active_buffer = std::move(write_queue.front());
-        write_queue.pop();
+    move_data();
+
+    if ((io_rw->read_register(LSR) & LSR_TX_EMPTY) == 0) {
+        if (have_interrupts && !writing && !active_buffer.data.empty()) {
+            writing = true;
+            set_interrupts();
+        }
+        return;
     }
 
     if (not active_buffer.data.empty()) {
@@ -411,6 +450,18 @@ void check_tx()
         active_buffer.pos += i;
         if (active_buffer.pos == active_buffer.length)
             active_buffer = {};
+
+        move_data();
+
+        if (!active_buffer.data.empty() && !writing) {
+            writing = true;
+            if (have_interrupts)
+                set_interrupts();
+        } else if (active_buffer.data.empty() && writing) {
+            writing = false;
+            if (have_interrupts)
+                set_interrupts();
+        }
     }
 }
 
@@ -426,31 +477,50 @@ void write_interrupt()
         if (i > 16)
             i = 16;
 
-        writing = true;
-
         write_blind(reinterpret_cast<const char *>(active_buffer.data.data()) + active_buffer.pos, i);
         active_buffer.pos += i;
         if (active_buffer.pos == active_buffer.length)
             active_buffer = {};
     } else {
         writing = false;
+        set_interrupts();
         io_rw->read_register(ISR);
     }
 }
 
+pmos_right_t tty_right;
+
 void check_rx()
 {
+    if (!reading)
+        return;
+
+    std::vector<std::byte> data;
+
     while ((io_rw->read_register(LSR) & LSR_DATA_READY) != 0) {
         auto t = io_rw->read_register(THR);
 
-        // putc(t, stdout);
-        printf("\033[1;36m"
-               "ns16550: Received letter %c"
-               "\033[0m"
-               "\n",
-               t);
+        data.push_back(static_cast<std::byte>(t));
     }
-    fflush(stdout);
+
+    if (data.empty())
+        return;
+
+    std::vector<std::byte> msg;
+    struct IPC_Write str = {
+        .type   = IPC_Write_NUM,
+        .flags  = 0,
+        .offset = IPC_FLAG_IO_OP_APPEND,
+        .data   = {},
+    };
+
+    msg.insert(msg.end(), reinterpret_cast<std::byte *>(&str), reinterpret_cast<std::byte *>(&str) + sizeof(str));
+    msg.insert(msg.end(), data.begin(), data.end());
+
+    auto r = send_message_right(tty_right, 0, msg.data(), msg.size(), nullptr, 0);
+    if (r.result != SUCCESS) {
+        write_str("Failed to send message to tty right " + std::to_string(r.result) + " (" + std::string(strerror(r.result)) + ")\n");
+    }
 }
 
 void check_buffers()
@@ -479,6 +549,8 @@ void request_logger_port()
     request_named_port(log_right_name.c_str(), log_right_name.length(), serial_port.get(), 0);
 }
 
+pmos::ReceiveRight serial_right;
+
 void react_named_port_notification(const char *msg_buff, size_t size, pmos::Right right)
 {
     IPC_Named_Right_Notification *msg = (IPC_Named_Right_Notification *)msg_buff;
@@ -493,9 +565,11 @@ void react_named_port_notification(const char *msg_buff, size_t size, pmos::Righ
         .task_id    = get_task_id(),
     };
 
-    auto serial_right = serial_port.create_right(pmos::RightType::SendMany).value().first;
+    auto [send_right, receive_right] = serial_port.create_right(pmos::RightType::SendMany).value();
+    serial_right = std::move(receive_right);
 
-    pmos::send_message_right_one(log_right, reg, {&serial_port, pmos::RightType::SendOnce}, false, std::move(serial_right)).value();
+    auto result = pmos::send_message_right_one(log_right, reg, {&serial_port, pmos::RightType::SendOnce}, false, std::move(send_right)).value();
+    result.release();
 }
 
 void react_interrupt()
@@ -522,21 +596,103 @@ void react_interrupt()
     pmos::complete_interrupt(interrupt_right);
 }
 
-int main()
+pmos::async::task<std::expected<std::vector<std::byte>, int>> read_from_right(pmos_right_t right, size_t size)
 {
-    printf("Hello from ns16550! My task id: %li\n", get_task_id());
+    IPC_Read message = {
+        .type  = IPC_Read_NUM,
+        .flags = 0,
+        .start_offset = 0,
+        .max_size     = size,
+    };
 
-    ns16550_init();
+    auto r = send_message_right(right, serial_port.get(), reinterpret_cast<void *>(&message), sizeof(message), nullptr, 0);
+    if (r.result != SUCCESS)
+        co_return std::unexpected(r.result);
+    auto reply_right = pmos::ReceiveRight(r.right, pmos::RightType::SendOnce, serial_port.get());
 
-    write_str("!! ns16550 task id: " + std::to_string(get_task_id()) + " !!\n");
+    auto msg = co_await dispatcher.get_message(reply_right);
+    if (!msg)
+        co_return std::unexpected(msg.error());
 
-    request_logger_port();
+    if (msg->data.size() < sizeof(IPC_Read_Reply))
+        co_return std::unexpected(-EIO);
 
+    IPC_Read_Reply *reply = reinterpret_cast<IPC_Read_Reply *>(msg->data.data());
+    if (reply->type != IPC_Read_Reply_NUM)
+        co_return std::unexpected(-EIO);
+
+    if (reply->result_code < 0)
+        co_return std::unexpected(reply->result_code);
+
+    co_return std::vector<std::byte>(msg->data.begin() + sizeof(IPC_Read_Reply), msg->data.end());
+}
+
+
+pmos::async::detached_task start_shell()
+{
+    pmos::ipc::EqualsFilter filter("real_root_mounted", "1");
+
+    auto shell_right = co_await pmbus_helper.get_object(filter);
+    write_str("Found real root object\n");
+
+    setenv("PATH", "/bin:/usr/bin", 1);
+
+    int amaster;
+    pid_t pid = forkpty(&amaster, NULL, NULL, NULL);
+    if (pid < 0) {
+        write_str("Failed to fork pty " + std::to_string(errno) + " (" + std::string(strerror(errno)) + ")\n");
+        co_return;
+    }
+
+    if (pid == 0) {
+        int result = execl("/bin/bash", "bash", NULL);
+        if (result < 0)
+            perror("Failed to exec bash");
+        _exit(127);
+    }
+    write_str("Forked pty with pid " + std::to_string(pid) + "\n");
+
+    pmos_right_t io_right;
+    auto result = get_fd_rights(amaster, nullptr, &io_right, nullptr);
+    if (result < 0) {
+        write_str("Failed to get right for pty fd " + std::to_string(result) + " (" + std::string(strerror(-result)) + ")\n");
+        co_return;
+    }
+
+    tty_right = io_right;
+    reading = true;
+    if (have_interrupts)
+        set_interrupts();
+
+    while (true) {
+        auto data = co_await read_from_right(io_right, 0x1000);
+        if (!data) {
+            write_str("Failed to read from pty right " + std::to_string(data.error()) + " (" + std::string(strerror(data.error())) + ")\n");
+            co_return;
+        }
+
+        if (data->size() == 0) {
+            write_str("Pty closed\n");
+            co_return;
+        }
+
+        write_queue.push({
+            std::vector<std::byte>(data->begin(), data->end()),
+            0,
+            data->size(),
+        });
+        check_tx();
+    }
+}
+
+pmos::async::detached_task get_messages()
+{
     while (1) {
-        auto [msg, msg_buff, reply_right, array] = serial_port.get_first_message().value();
+        auto msg_w = co_await dispatcher.get_message_default();
+        auto [msg, msg_buff, reply_right, array] = std::move(msg_w.value());
 
         if (msg.size < sizeof(IPC_Generic_Msg)) {
-            write_str("Warning: recieved very small message\n");
+            write_str("Warning: received very small message\n");
             break;
         }
 
@@ -575,4 +731,19 @@ int main()
             break;
         }
     }
+}
+
+int main()
+{
+    printf("Hello from ns16550! My task id: %li\n", get_task_id());
+
+    ns16550_init();
+
+    write_str("!! ns16550 task id: " + std::to_string(get_task_id()) + " !!\n");
+
+    request_logger_port();
+    get_messages();
+    start_shell();
+
+    dispatcher.dispatch().value();
 }

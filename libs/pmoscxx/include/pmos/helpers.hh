@@ -2,6 +2,7 @@
 #include <pmos/ports.h>
 #include <pmos/system.h>
 #include <pmos/containers/intrusive_bst.hh>
+#include <pmos/async/coroutines.hh>
 
 #include <array>
 #include <cerrno>
@@ -22,6 +23,7 @@ enum class RightType {
     IntSource,
     IntNotification,
     Timer,
+    Process,
     Unknown,
 };
 
@@ -44,23 +46,28 @@ public:
 
     constexpr Right(pmos_right_t right, RightType type) noexcept;
 
+    static std::expected<Right, int> from(pmos_right_t right) noexcept;
+
     Right clone() const;
     std::expected<Right, int> clone_noexcept() const noexcept;
 
+    std::expected<uint64_t, int> process_id() const noexcept;
 private:
     pmos_right_t right = INVALID_RIGHT;
     RightType type_    = {};
 };
 
-class RecieveRight
+std::expected<RightType, int> get_right_type(pmos_right_t right) noexcept;
+
+class ReceiveRight
 {
 public:
-    constexpr RecieveRight() noexcept = default;
-    constexpr RecieveRight(pmos_right_t right, RightType type, pmos_port_t port) noexcept;
-    ~RecieveRight();
+    constexpr ReceiveRight() noexcept = default;
+    constexpr ReceiveRight(pmos_right_t right, RightType type, pmos_port_t port) noexcept;
+    ~ReceiveRight();
 
-    constexpr RecieveRight(RecieveRight &&r) noexcept;
-    constexpr RecieveRight &operator=(RecieveRight &&right) noexcept;
+    constexpr ReceiveRight(ReceiveRight &&r) noexcept;
+    constexpr ReceiveRight &operator=(ReceiveRight &&right) noexcept;
 
     constexpr explicit operator bool() const noexcept;
 
@@ -103,7 +110,7 @@ public:
     constexpr pmos_port_t release() noexcept;
 
     static std::expected<Port, int> create() noexcept;
-    std::expected<std::pair<Right, RecieveRight>, int> create_right(RightType type) noexcept;
+    std::expected<std::pair<Right, ReceiveRight>, int> create_right(RightType type) noexcept;
 
     get_msg_return_type get_first_message(bool nonblocking = false);
 
@@ -111,13 +118,15 @@ private:
     pmos_port_t id = 0;
 };
 
-RecieveRight register_interrupt(const Right &int_source_right, Port &port);
-void complete_interrupt(const RecieveRight &notification_right);
+std::expected<ReceiveRight, int> watch_right(const Port &port, const Right &right) noexcept;
 
-RecieveRight create_timer_right(Port &port);
-void set_deadline(const RecieveRight &timer_right, uint64_t deadline_ns, bool relative = false);
+ReceiveRight register_interrupt(const Right &int_source_right, Port &port);
+void complete_interrupt(const ReceiveRight &notification_right);
 
-std::expected<RecieveRight, int> request_named_port(std::string_view name, Port &port);
+ReceiveRight create_timer_right(Port &port);
+void set_deadline(const ReceiveRight &timer_right, uint64_t deadline_ns, bool relative = false);
+
+std::expected<ReceiveRight, int> request_named_port(std::string_view name, Port &port);
 
 std::expected<Right, int> create_mem_object_noexcept(uint64_t size, uint32_t flags) noexcept;
 Right create_mem_object(uint64_t size, uint32_t flags);
@@ -125,7 +134,7 @@ Right create_mem_object(uint64_t size, uint32_t flags);
 template<typename T, typename... Rights>
     requires std::is_trivially_copyable_v<T> && (sizeof...(Rights) <= 4) &&
              (std::is_same_v<std::decay_t<Rights>, Right> && ...)
-inline std::expected<RecieveRight, int> send_message_right(
+inline std::expected<ReceiveRight, std::pair<int, int>> send_message_right(
     Right &right, std::span<T const> data, std::pair<Port const *, RightType> optional_reply_port,
     bool delete_right = false, Rights... rights) noexcept
 {
@@ -151,20 +160,39 @@ inline std::expected<RecieveRight, int> send_message_right(
                                      NUM_RIGHTS > 0 ? &extra : nullptr, flags);
 
     if (result.result)
-        return std::unexpected(static_cast<int>(-result.result));
+        return std::unexpected(std::make_pair(static_cast<int>(-result.result), static_cast<int>(result.right)));
 
     if (right.type() == RightType::SendOnce || delete_right)
         right.release();
 
     (rights.release(), ...);
 
-    return RecieveRight(result.right, t, port);
+    return ReceiveRight(result.right, t, port);
+}
+
+template<typename T, typename... Rights>
+requires std::is_trivially_copyable_v<T> &&
+         (sizeof...(Rights) <= 4) &&
+         (std::is_same_v<std::decay_t<Rights>, Right> && ...)
+inline std::expected<ReceiveRight, std::pair<int, int>> send_message_right(
+    Right &right,
+    std::span<T> data,
+    std::pair<Port const *, RightType> optional_reply_port,
+    bool delete_right = false,
+    Rights... rights) noexcept
+{
+    return send_message_right(
+        right,
+        std::span<const T>(data.data(), data.size()),
+        optional_reply_port,
+        delete_right,
+        std::forward<Rights>(rights)...);
 }
 
 template<typename T, typename... Rights>
     requires std::is_trivially_copyable_v<T> && (sizeof...(Rights) <= 4) &&
              (std::is_same_v<std::decay_t<Rights>, Right> && ...)
-inline std::expected<RecieveRight, int> send_message_right_one(
+inline std::expected<ReceiveRight, std::pair<int, int>> send_message_right_one(
     Right &right, T const &object, std::pair<Port const *, RightType> optional_reply_port,
     bool delete_right = false, Rights... rights) noexcept
 {
@@ -184,10 +212,10 @@ protected:
         get_msg_return_type await_resume() noexcept;
 
     private:
-        MessageWaiter(PortDispatcher &dispatcher, RecieveRight *recieve_right) noexcept;
+        MessageWaiter(PortDispatcher &dispatcher, ReceiveRight *receive_right) noexcept;
 
-        RecieveRight *recieve_right = nullptr;
-        pmos_right_t recieve_right_id;
+        ReceiveRight *receive_right = nullptr;
+        pmos_right_t receive_right_id;
         pmos::containers::RBTreeNode<MessageWaiter> tree_node = {};
         std::coroutine_handle<> h;
         PortDispatcher &dispatcher;
@@ -199,7 +227,7 @@ protected:
 
     using PortsTree = pmos::containers::RedBlackTree<
         MessageWaiter, &MessageWaiter::tree_node,
-        detail::TreeCmp<MessageWaiter, pmos_right_t, &MessageWaiter::recieve_right_id>>;
+        detail::TreeCmp<MessageWaiter, pmos_right_t, &MessageWaiter::receive_right_id>>;
 
     Port &port;
     MessageWaiter *default_waiter = {};
@@ -227,7 +255,7 @@ protected:
 
     TimerTree::RBTreeHead timer_tree;
     uint64_t next_timer_time = 0;
-    RecieveRight timer_waiter_right;
+    ReceiveRight timer_waiter_right;
 public:
 
     constexpr PortDispatcher(Port &) noexcept;
@@ -235,7 +263,7 @@ public:
     constexpr Port &get_port() noexcept;
     constexpr const Port &get_port() const noexcept;
 
-    MessageWaiter get_message(RecieveRight &) noexcept;
+    MessageWaiter get_message(ReceiveRight &) noexcept;
     MessageWaiter get_message_default() noexcept;
     std::expected<void, int> dispatch();
 
@@ -245,6 +273,8 @@ public:
 
 std::expected<Right, int> get_right_by_name(std::string_view name, bool noblock = false);
 std::expected<void, int> name_right(Right right, std::string_view name);
+
+pmos::async::task<std::expected<void, int>> name_right(PortDispatcher &port, Right right, std::string_view name);
 
 constexpr Port::Port(pmos_port_t p) noexcept: id(p) {}
 
@@ -289,9 +319,9 @@ constexpr pmos_right_t Right::release() noexcept
 
 constexpr RightType Right::type() const noexcept { return type_; }
 
-constexpr RecieveRight::RecieveRight(RecieveRight &&r) noexcept: RecieveRight() { *this = std::move(r); }
+constexpr ReceiveRight::ReceiveRight(ReceiveRight &&r) noexcept: ReceiveRight() { *this = std::move(r); }
 
-constexpr RecieveRight &RecieveRight::operator=(RecieveRight &&r) noexcept
+constexpr ReceiveRight &ReceiveRight::operator=(ReceiveRight &&r) noexcept
 {
     std::swap(r.right_, this->right_);
     std::swap(r.type_, this->type_);
@@ -299,10 +329,10 @@ constexpr RecieveRight &RecieveRight::operator=(RecieveRight &&r) noexcept
     return *this;
 }
 
-constexpr RecieveRight::operator bool() const noexcept { return right_; }
+constexpr ReceiveRight::operator bool() const noexcept { return right_; }
 
-constexpr pmos_right_t RecieveRight::get() const noexcept { return right_; }
-constexpr pmos_right_t RecieveRight::release() noexcept
+constexpr pmos_right_t ReceiveRight::get() const noexcept { return right_; }
+constexpr pmos_right_t ReceiveRight::release() noexcept
 {
     auto r = right_;
     right_  = INVALID_RIGHT;
@@ -311,11 +341,11 @@ constexpr pmos_right_t RecieveRight::release() noexcept
     return r;
 }
 
-constexpr pmos_port_t RecieveRight::port() const noexcept { return port_; }
+constexpr pmos_port_t ReceiveRight::port() const noexcept { return port_; }
 
-constexpr RightType RecieveRight::type() const noexcept { return type_; }
+constexpr RightType ReceiveRight::type() const noexcept { return type_; }
 
-constexpr RecieveRight::RecieveRight(pmos_right_t r, RightType t, pmos_port_t p) noexcept: right_(r), type_(t), port_(p) {}
+constexpr ReceiveRight::ReceiveRight(pmos_right_t r, RightType t, pmos_port_t p) noexcept: right_(r), type_(t), port_(p) {}
 
 constexpr Port &PortDispatcher::get_port() noexcept
 {

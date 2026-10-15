@@ -24,12 +24,12 @@ copy_service() {
     mcopy -i "$BOOT_PARTITION" "${BOOT_DIR}/${SERVICE}.yaml" "::/${SERVICE}.yaml"
 }
 
-dd if=/dev/zero of="$DISK_IMAGE" bs=1M count=128
+dd if=/dev/zero of="$DISK_IMAGE" bs=1M count=256
 
 # Create an MBR partition table
 echo 'label: dos' | sfdisk "$DISK_IMAGE"
 echo '2048,130048,0x0C,*' | sfdisk --append "$DISK_IMAGE"
-echo '132096,130048,0x83' | sfdisk --append "$DISK_IMAGE"
+echo '132096,392192,0x83' | sfdisk --append "$DISK_IMAGE"
 
 # Create a FAT32 filesystem for the boot partition
 dd if=/dev/zero of="$BOOT_PARTITION" bs=1M count=64
@@ -50,14 +50,28 @@ mmd -i "$BOOT_PARTITION" "::/EFI"
 mmd -i "$BOOT_PARTITION" "::/EFI/BOOT"
 mcopy -i "$BOOT_PARTITION" "/usr/local/share/limine/BOOT"* "::/EFI/BOOT/"
 
+mmd -i "$BOOT_PARTITION" "::/usr"
+mmd -i "$BOOT_PARTITION" "::/usr/lib"
+
+for LIBRARY in $LIBRARIES; do
+    echo "Copying library $LIBRARY..."
+    LIBRARY_FILE=${LIBRARY##*/}
+    mcopy -i "$BOOT_PARTITION" "$SYSROOT/$LIBRARY" "::/usr/lib/$LIBRARY_FILE"
+done
+
 # Copy services
 for SERVICE in $SERVICES; do
     copy_service "$SERVICE"
 done
 
 # Create an ext4 filesystem for the root partition
-dd if=/dev/zero of="$EXT4_PARTITION" bs=1M count=64
-mke2fs -d "$SYSROOT" -t ext4 "$EXT4_PARTITION" -L "pmos-root"
+dd if=/dev/zero of="$EXT4_PARTITION" bs=1M count=191
+ROOTFS_STAGE=$(mktemp -d)
+cp -a "$SYSROOT"/. "$ROOTFS_STAGE"/
+mkdir -p "$ROOTFS_STAGE/run/initramfs"
+touch "$ROOTFS_STAGE/run/initramfs/.keep"
+mke2fs -d "$ROOTFS_STAGE" -t ext4 "$EXT4_PARTITION" -L "pmos-root"
+rm -rf "$ROOTFS_STAGE"
 
 # Combine the partitions into the final disk image
 dd conv=notrunc if="$BOOT_PARTITION" of="$DISK_IMAGE" bs=512 seek=2048

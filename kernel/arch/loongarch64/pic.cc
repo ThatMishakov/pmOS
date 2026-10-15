@@ -3,7 +3,7 @@
 #include <errno.h>
 #include <interrupts/interrupt_handler.hh>
 #include <kern_logger/kern_logger.hh>
-#include <lib/vector.hh>
+#include <pmos/containers/vector.hh>
 #include <loongarch_asm.hh>
 #include <memory/paging.hh>
 #include <memory/vmm.hh>
@@ -171,7 +171,7 @@ void interrupts::interrupt_complete(InterruptHandler *handler)
     csrxchg32<loongarch::csr::ECFG>(-1U, 1 << (i/sizeof(uint32_t) + 2));
 }
 
-klib::vector<BIOPIC *> biopics;
+pmos::containers::vector<BIOPIC *> biopics;
 
 static void biopic_push(BIOPIC *biopic)
 {
