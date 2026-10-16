@@ -66,6 +66,43 @@ fp_write_regs_initial:
     addi sp, sp, 16
     ret
 
+    .globl fp_write_regs_initial_double
+    .type fp_write_regs_initial_double, @function
+fp_write_regs_initial_double:
+    fmv.d.x f0, zero
+    fmv.d.x f1, zero
+    fmv.d.x f2, zero
+    fmv.d.x f3, zero
+    fmv.d.x f4, zero
+    fmv.d.x f5, zero
+    fmv.d.x f6, zero
+    fmv.d.x f7, zero
+    fmv.d.x f8, zero
+    fmv.d.x f9, zero
+    fmv.d.x f10, zero
+    fmv.d.x f11, zero
+    fmv.d.x f12, zero
+    fmv.d.x f13, zero
+    fmv.d.x f14, zero
+    fmv.d.x f15, zero
+    fmv.d.x f16, zero
+    fmv.d.x f17, zero
+    fmv.d.x f18, zero
+    fmv.d.x f19, zero
+    fmv.d.x f20, zero
+    fmv.d.x f21, zero
+    fmv.d.x f22, zero
+    fmv.d.x f23, zero
+    fmv.d.x f24, zero
+    fmv.d.x f25, zero
+    fmv.d.x f26, zero
+    fmv.d.x f27, zero
+    fmv.d.x f28, zero
+    fmv.d.x f29, zero
+    fmv.d.x f30, zero
+    fmv.d.x f31, zero
+    ret
+
     .globl fp_store_regs_single
     .type fp_store_regs_single, @function
 fp_store_regs_single:
