@@ -218,11 +218,6 @@ protected:
                                       u64 end, u64 curr_start);
 
     int flags = 0;
-
-    kresult_t copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 phys_page_level,
-                                u64 absolute_start, u64 to_addr, u64 size_bytes, u64 new_access,
-                                u64 current_copy_from, int level, u64 &upper_bound_offset,
-                                kernel::paging::TLBShootdownContext &ctx);
 };
 
 const u16 rec_map_index = 509;

@@ -228,11 +228,6 @@ protected:
 
     RISCV64_Page_Table() = default;
 
-    static kresult_t copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 phys_page_level,
-                                       u64 start, u64 to_offset, u64 max_size, u64 new_access,
-                                       u64 i, int level, u64 &last_copied,
-                                       kernel::paging::TLBShootdownContext &ctx);
-
 private:
     // There is an interesting pattern for this:
     // https://en.wikipedia.org/wiki/Curiously_recurring_template_pattern#Object_counter
