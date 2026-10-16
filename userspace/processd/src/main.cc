@@ -198,7 +198,7 @@ pmos::async::task<std::expected<uint64_t /* reloc offset */, int>> load_into_mem
                     continue;
 
                 uint32_t start_page = phdr->p_vaddr & ~page_mask;
-                uint32_t end_page   = ((phdr->p_vaddr & page_mask) + phdr->p_memsz + page_mask) & ~page_mask;
+                uint32_t end_page   = (phdr->p_vaddr + phdr->p_memsz + page_mask) & ~page_mask;
 
                 if (start_page < min_page)
                     min_page = start_page;
@@ -303,7 +303,7 @@ pmos::async::task<std::expected<uint64_t /* reloc offset */, int>> load_into_mem
                     continue;
 
                 uint64_t start_page = phdr->p_vaddr & ~page_mask;
-                uint64_t end_page   = ((phdr->p_vaddr & page_mask) + phdr->p_memsz + page_mask) & ~page_mask;
+                uint64_t end_page   = (phdr->p_vaddr + phdr->p_memsz + page_mask) & ~page_mask;
 
                 if (start_page < min_page)
                     min_page = start_page;
