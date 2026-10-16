@@ -361,6 +361,7 @@ found:
         virtmem_add_to_free_list(new_tag);
     }
 
+    t->size = size;
     virtmem_save_to_alloc_hashtable(t);
     assert(!(aligned_up_base % (1 << Q)));
     return (void *)aligned_up_base;
