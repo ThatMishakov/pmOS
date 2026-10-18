@@ -480,9 +480,8 @@ void kernel::sched::call_after_smp_entry()
     c->current_task->page_table->apply();
     c->current_task->after_task_switch();
 
-    assert(c->kernel_pt_generation == -1);
-    c->kernel_pt_generation = __atomic_load_n(&kernel::paging::kernel_pt_generation, __ATOMIC_ACQUIRE);
-    __atomic_add_fetch(&kernel_pt_active_cpus_count[c->kernel_pt_generation], 1, __ATOMIC_RELAXED);
+    paging::online_cpu(c);
+
     c->online = true;
 }
 
@@ -499,10 +498,7 @@ void kernel::sched::park_self()
     task->page_table->unapply_cpu(get_cpu_struct());
     task->before_task_switch();
 
-    // Kill TLB shootdowns
-    int kernel_pt_gen = c->kernel_pt_generation;
-    __atomic_sub_fetch(&kernel_pt_active_cpus_count[kernel_pt_gen], 1, __ATOMIC_RELEASE);
-    c->kernel_pt_generation = -1;
+    paging::offline_cpu(c);
 
     log::serial_logger.printf("Parking cpu %x\n", c->cpu_id);
 

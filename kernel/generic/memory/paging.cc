@@ -626,11 +626,34 @@ extern bool cpu_struct_works;
 extern bool other_cpus_online;
 } // namespace kernel::sched
 
+// TODO: This can be removed later...
+static Spinlock shootdown_barrier; 
+
+void kernel::paging::online_cpu(sched::CPU_Info *cpu)
+{
+    assert(cpu == sched::get_cpu_struct());
+    assert(cpu->kernel_pt_generation == -1);
+
+    {
+        Auto_Lock_Scope l(shootdown_barrier);
+        cpu->kernel_pt_generation = __atomic_load_n(&kernel::paging::kernel_pt_generation, __ATOMIC_ACQUIRE);
+        __atomic_add_fetch(&kernel_pt_active_cpus_count[cpu->kernel_pt_generation], 1, __ATOMIC_RELAXED);
+    }
+
+    flush_tlb_kernel();
+}
+
+void kernel::paging::offline_cpu(sched::CPU_Info *cpu)
+{
+    assert(cpu == sched::get_cpu_struct());
+    assert(cpu->kernel_pt_generation != -1);
+
+    __atomic_sub_fetch(&kernel_pt_active_cpus_count[cpu->kernel_pt_generation], 1, __ATOMIC_RELEASE);
+    cpu->kernel_pt_generation = -1;
+}
+
 void TLBShootdownContext::finalize()
 {
-    // TODO: This can be removed later...
-    static Spinlock barrier;
-
     if (empty() && !arch_flags)
         return;
 
@@ -648,7 +671,7 @@ void TLBShootdownContext::finalize()
         } else {
             auto my_cpu = sched::get_cpu_struct();
 
-            Auto_Lock_Scope l(barrier);
+            Auto_Lock_Scope l(shootdown_barrier);
 
             kernel_shootdown_desc = this;
 
@@ -673,7 +696,7 @@ void TLBShootdownContext::finalize()
 
         int old_generation;
 
-        Auto_Lock_Scope l(barrier);
+        Auto_Lock_Scope l(shootdown_barrier);
         {
             Auto_Lock_Scope l2(page_table->active_cpus_lock);
             // flip generation and notify other CPUs

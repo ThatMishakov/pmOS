@@ -7,6 +7,7 @@
 #include <x86_utils.hh>
 #include <time/timers.hh>
 #include <time/x86_timers.hh>
+#include <x86_asm.hh>
 
 using namespace kernel;
 using namespace kernel::sched;
@@ -137,4 +138,19 @@ void stop_cpus()
             check_synchronous_ipis();
         }
     }
+}
+
+constexpr ulong CR4_PGE = 1 << 7;
+constexpr ulong CR4_PCIDE = 1 << 17;
+
+void kernel::paging::flush_tlb_kernel()
+{
+    auto cr4 = getCR4();
+    auto cr4_no_cache = cr4 & ~(CR4_PGE | CR4_PCIDE); 
+    setCR4(cr4_no_cache);
+
+    auto cr3 = getCR3();
+    setCR3(cr3);
+
+    setCR4(cr4);
 }
