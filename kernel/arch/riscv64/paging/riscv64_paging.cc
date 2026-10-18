@@ -85,7 +85,7 @@ kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr,
                          kernel::paging::Page_Table_Arguments arg)
 {
     arg.readable |= arg.writeable;
-    assert(arg.readable or arg.execution_disabled);
+    assert(arg.readable or !arg.execution_disabled);
 
     Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
 

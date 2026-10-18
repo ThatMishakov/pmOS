@@ -131,12 +131,15 @@ void page_fault(u64 addr, u64 scause)
     u64 access_type = 0;
     switch (scause) {
     case INSTRUCTION_PAGE_FAULT:
+    case INSTRUCTION_ACCESS_FAULT:
         access_type = Generic_Mem_Region::Executable;
         break;
     case LOAD_PAGE_FAULT:
+    case LOAD_ACCESS_FAULT:
         access_type = Generic_Mem_Region::Readable;
         break;
     case STORE_AMO_PAGE_FAULT:
+    case STORE_AMO_ACCESS_FAULT:
         access_type = Generic_Mem_Region::Writeable;
         break;
     default:
@@ -147,7 +150,9 @@ void page_fault(u64 addr, u64 scause)
     auto page_table = task->page_table;
 
     auto result = [&]() -> kresult_t {
-        if (scause == 7)
+        if (scause == INSTRUCTION_ACCESS_FAULT
+            or scause == LOAD_ACCESS_FAULT
+            or scause == STORE_AMO_ACCESS_FAULT)
             return -EIO;
 
         Auto_Lock_Scope lock(page_table->lock);
