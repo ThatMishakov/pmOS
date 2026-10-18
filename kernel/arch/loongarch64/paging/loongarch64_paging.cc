@@ -11,6 +11,7 @@
 #include <pmos/containers/map.hh>
 #include <pmos/utility/scope_guard.hh>
 #include <utils.hh>
+#include <memory/paging.hh>
 
 using namespace kernel;
 
@@ -311,7 +312,8 @@ LoongArch64_Page_Table::Page_Info get_page_mapping(u64 page_directory, void *vir
 
     i.is_allocated = !!(pte & PAGE_VALID);
     i.dirty        = !!(pte & PAGE_DIRTY);
-    i.flags        = (pte >> 8) & 0xf;
+    i.flags        = (pte & PAGE_AVAILABLE_MASK) >> PAGE_AVAILABLE_SHIFT;
+    i.cache_policy = pte_cache_policy(pte);
     i.user_access  = !!(pte & PAGE_USER_MASK);
     i.writeable    = !!(pte & PAGE_DIRTY);
     i.executable   = !(pte & PAGE_NO_EXECUTE);
@@ -329,12 +331,15 @@ static void free_all_level(u64 level_page, unsigned level)
 
     for (unsigned i = 0; i < 512; ++i) {
         auto pte = __atomic_load_n(active_pt + i, __ATOMIC_RELAXED);
-        if (!(pte & PAGE_VALID))
-            continue;
-
         if (level == 1) {
+            if (!(pte & PAGE_VALID))
+                continue;
+
             free_leaf_pte(pte);
         } else {
+            if (!pde_valid(pte))
+                continue;
+
             u64 page = pte & PAGE_ADDR_MASK;
             free_all_level(page, level - 1);
             pmm::free_memory_for_kernel(page, 1);
@@ -419,77 +424,6 @@ kresult_t loongarch_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *
         free_leaf_pte(l1_entry);
 
     ctx.invalidate_page(virt_addr);
-    return 0;
-}
-
-static kresult_t copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 phys_page_level,
-                                   u64 absolute_start, u64 to_addr, u64 size_bytes, u64 new_access,
-                                   u64 current_copy_from, int level, u64 &upper_bound_offset,
-                                   TLBShootdownContext &ctx)
-{
-    const u8 offset = 12 + (level - 1) * 9;
-
-    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
-    mapper.map(phys_page_level);
-
-    u64 mask        = (1UL << offset) - 1;
-    u64 max         = (absolute_start + size_bytes + mask) & ~mask;
-    u64 end_index   = (current_copy_from >> (offset + 9)) == (max >> (offset + 9))
-                          ? (max >> offset) & 0x1ff
-                          : 512;
-    u64 start_index = (current_copy_from >> offset) & 0x1ff;
-
-    for (u64 i = start_index; i < end_index; ++i) {
-        auto pte = __atomic_load_n(mapper.ptr + i, __ATOMIC_RELAXED);
-
-        if (level == 1) {
-            if (!(pte & PAGE_PRESENT))
-                continue;
-
-            auto p = pmm::Page_Descriptor::find_page_struct(pte & PAGE_ADDR_MASK);
-            assert(p.page_struct_ptr && "page struct must be present");
-            if (!p.page_struct_ptr->is_anonymous())
-                continue;
-
-            u64 copy_from = ((i - start_index) << offset) + current_copy_from;
-            u64 copy_to   = copy_from - absolute_start + to_addr;
-
-            if (pte & PAGE_DIRTY) {
-                pte &= ~PAGE_DIRTY;
-                __atomic_store_n(mapper.ptr + i, pte, __ATOMIC_RELEASE);
-                ctx.invalidate_page((void *)copy_from);
-            }
-
-            kernel::paging::Page_Table_Arguments arg = {
-                .readable           = !!(new_access & Readable),
-                .writeable          = 0,
-                .user_access        = true,
-                .global             = false,
-                .execution_disabled = not(new_access & Executable),
-                .extra              = static_cast<u8>(pte >> PAGE_AVAILABLE_SHIFT),
-                .cache_policy       = pte_cache_policy(pte),
-            };
-            auto result = to->map(klib::move(p), (void *)copy_to, arg);
-            if (result)
-                return result;
-
-            upper_bound_offset = copy_from - absolute_start + 4096;
-        } else {
-            if (!pde_valid(pte))
-                continue;
-
-            u64 next_level_phys = pte & PAGE_USER_MASK;
-            u64 current         = ((i - start_index) << offset) + current_copy_from;
-            if (i != start_index)
-                current &= ~mask;
-            auto result =
-                copy_to_recursive(to, next_level_phys, absolute_start, to_addr, size_bytes,
-                                  new_access, current, level - 1, upper_bound_offset, ctx);
-            if (result)
-                return result;
-        }
-    }
-
     return 0;
 }
 
@@ -616,6 +550,11 @@ namespace kernel::paging {
 u64 paging::arch_phys_addr_limit()
 {
     return (u64)1 << max_memory_bits;
+}
+
+void paging::flush_tlb_kernel()
+{
+    flush_tlb();
 }
 
 }

@@ -62,9 +62,7 @@ memory::RCU heap_rcu;
 
 pmos::containers::vector<CPU_Info *> cpus;
 
-size_t get_cpu_count() noexcept { return cpus.size(); }
-
-size_t number_of_cpus = 1;
+size_t get_cpu_count() { return cpus.size(); }
 
 // u64 TaskDescriptor::check_unblock_immediately(u64 reason, u64 extra)
 // {
@@ -363,6 +361,7 @@ void TaskDescriptor::atomic_block_by_page(void *page)
     assert(page_table);
     page_table->atomic_push_blocked_task(this, page);
 
+    __atomic_fetch_and(&wake_reason_mask, ~SCHED_WAKE_MEMORY, __ATOMIC_RELAXED);
     atomic_block_self(TaskDescriptor::SCHED_WAKE_MEMORY);
 
     if (!page_table->page_pending(page))
@@ -481,9 +480,8 @@ void kernel::sched::call_after_smp_entry()
     c->current_task->page_table->apply();
     c->current_task->after_task_switch();
 
-    assert(c->kernel_pt_generation == -1);
-    c->kernel_pt_generation = __atomic_load_n(&kernel::paging::kernel_pt_generation, __ATOMIC_ACQUIRE);
-    __atomic_add_fetch(&kernel_pt_active_cpus_count[c->kernel_pt_generation], 1, __ATOMIC_RELAXED);
+    paging::online_cpu(c);
+
     c->online = true;
 }
 
@@ -500,10 +498,7 @@ void kernel::sched::park_self()
     task->page_table->unapply_cpu(get_cpu_struct());
     task->before_task_switch();
 
-    // Kill TLB shootdowns
-    int kernel_pt_gen = c->kernel_pt_generation;
-    __atomic_sub_fetch(&kernel_pt_active_cpus_count[kernel_pt_gen], 1, __ATOMIC_RELEASE);
-    c->kernel_pt_generation = -1;
+    paging::offline_cpu(c);
 
     log::serial_logger.printf("Parking cpu %x\n", c->cpu_id);
 

@@ -142,7 +142,7 @@ fast_atomic_read_from_user:
 
 read_failure:
     movq %rax, %rsp
-    leaq 80(%rsp), %rbp
+    leaq 56(%rsp), %rbp
 
     movq %rcx, %rsi # const void *faulting_addr
     movq $4, %r8    # size_t size
@@ -157,8 +157,8 @@ read_failure:
     cmpb $1, %dl
     jne 1f
 
-    movq -56(%rbp), %rsi # source
-    movq -64(%rbp), %rdi # destination
+    movq -48(%rbp), %rsi # source
+    movq -56(%rbp), %rdi # destination
 
     enable_user
     movl (%rsi), %eax

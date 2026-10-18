@@ -43,6 +43,9 @@ generic:
     bl memcpy
 
     # Success
+    st.d   $zero, $tp, 48 # CPU_Info::jumpto_func
+    st.d   $zero, $tp, 56 # CPU_Info::jumpto_arg
+
     xor    $a0, $a0, $a0
     li.d   $a1, 1
 
@@ -129,6 +132,9 @@ fast_atomic_read_from_user:
     st.w   $t0, $a0, 0
 
     # Success
+    st.d   $zero, $tp, 48 # CPU_Info::jumpto_func
+    st.d   $zero, $tp, 56 # CPU_Info::jumpto_arg
+
     xor    $a0, $a0, $a0
     li.d   $a1, 1
 

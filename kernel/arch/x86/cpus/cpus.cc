@@ -176,6 +176,8 @@ void maybe_enable_fred()
 }
 #endif
 
+extern int kernel_pt_active_cpus_count[2];
+
 void init_per_cpu(u64 lapic_id)
 {
     sse::detect_sse();
@@ -239,6 +241,9 @@ void init_per_cpu(u64 lapic_id)
     if (!c->temp_mapper)
         panic("Failed to create temp mapper\n");
     #endif
+
+    c->kernel_pt_generation = kernel_pt_generation;
+    __atomic_add_fetch(&kernel_pt_active_cpus_count[kernel_pt_generation], 1, __ATOMIC_RELAXED);
 }
 
 extern "C" void smp_main(CPU_Info *c)
@@ -476,6 +481,9 @@ void init_smp()
             panic("Found LSAPIC entry in MADT!");
         }
     }
+
+    memory::init_rcu();
+    other_cpus_online = true;
 
     smp_wake_everyone_else_up();
 }

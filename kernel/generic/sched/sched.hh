@@ -243,7 +243,9 @@ u64 get_ns_since_bootup();
 
 extern pmos::containers::vector<CPU_Info *> cpus;
 
-size_t get_cpu_count() noexcept;
+size_t get_cpu_count();
+
+extern bool other_cpus_online;
 
 /**
  * This vector holds the data of all of the CPUs

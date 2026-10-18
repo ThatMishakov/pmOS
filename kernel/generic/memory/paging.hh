@@ -588,4 +588,9 @@ Memory_Type memory_type_for_phys_addr(phys_addr_t phys_addr);
 // If it's 0, all the physical memory is mappable
 phys_addr_t arch_phys_addr_limit();
 
-};
+void flush_tlb_kernel();
+
+void online_cpu(sched::CPU_Info *cpu);
+void offline_cpu(sched::CPU_Info *cpu);
+
+} // namespace kernel::paging

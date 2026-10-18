@@ -151,6 +151,9 @@ fast_atomic_read_from_user:
     li t0, 0x40000
     csrc sstatus, t0
 
+    sd zero, 48(tp)
+    sd zero, 56(tp)
+
     # Success
     xor a0, a0, a0
     li  a1, 1

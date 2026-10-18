@@ -18,7 +18,10 @@ u64 timer_max;
 
 void start_timer_oneshot(u64 ticks)
 {
+    if (ticks & 0x3)
+        ticks += 4;
     ticks &= ~((u64)0x3);
+    ticks = std::min(ticks, timer_max & ~((u64)0x3));
     ticks |= 0x01; // Timer enable
     timer_tcfg(ticks);
 }
@@ -63,7 +66,7 @@ struct LoongArchTimer final: kernel::time::LocalTimer {
 
     virtual void cancel_deadline() override
     {
-        start_timer_oneshot(0);
+        timer_tcfg(0);
     }
 
     virtual void init_as_main() override

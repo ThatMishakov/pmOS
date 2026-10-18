@@ -76,7 +76,7 @@ ReturnStr<Mem_Object_Reference *>
         return Error(-ENOMEM);
 
     return atomic_create_mem_object_region(page_aligned_start, page_aligned_size, access & 0x7,
-                                           access & 0x8, "anonymous memory", object, cow, 0,
+                                           fixed, "anonymous memory", object, cow, 0,
                                            page_aligned_size);
 }
 
@@ -103,14 +103,31 @@ ReturnStr<bool> Page_Table::atomic_copy_to_user(void *to, const void *from, size
     return true;
 }
 
+static bool ranges_intersect(uintptr_t start1, size_t size1, uintptr_t start2, size_t size2)
+{
+    if (size1 == 0 || size2 == 0)
+        return false;
+
+    if (start1 < start2) {
+        return start2 - start1 < size1;
+    } else {
+        return start1 - start2 < size2;
+    }
+}
+
 kresult_t Page_Table::release_in_range(TLBShootdownContext &ctx, void *start_addr, size_t size)
 {
     invalidate_range(ctx, start_addr, size, true);
 
+    const auto unmap_start = reinterpret_cast<uintptr_t>(start_addr);
+
     // Special case: One large region needs to be split in two, from the middle
-    auto it          = paging_regions.get_smaller_or_equal(start_addr);
-    if (it != paging_regions.end() and it->start_addr < start_addr and
-        it->addr_end() > (void *)((char *)start_addr + size)) {
+    auto it = paging_regions.get_smaller_or_equal(start_addr);
+    const uintptr_t region_start = it != paging_regions.end() ? reinterpret_cast<uintptr_t>(it->start_addr) : 0;
+    const auto offset = unmap_start - region_start;
+
+    if (it != paging_regions.end() and region_start < unmap_start &&
+            offset < it->size && size < it->size - offset) {
         // This is the case when the region needs to be split
         // it is the only case that may fail because the system may not have enough memory to
         // allocate a second region
@@ -123,22 +140,35 @@ kresult_t Page_Table::release_in_range(TLBShootdownContext &ctx, void *start_add
         if (it == paging_regions.end())
             it = paging_regions.begin();
 
-        void *end_addr = (char *)start_addr + size;
-        while (it != paging_regions.end() and it->start_addr < end_addr) {
+        while (it != paging_regions.end()) {
+            const auto region_start =
+                reinterpret_cast<uintptr_t>(it->start_addr);
+
+            if (region_start >= unmap_start &&
+                region_start - unmap_start >= size)
+                break;
+            
             auto i = it++;
 
             // 1 region can be before the one to be released
-            if (not i->is_in_range(start_addr))
+            if (!ranges_intersect(
+                    reinterpret_cast<uintptr_t>(i->start_addr), i->size,
+                    reinterpret_cast<uintptr_t>(start_addr), size))
                 continue;
 
-            if (i->start_addr < start_addr) {
-                i->trim(i->start_addr, (char *)start_addr - (char *)i->start_addr);
-            } else if (i->addr_end() > end_addr) {
-                i->trim(end_addr, (char *)i->addr_end() - (char *)end_addr);
+            if (region_start < unmap_start) {
+                i->trim(i->start_addr, unmap_start - region_start);
             } else {
-                i->prepare_deletion();
-                paging_regions.erase(i);
-                i->rcu_free();
+                const auto offset = region_start - unmap_start;
+                const auto removed = size - offset;
+
+                if (removed < i->size) {
+                    i->trim(reinterpret_cast<void *>(region_start + removed), i->size - removed);
+                } else {
+                    i->prepare_deletion();
+                    paging_regions.erase(i);
+                    i->rcu_free();
+                }
             }
         }
     }
@@ -327,9 +357,18 @@ bool Page_Table::can_takeout_page(void *page_addr) noexcept
 
 ReturnStr<void *> Page_Table::find_region_spot(void *desired_start, size_t size, bool fixed)
 {
-    void *end = (char *)desired_start + size;
+    if (size == 0)
+        return Error(-EINVAL);
 
-    bool region_ok = desired_start != 0;
+    const auto start = reinterpret_cast<uintptr_t>(desired_start);
+    const auto limit = reinterpret_cast<uintptr_t>(user_addr_max());
+    if (limit != 0 && size > limit)
+        return Error(-ENOMEM);
+
+    const uintptr_t max_start = limit - size;
+    bool valid_addr = start <= max_start;
+
+    bool region_ok = valid_addr && (fixed || desired_start != nullptr);
 
     if (region_ok) {
         auto it = paging_regions.get_smaller_or_equal(desired_start);
@@ -339,37 +378,44 @@ ReturnStr<void *> Page_Table::find_region_spot(void *desired_start, size_t size,
 
     if (region_ok) {
         auto it = paging_regions.lower_bound(desired_start);
-        if (it != paging_regions.end() and it->start_addr < end)
+        if (it != paging_regions.end() and reinterpret_cast<uintptr_t>(it->start_addr) - start < size)
             region_ok = false;
     }
 
     // If the new region doesn't overlap with anything, just use it
     if (region_ok) {
         return desired_start;
-
     } else {
-        if (fixed && desired_start == nullptr)
-            return Error(-EINVAL);
-
-        else if (fixed)
+        if (fixed && valid_addr)
             return desired_start;
+        else if (fixed)
+            return Error(-ENOMEM);
 
-        void *addr = (void *)0x1000;
+        uintptr_t addr = PAGE_SIZE;
         auto it    = paging_regions.begin();
         while (it != paging_regions.end()) {
-            void *end = (char *)addr + size;
+            if (addr > max_start)
+                return Error(-ENOMEM);
 
-            if (*it > end and end <= user_addr_max())
-                return addr;
+            const auto next_start = reinterpret_cast<uintptr_t>(it->start_addr);
 
-            addr = it->addr_end();
+            if (next_start >= addr && next_start - addr >= size)
+                return reinterpret_cast<void *>(addr);
+
+            const auto region_end =
+                reinterpret_cast<uintptr_t>(it->addr_end());
+            if (region_end == 0)
+                return Error(-ENOMEM);
+            if (region_end > addr)
+                addr = region_end;
+            
             ++it;
         }
 
-        if ((char *)addr + size > user_addr_max())
+        if (addr > max_start)
             return Error(-ENOMEM);
 
-        return addr;
+        return reinterpret_cast<void *>(addr);
     }
 }
 
@@ -443,6 +489,8 @@ void Page_Table::trigger_shootdown(Page_Table *maybe_page_table, sched::CPU_Info
 
         int old_gen = cpu->kernel_pt_generation;
         int new_gen = kernel_pt_generation;
+
+        cpu->kernel_pt_generation = new_gen;
 
         __atomic_add_fetch(&kernel_pt_active_cpus_count[new_gen], 1, __ATOMIC_RELAXED);
         __atomic_sub_fetch(&kernel_pt_active_cpus_count[old_gen], 1, __ATOMIC_RELEASE);
@@ -578,11 +626,34 @@ extern bool cpu_struct_works;
 extern bool other_cpus_online;
 } // namespace kernel::sched
 
+// TODO: This can be removed later...
+static Spinlock shootdown_barrier; 
+
+void kernel::paging::online_cpu(sched::CPU_Info *cpu)
+{
+    assert(cpu == sched::get_cpu_struct());
+    assert(cpu->kernel_pt_generation == -1);
+
+    {
+        Auto_Lock_Scope l(shootdown_barrier);
+        cpu->kernel_pt_generation = __atomic_load_n(&kernel::paging::kernel_pt_generation, __ATOMIC_ACQUIRE);
+        __atomic_add_fetch(&kernel_pt_active_cpus_count[cpu->kernel_pt_generation], 1, __ATOMIC_RELAXED);
+    }
+
+    flush_tlb_kernel();
+}
+
+void kernel::paging::offline_cpu(sched::CPU_Info *cpu)
+{
+    assert(cpu == sched::get_cpu_struct());
+    assert(cpu->kernel_pt_generation != -1);
+
+    __atomic_sub_fetch(&kernel_pt_active_cpus_count[cpu->kernel_pt_generation], 1, __ATOMIC_RELEASE);
+    cpu->kernel_pt_generation = -1;
+}
+
 void TLBShootdownContext::finalize()
 {
-    // TODO: This can be removed later...
-    static Spinlock barrier;
-
     if (empty() && !arch_flags)
         return;
 
@@ -600,7 +671,9 @@ void TLBShootdownContext::finalize()
         } else {
             auto my_cpu = sched::get_cpu_struct();
 
-            Auto_Lock_Scope l(barrier);
+            Auto_Lock_Scope l(shootdown_barrier);
+
+            kernel_shootdown_desc = this;
 
             int old_generation   = kernel_pt_generation;
             kernel_pt_generation = kernel_pt_generation == 0 ? 1 : 0;
@@ -609,6 +682,8 @@ void TLBShootdownContext::finalize()
 
             for (auto cpu: sched::cpus) {
                 if (cpu == my_cpu)
+                    continue;
+                if (cpu->kernel_pt_generation != old_generation)
                     continue;
                 cpu->ipi_tlb_shootdown();
             }
@@ -623,7 +698,7 @@ void TLBShootdownContext::finalize()
 
         int old_generation;
 
-        Auto_Lock_Scope l(barrier);
+        Auto_Lock_Scope l(shootdown_barrier);
         {
             Auto_Lock_Scope l2(page_table->active_cpus_lock);
             // flip generation and notify other CPUs

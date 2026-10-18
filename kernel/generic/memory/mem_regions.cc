@@ -215,7 +215,7 @@ void Mem_Object_Reference::trim(void *new_start, size_t new_size) noexcept
     auto end = amap.lower_bound(object_offset_bytes);
     amap.erase(it, end);
 
-    it = amap.lower_bound(object_offset_bytes + object_size_bytes);
+    it = amap.lower_bound(object_offset_bytes + size);
     end = amap.end();
     amap.erase(it, end);
 }
@@ -259,7 +259,7 @@ kresult_t Mem_Object_Reference::punch_hole(void *hole_addr_start, size_t hole_si
     ptr->access_type = access_type;
     ptr->references = references;
     ptr->object_offset_bytes = object_offset_bytes + offset;
-    ptr->object_size_bytes = object_size_bytes - offset;
+    ptr->object_size_bytes = offset < object_size_bytes ? object_size_bytes - offset : 0;
     ptr->cow = cow;
 
     for (auto it = amap.lower_bound(ptr->object_offset_bytes); it != amap.end(); ++it) {

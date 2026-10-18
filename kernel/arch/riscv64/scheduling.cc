@@ -406,6 +406,8 @@ namespace kernel::sched
 extern bool cpu_struct_works;
 }
 
+extern int kernel_pt_active_cpus_count[2];
+
 void init_scheduling(u64 hart_id)
 {
     CPU_Info *i = new CPU_Info();
@@ -481,6 +483,9 @@ void init_scheduling(u64 hart_id)
 
     // Enable all interrupts
     plic_set_threshold(0);
+
+    i->kernel_pt_generation = kernel::paging::kernel_pt_generation;
+    __atomic_add_fetch(&kernel_pt_active_cpus_count[i->kernel_pt_generation], 1, __ATOMIC_RELAXED);
 
     serial_logger.printf("Scheduling initialized\n");
 }
@@ -609,6 +614,9 @@ void init_smp()
 {
     init_smp_acpi();
     // TODO: FDT
+
+    kernel::memory::init_rcu();
+    other_cpus_online = true;
 
     start_aps();
 }

@@ -68,19 +68,38 @@ void TaskDescriptor::futex_try_remove()
 
 void TaskDescriptor::futex_wake(ulong futex_addr, bool wake_all)
 {
-    do {
+    auto list = pmos::containers::CircularDoubleList<TaskDescriptor, &TaskDescriptor::futex_list_node>{};
+
+    {
         Auto_Lock_Scope scope_lock(futex_hash_lock);
-        auto task = futex_hash_map.find(FutexKey {page_table.get(), futex_addr});
+        do {
+            auto task = futex_hash_map.find(FutexKey {page_table.get(), futex_addr});
 
-        if (!task)
-            break;
+            if (!task)
+                break;
 
-        futex_hash_map.remove(task);
+            __atomic_or_fetch(&task->wake_reason_mask, TaskDescriptor::SCHED_WAKE_FUTEX, __ATOMIC_RELEASE);
+
+            futex_hash_map.remove(task);
+            list.push_back(task);
+        } while (wake_all);
+    }
+    
+    auto get_next_task = [&list]() -> TaskDescriptor * {
+        Auto_Lock_Scope scope_lock(futex_hash_lock);
+
+        if (list.empty())
+            return nullptr;
+
+        auto task = &list.front();
+        list.erase(task);
         task->futex_pushed = false;
 
-        task->atomic_handle_unblock(TaskDescriptor::SCHED_WAKE_FUTEX);
-    } while (wake_all);
+        return task;
+    };
     
+    while (auto task = get_next_task())
+        task->atomic_do_deferred_unblock();
 }
 
 } // namespace kernel::proc

@@ -835,6 +835,7 @@ void syscall_get_message_info(TaskDescriptor *task)
         auto port = data->port;
         assert(port);
 
+        __atomic_and_fetch(&task->wake_reason_mask, ~TaskDescriptor::SCHED_WAKE_PORT, __ATOMIC_RELAXED);
         if (port->atomic_is_empty()) [[unlikely]] {
             task->atomic_block_self(TaskDescriptor::SCHED_WAKE_PORT);
             return;
@@ -1422,7 +1423,7 @@ void syscall_get_segment(TaskDescriptor *current)
     case 1: {
         segment = target->regs.thread_pointer();
         auto b =
-            copy_to_user((char *)&current->regs.thread_pointer(), (char *)ptr, sizeof(segment));
+            copy_to_user((char *)&segment, (char *)ptr, sizeof(segment));
         if (!b.success()) {
             syscall_error(current) = b.result;
             return;
@@ -2841,7 +2842,7 @@ static void futex_wakeup(TaskDescriptor *task)
 
     // Futex has been blocked by memory, so retry reading the value
 
-    u32 expected_value = syscall_arg(task, 2, 0);
+    u32 expected_value = syscall_arg(task, 2, 1);
     u32 user_value;
 
     auto result = atomic_read_from_user(&user_value, (u32 *)task->futex_addr);
@@ -2871,9 +2872,8 @@ void syscall_futex_wait(TaskDescriptor *task)
 {
     u64 timeout_ns = syscall_arg64(task, 0);
     ulong ptr = syscall_arg(task, 1, 1);
-    u32 expected_value = syscall_arg(task, 2, 0);
+    u32 expected_value = syscall_arg(task, 2, 1);
 
-    // TODO: implement the timeout here
     uint64_t deadline = timeout_ns == (u64)-1 ? -1 : get_ns_since_bootup() + timeout_ns;
 
     task->set_continuation(futex_wakeup, cancel_futex_wait);

@@ -37,6 +37,7 @@ using namespace kernel::riscv64::fp;
 using namespace kernel::proc;
 
 extern "C" void fp_write_regs_initial();
+extern "C" void fp_write_regs_initial_double();
 extern "C" void fp_load_regs_single(const u64 *fp_regs);
 extern "C" void fp_load_regs_double(const u64 *fp_regs);
 extern "C" void fp_store_regs_single(u64 *fp_regs);
@@ -52,7 +53,16 @@ void set_fp_state_initial()
     static const u64 zero = 0;
     asm("csrw fcsr, %0" : : "r"(zero));
 
-    fp_write_regs_initial();
+    switch (max_supported_fp_level) {
+    case FloatingPointSize::SinglePrecision:
+        fp_write_regs_initial();
+        break;
+    case FloatingPointSize::DoublePrecision:
+        fp_write_regs_initial_double();
+        break;
+    default:
+        assert(false);
+    }
 
     set_fp_state(FloatingPointState::Initial);
 }
@@ -146,6 +156,9 @@ kresult_t TaskDescriptor::inherit_registers_from_current()
     regs = current->regs;
     memcpy(fp_registers.get(), current->fp_registers.get(),
            fp_register_size(max_supported_fp_level) * 2 * sizeof(u64));
+    fcsr = current->fcsr;
+    fp_state = current->fp_state;
+
 
     current->after_task_switch();
 
