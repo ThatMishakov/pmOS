@@ -361,6 +361,7 @@ void TaskDescriptor::atomic_block_by_page(void *page)
     assert(page_table);
     page_table->atomic_push_blocked_task(this, page);
 
+    __atomic_fetch_and(&wake_reason_mask, ~SCHED_WAKE_MEMORY, __ATOMIC_RELAXED);
     atomic_block_self(TaskDescriptor::SCHED_WAKE_MEMORY);
 
     if (!page_table->page_pending(page))

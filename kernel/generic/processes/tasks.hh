@@ -152,9 +152,8 @@ namespace proc
         bool is_terminating() const;
 
         static constexpr int SCHED_FLAG_PAUSE     = 0x01;
-        static constexpr int SCHED_FLAG_WAKE      = 0x02;
-        static constexpr int SCHED_FLAG_INTERRUPT = 0x04;
-        static constexpr int SCHED_FLAG_TERMINATE = 0x08;
+        static constexpr int SCHED_FLAG_INTERRUPT = 0x02;
+        static constexpr int SCHED_FLAG_TERMINATE = 0x04;
 
         u32 wake_reason_mask = 0;
         u32 unblock_mask = 0;
@@ -411,6 +410,7 @@ namespace proc
         }
 
         void atomic_handle_unblock(u32 reason_mask);
+        void atomic_do_deferred_unblock();
 
         result_t inherit_registers_from_current();
 

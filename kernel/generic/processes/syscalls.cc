@@ -835,6 +835,7 @@ void syscall_get_message_info(TaskDescriptor *task)
         auto port = data->port;
         assert(port);
 
+        __atomic_and_fetch(&task->wake_reason_mask, ~TaskDescriptor::SCHED_WAKE_PORT, __ATOMIC_RELAXED);
         if (port->atomic_is_empty()) [[unlikely]] {
             task->atomic_block_self(TaskDescriptor::SCHED_WAKE_PORT);
             return;

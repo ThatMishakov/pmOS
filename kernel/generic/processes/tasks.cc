@@ -953,18 +953,25 @@ TaskDescriptor::~TaskDescriptor() noexcept
 
 void TaskDescriptor::atomic_handle_unblock(u32 reason)
 {
-    auto old_mask = __atomic_fetch_or(&wake_reason_mask, reason, __ATOMIC_RELAXED);
-    old_mask &= reason;
-    if (!(~old_mask & reason))
-        // No new bits set
+    Auto_Lock_Scope scope_lock(sched_lock);
+
+    __atomic_fetch_or(&wake_reason_mask, reason, __ATOMIC_RELAXED);
+    if (!(reason & unblock_mask))
         return;
 
+    if (status == TaskStatus::TASK_BLOCKED)
+        unblock();
+}
+
+void TaskDescriptor::atomic_do_deferred_unblock()
+{
     Auto_Lock_Scope scope_lock(sched_lock);
-    if ((reason & unblock_mask)) {
+
+    auto pending = __atomic_load_n(&wake_reason_mask, __ATOMIC_ACQUIRE);
+
+    if (pending & unblock_mask) {
         if (status == TaskStatus::TASK_BLOCKED)
             unblock();
-        else if (status == TaskStatus::TASK_RUNNING)
-            sched_pending_mask |= SCHED_FLAG_WAKE;
     }
 }
 
@@ -979,13 +986,10 @@ void TaskDescriptor::atomic_block_self(u32 unblock_mask, bool force)
         return;
     }
 
-    if (sched_pending_mask & SCHED_FLAG_WAKE) {
-        auto mask = __atomic_fetch_and(&wake_reason_mask, ~unblock_mask, __ATOMIC_RELAXED);
-        if (mask & unblock_mask) {
-            // Don't block and return immediately (other stuff will be handled after the unblocking)
-            sched_pending_mask &= ~SCHED_FLAG_WAKE;
-            return;
-        }
+    auto mask = __atomic_load_n(&wake_reason_mask, __ATOMIC_ACQUIRE);
+    if (mask & unblock_mask) {
+        // Don't block and return immediately (other stuff will be handled after the unblocking)
+        return;
     }
 
     if (sched_pending_mask & SCHED_FLAG_PAUSE && !force) {
@@ -1044,7 +1048,7 @@ void TaskDescriptor::interrupt_blocked(i64 error_code)
         cancel_callback(this, error_code);
         continuation_func = nullptr;
     } else if (status == TaskStatus::TASK_RUNNING) {
-        
+        pending_cancel_reason = error_code;
         sched_pending_mask |= SCHED_FLAG_INTERRUPT;
     }
 }
@@ -1153,10 +1157,18 @@ void TaskDescriptor::TaskAttention::get_attention()
             task->timer_cpu->ipi_get_attention();
             unblock = false;
         }
+
+        if (unblock) {
+            // This needs to be done here and with atomic_do_deffered_unblock
+            // instead of by atomic_handle_unblock because otherwise it creates a race
+            __atomic_fetch_or(&task->wake_reason_mask,
+                            TaskDescriptor::SCHED_WAKE_ATTENTION,
+                            __ATOMIC_RELEASE);
+        }
     }
 
     if (unblock) {
-        task->atomic_handle_unblock(TaskDescriptor::SCHED_WAKE_ATTENTION);
+        task->atomic_do_deferred_unblock();
     }
 }
 
@@ -1172,6 +1184,7 @@ void TaskDescriptor::timer_try_remove()
     } else if (waiting_for_attention) {
         // Other CPU will remove it when it gets attention
     } else {
+        __atomic_fetch_and(&wake_reason_mask, ~SCHED_WAKE_ATTENTION, __ATOMIC_RELAXED);
         {
             Auto_Lock_Scope l(timer_cpu->attention_queue_lock);
             timer_cpu->attention_queue.push_back(&attention_node);
