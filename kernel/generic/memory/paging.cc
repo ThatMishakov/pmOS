@@ -683,6 +683,8 @@ void TLBShootdownContext::finalize()
             for (auto cpu: sched::cpus) {
                 if (cpu == my_cpu)
                     continue;
+                if (cpu->kernel_pt_generation != old_generation)
+                    continue;
                 cpu->ipi_tlb_shootdown();
             }
 

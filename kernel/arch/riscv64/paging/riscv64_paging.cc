@@ -725,6 +725,8 @@ u64 arch_phys_addr_limit()
     return (u64)1 << 56;
 }
 
+void flush_tlb_kernel() { riscv64::paging::flush_all(); }
+
 } // namespace kernel::paging
 
 void early_detect_cpu_features()

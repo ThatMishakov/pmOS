@@ -11,6 +11,7 @@
 #include <pmos/containers/map.hh>
 #include <pmos/utility/scope_guard.hh>
 #include <utils.hh>
+#include <memory/paging.hh>
 
 using namespace kernel;
 
@@ -549,6 +550,11 @@ namespace kernel::paging {
 u64 paging::arch_phys_addr_limit()
 {
     return (u64)1 << max_memory_bits;
+}
+
+void paging::flush_tlb_kernel()
+{
+    flush_tlb();
 }
 
 }

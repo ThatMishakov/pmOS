@@ -87,8 +87,8 @@ void init_scheduling(u64 cpu_id)
     set_eiopic_for_cpu(i);
     init_eiopic();
 
-    i->kernel_pt_generation = kernel_pt_generation;
-    __atomic_add_fetch(&kernel_pt_active_cpus_count[kernel_pt_generation], 1, __ATOMIC_RELAXED);
+    i->kernel_pt_generation = kernel::paging::kernel_pt_generation;
+    __atomic_add_fetch(&kernel_pt_active_cpus_count[i->kernel_pt_generation], 1, __ATOMIC_RELAXED);
 
     log::serial_logger.printf("Scheduling initialized\n");
 }
