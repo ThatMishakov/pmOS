@@ -311,7 +311,8 @@ LoongArch64_Page_Table::Page_Info get_page_mapping(u64 page_directory, void *vir
 
     i.is_allocated = !!(pte & PAGE_VALID);
     i.dirty        = !!(pte & PAGE_DIRTY);
-    i.flags        = (pte >> 8) & 0xf;
+    i.flags        = (pte & PAGE_AVAILABLE_MASK) >> PAGE_AVAILABLE_SHIFT;
+    i.cache_policy = pte_cache_policy(pte);
     i.user_access  = !!(pte & PAGE_USER_MASK);
     i.writeable    = !!(pte & PAGE_DIRTY);
     i.executable   = !(pte & PAGE_NO_EXECUTE);
