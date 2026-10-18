@@ -54,20 +54,25 @@ void RCU::start_generation() noexcept
 
 void RCU_CPU::quiet(RCU &parent, size_t my_cpu_id)
 {
-    if (parent.cpu_bit_set(my_cpu_id)) {
+    u64 parent_generation = 0;
+    {
         Auto_Lock_Scope l(parent.lock);
+    
+        if (parent.cpu_bit_set(my_cpu_id)) {
+            parent.silence_cpu(my_cpu_id);
+            if (parent.generation_complete()) {
+                parent.generation++;
 
-        parent.silence_cpu(my_cpu_id);
-        if (parent.generation_complete()) {
-            parent.generation++;
-
-            if (parent.generation <= parent.highest_generation) {
-                parent.start_generation();
+                if (parent.generation <= parent.highest_generation) {
+                    parent.start_generation();
+                }
             }
         }
+
+        parent_generation = parent.generation;
     }
 
-    if (current_callbacks and (parent.generation > generation)) {
+    if (current_callbacks and (parent_generation > this->generation)) {
         while (current_callbacks) {
             // TODO: This can be delayed, e.g. to be executed while the CPU is idling
             RCU_Head *next = current_callbacks->rcu_next;
@@ -81,7 +86,7 @@ void RCU_CPU::quiet(RCU &parent, size_t my_cpu_id)
         next_callbacks    = nullptr;
 
         Auto_Lock_Scope l(parent.lock);
-        generation = parent.generation + 1;
+        this->generation = parent.generation + 1;
 
         if (!parent.generation_complete()) {
             assert(parent.highest_generation <= (generation + 1));
