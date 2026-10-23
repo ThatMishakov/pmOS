@@ -110,7 +110,7 @@ struct ReceiveRight: GenericMessage {
 
     // GenericMessage overrides
     virtual size_t size() const override;
-    virtual ReturnStr<bool> copy_to_user_buff(char *buff) const override;
+    virtual ReturnStr<bool> copy_to_user_buff(char *buff, size_t max_size) const override;
     virtual u64 sent_with_right() const override;
     virtual u64 sender_task_id() const override;
     virtual u64 sender_process_id() const override;
@@ -160,7 +160,7 @@ struct SendManyRight final: SendRight {
 
     // GenericMessage overrides
     virtual size_t size() const override;
-    virtual ReturnStr<bool> copy_to_user_buff(char *buff) const override;
+    virtual ReturnStr<bool> copy_to_user_buff(char *buff, size_t max_size) const override;
 };
 
 struct SendOnceRight final: SendRight {

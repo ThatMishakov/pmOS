@@ -672,6 +672,7 @@ void syscall_get_first_message(TaskDescriptor *current)
     Port *port;
 
     auto buff = syscall_arg(current, 1, 1);
+    auto max_size = syscall_arg(current, 2, 1);
     auto args = syscall_flags(current);
 
     if (current->continuation_func) {
@@ -713,7 +714,7 @@ void syscall_get_first_message(TaskDescriptor *current)
         top_message = port->get_front();
     }
 
-    auto result = top_message->copy_to_user_buff((char *)buff);
+    auto result = top_message->copy_to_user_buff((char *)buff, max_size);
     if (!result.success()) {
         syscall_error(current) = result.result;
         return;

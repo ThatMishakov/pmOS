@@ -190,7 +190,7 @@ get_msg_return_type Port::get_first_message(bool nonblocking)
             }
     }
 
-    auto r = ::get_first_message(reinterpret_cast<char *>(data.data()), 0, id);
+    auto r = ::get_first_message(reinterpret_cast<char *>(data.data()), desc.size, 0, id);
     if (r.result)
         return std::unexpected(static_cast<int>(-r.result));
 

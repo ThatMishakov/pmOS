@@ -66,7 +66,7 @@ unsafe extern "C" {
     fn create_port(owner_pid: libc::pid_t, flags: u32) -> PortReqResult;
     fn pmos_delete_port(port: Port) -> ResultT;
     fn syscall_get_message_info(descr: &mut MessageDescriptor, port: u64, flags: u32) -> ResultT;
-    unsafe fn get_first_message(buff: *mut u8, args: u32, port: u64) -> RightRequestResult;
+    unsafe fn get_first_message(buff: *mut u8, size: usize, args: u32, port: u64) -> RightRequestResult;
     #[link_name = "name_right"]
     unsafe fn name_right_stdlib(
         right: Right,
@@ -192,7 +192,7 @@ impl IPCPort {
         }
 
         let mut buffer = vec![0u8; desc.size as usize];
-        let r = unsafe { get_first_message(buffer.as_mut_ptr(), 0, self.port) }
+        let r = unsafe { get_first_message(buffer.as_mut_ptr(), buffer.len(), 0, self.port) }
             .result()
             .unwrap();
 

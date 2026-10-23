@@ -83,7 +83,7 @@ struct GenericMessage {
         return i;
     }
 
-    virtual ReturnStr<bool> copy_to_user_buff(char *buff) const = 0;
+    virtual ReturnStr<bool> copy_to_user_buff(char *buff, size_t max_size) const = 0;
 
     virtual ~GenericMessage() = default;
 
@@ -107,7 +107,7 @@ struct Message final: public GenericMessage {
     virtual inline size_t size() const override { return content.size(); }
 
     // Returns true if done successfully, false otherwise (e.g. when syscall needs to be repeated)
-    virtual ReturnStr<bool> copy_to_user_buff(char *buff) const override;
+    virtual ReturnStr<bool> copy_to_user_buff(char *buff, size_t max_size) const override;
 
     virtual Right *get_reply_right() const override;
     virtual void clear_reply_right() override;

@@ -138,7 +138,7 @@ void pmos_msgloop_loop(struct pmos_msgloop_data *data)
 
         char buff[descr.size];
 
-        right_request_t message = get_first_message(buff, 0, data->port);
+        right_request_t message = get_first_message(buff, descr.size, 0, data->port);
         if (message.result != SUCCESS) {
             fprintf(stderr,
                     "pmOS libc: failed to get message in pmos_msgloop_loop() from port %" PRIu64

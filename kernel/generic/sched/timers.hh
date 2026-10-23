@@ -66,7 +66,7 @@ struct TimerRight final: TimerNode, ipc::ReceiveRight, AttentionNode {
     virtual void delete_self() override;
     
     virtual size_t size() const override;
-    virtual ReturnStr<bool> copy_to_user_buff(char *buff) const override;
+    virtual ReturnStr<bool> copy_to_user_buff(char *buff, size_t max_size) const override;
 
     static ReturnStr<TimerRight *> create_for_port(ipc::Port *port);
 

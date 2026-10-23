@@ -38,14 +38,15 @@
 #include <stddef.h>
 #include <types.hh>
 #include <utils.hh>
+#include <algorithm>
 
 using namespace kernel;
 namespace kernel::ipc
 {
 
-ReturnStr<bool> Message::copy_to_user_buff(char *buff) const
+ReturnStr<bool> Message::copy_to_user_buff(char *buff, size_t max_size) const
 {
-    return copy_to_user(&content.front(), buff, content.size());
+    return copy_to_user(&content.front(), buff, std::min(max_size, content.size()));
 }
 
 Port *Port::atomic_create_port(proc::TaskDescriptor *task) noexcept
