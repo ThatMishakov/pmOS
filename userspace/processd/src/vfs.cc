@@ -391,24 +391,6 @@ pmos::async::detached_task attend_open_file(std::shared_ptr<VNode> vnode, pmos::
             handle_ttyname(vnode, std::move(reply_right));
         }
             break;
-        case IPC_Unlockpt_NUM: {
-            if (message.size() < sizeof(IPC_Unlockpt)) {
-                kernelLogger() << "posixd: Received IPC_Unlockpt that is too small while attending pty\n" << frg::endlog;
-                break;
-            }
-
-            auto result = co_await vnode->parent_fs->unlockpt(vnode);
-
-            IPC_Unlockpt_Reply reply = {
-                .type        = IPC_Unlockpt_Reply_NUM,
-                .result_code = static_cast<int16_t>(result.error_or(0)),
-                .flags       = 0,
-            };
-
-            auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
-            if (!result_send)
-                kernelLogger() << "posixd: Error " << result_send.error().first << " sending unlockpt reply to port " << reply_right.get() << "\n" << frg::endlog;
-        } break;
         case IPC_Chdir_NUM: {
             if (msg.size < sizeof(IPC_Chdir)) {
                 kernelLogger() << "processd: Received IPC_Chdir that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;

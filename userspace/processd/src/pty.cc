@@ -503,6 +503,112 @@ void manager_handle_write(const char *data, size_t size, std::shared_ptr<PtyData
     }
 }
 
+int ttiocsctty_handle(std::shared_ptr<PtyData> pty, unsigned flags, uint64_t sender_process_id)
+{
+    auto process = get_process_kernel_id(sender_process_id);
+    if (!process) {
+        kernelLogger() << "posixd: TIOCSCTTY request for pty " << pty->idx << " from unknown kernel process " << sender_process_id << "\n" << frg::endlog;
+        return -EPERM;
+    }
+
+    auto session = process->process_group->session;
+    if (process->pid != session->sid)
+        return -EPERM;
+
+    if (pty->session)
+        return -EPERM;
+
+    if (session->controlling_terminal)
+        return -EPERM;
+
+    pty->session = session;
+    session->controlling_terminal = pty;
+
+    return 0;
+}
+
+void handle_ioctl(std::shared_ptr<PtyData> pty, unsigned request, unsigned flags, std::span<std::byte> data, pmos::Right reply_right, uint64_t sender_process_id, bool subordinate)
+{
+    int result_code = 0;
+    std::vector<std::byte> reply_data{};
+
+    switch (request) {
+    case TCSETS:
+    // The next two are a TODO!!
+    case TCSETSW:
+    case TCSETSF: {
+        if (data.size() < sizeof(struct termios)) {
+            result_code = -EINVAL;
+            break;
+        }
+        struct termios *new_settings = reinterpret_cast<struct termios *>(data.data());
+        pty->active_settings = *new_settings;
+    
+        result_code = 0;
+    }
+        break;
+    case TIOCSCTTY:
+        result_code = ttiocsctty_handle(pty, flags, sender_process_id);
+        break;
+    case TIOCGWINSZ: {
+        if (data.size() < sizeof(struct winsize)) {
+            result_code = -EINVAL;
+            break;
+        }
+        reply_data.insert(reply_data.end(), reinterpret_cast<std::byte *>(&pty->active_window_size), reinterpret_cast<std::byte *>(&pty->active_window_size) + sizeof(struct winsize));
+    }
+        break;
+    case TIOCGPGRP: {
+        if (pty->foreground_group) {
+            result_code = pty->foreground_group->pgid;
+        } else {
+            result_code = INT_MAX;
+        }
+    }
+        break;
+    case TIOCSPTLCK: {
+        if (data.size() < sizeof(int)) {
+            result_code = -EINVAL;
+            break;
+        }
+        if (subordinate) {
+            result_code = -EPERM;
+            break;
+        }
+        int *lock_value = reinterpret_cast<int *>(data.data());
+        if (*lock_value != 0) {
+            pty->locked = true;
+        } else {
+            pty->locked = false;
+        }
+    }
+        break;
+    case TCGETS: {
+        reply_data.insert(reply_data.end(), reinterpret_cast<std::byte *>(&pty->active_settings), reinterpret_cast<std::byte *>(&pty->active_settings) + sizeof(struct termios));
+    }
+        break;
+    default:
+        kernelLogger() << "posixd: Unknown ioctl request " << request << " while attending pty\n" << frg::endlog;
+        result_code = -ENOTTY;
+        break;
+    }
+
+    IPC_Ioctl_Reply reply = {
+        .type         = IPC_Ioctl_Reply_NUM,
+        .flags        = 0,
+        .result_code  = result_code,
+        .data = {},
+    };
+
+    std::vector<std::byte> reply_buffer;
+    reply_buffer.insert(reply_buffer.end(), reinterpret_cast<std::byte *>(&reply), reinterpret_cast<std::byte *>(&reply) + sizeof(reply));
+    reply_buffer.insert(reply_buffer.end(), reply_data.begin(), reply_data.end());
+
+    auto result_send = pmos::send_message_right(reply_right, std::span(reply_buffer), {}, true);
+    if (!result_send)
+        kernelLogger() << "posixd: Error " << result_send.error().first << " sending ioctl reply to port " << reply_right.get() << "\n" << frg::endlog;
+}
+
 pmos::async::detached_task openpt_manager(pmos::ReceiveRight rr, std::shared_ptr<PtyData> pty, unsigned oflags)
 {
     while (1) {
@@ -539,6 +645,19 @@ pmos::async::detached_task openpt_manager(pmos::ReceiveRight rr, std::shared_ptr
             manager_handle_write(write_msg->data, size, pty, std::move(reply_right));
         }
             break;
+        case IPC_Ioctl_NUM: {
+            if (message.size() < sizeof(IPC_Ioctl)) {
+                kernelLogger() << "posixd: Received IPC_Ioctl that is too small while attending pty\n" << frg::endlog;
+                break;
+            }
+
+            auto *ioctl_msg = reinterpret_cast<IPC_Ioctl *>(ipc_msg);
+            size_t data_size = message.size() - sizeof(IPC_Ioctl);
+            std::span<std::byte> data{reinterpret_cast<std::byte *>(ioctl_msg->data), data_size};
+
+            handle_ioctl(pty, ioctl_msg->request, ioctl_msg->flags, data, std::move(reply_right), msg.sender_process, false);
+        }
+            break;
         default:
             kernelLogger() << "posixd: Unknown message type " << ipc_msg->type << " while attending pty\n" << frg::endlog;
             break;
@@ -546,30 +665,6 @@ pmos::async::detached_task openpt_manager(pmos::ReceiveRight rr, std::shared_ptr
     }
 
     co_return;
-}
-
-int ttiocsctty_handle(std::shared_ptr<PtyData> pty, unsigned flags, uint64_t sender_process_id)
-{
-    auto process = get_process_kernel_id(sender_process_id);
-    if (!process) {
-        kernelLogger() << "posixd: TIOCSCTTY request for pty " << pty->idx << " from unknown kernel process " << sender_process_id << "\n" << frg::endlog;
-        return -EPERM;
-    }
-
-    auto session = process->process_group->session;
-    if (process->pid != session->sid)
-        return -EPERM;
-
-    if (pty->session)
-        return -EPERM;
-
-    if (session->controlling_terminal)
-        return -EPERM;
-
-    pty->session = session;
-    session->controlling_terminal = pty;
-
-    return 0;
 }
 
 void subordinate_handle_write(const char *data, size_t size, std::shared_ptr<PtyData> pty, pmos::Right reply_right)
@@ -617,67 +712,6 @@ static void handle_poll(std::shared_ptr<PtyData> pty, uint16_t flags, uint16_t m
     }
 }
 
-void handle_ioctl(std::shared_ptr<PtyData> pty, unsigned request, unsigned flags, std::span<std::byte> data, pmos::Right reply_right, uint64_t sender_process_id)
-{
-    int result_code = 0;
-    std::vector<std::byte> reply_data{};
-
-    switch (request) {
-    case TCSETS:
-    // The next two are a TODO!!
-    case TCSETSW:
-    case TCSETSF: {
-        if (data.size() < sizeof(struct termios)) {
-            result_code = -EINVAL;
-            break;
-        }
-        struct termios *new_settings = reinterpret_cast<struct termios *>(data.data());
-        pty->active_settings = *new_settings;
-    
-        result_code = 0;
-    }
-        break;
-    case TIOCSCTTY:
-        result_code = ttiocsctty_handle(pty, flags, sender_process_id);
-        break;
-    case TIOCGWINSZ: {
-        if (data.size() < sizeof(struct winsize)) {
-            result_code = -EINVAL;
-            break;
-        }
-        reply_data.insert(reply_data.end(), reinterpret_cast<std::byte *>(&pty->active_window_size), reinterpret_cast<std::byte *>(&pty->active_window_size) + sizeof(struct winsize));
-    }
-        break;
-    case TIOCGPGRP: {
-        if (pty->foreground_group) {
-            result_code = pty->foreground_group->pgid;
-        } else {
-            result_code = INT_MAX;
-        }
-    }
-        break;
-    default:
-        kernelLogger() << "posixd: Unknown ioctl request " << request << " while attending pty\n" << frg::endlog;
-        result_code = -ENOTTY;
-        break;
-    }
-
-    IPC_Ioctl_Reply reply = {
-        .type         = IPC_Ioctl_Reply_NUM,
-        .flags        = 0,
-        .result_code  = result_code,
-        .data = {},
-    };
-
-    std::vector<std::byte> reply_buffer;
-    reply_buffer.insert(reply_buffer.end(), reinterpret_cast<std::byte *>(&reply), reinterpret_cast<std::byte *>(&reply) + sizeof(reply));
-    reply_buffer.insert(reply_buffer.end(), reply_data.begin(), reply_data.end());
-
-    auto result_send = pmos::send_message_right(reply_right, std::span(reply_buffer), {}, true);
-    if (!result_send)
-        kernelLogger() << "posixd: Error " << result_send.error().first << " sending ioctl reply to port " << reply_right.get() << "\n" << frg::endlog;
-}
-
 pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared_ptr<PtyData> pty, unsigned oflags, std::shared_ptr<Process> process)
 {
     while (1) {
@@ -714,18 +748,18 @@ pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared
             handle_read_subordinate(pty, read_msg, std::move(reply_right));
         }
             break;
-        case IPC_Tcgetattr_NUM: {
-            IPC_Tcgetattr_Reply reply = {
-                .type = IPC_Tcgetattr_Reply_NUM,
-                .result_code = 0,
-                .termios = pty->active_settings,
-            };
+        // case IPC_Tcgetattr_NUM: {
+        //     IPC_Tcgetattr_Reply reply = {
+        //         .type = IPC_Tcgetattr_Reply_NUM,
+        //         .result_code = 0,
+        //         .termios = pty->active_settings,
+        //     };
 
-            auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
-            if (!result_send)
-                kernelLogger() << "posixd: Error " << result_send.error().first << " sending termios getattr reply to port " << reply_right.get() << "\n" << frg::endlog;
-        }
-            break;
+        //     auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+        //     if (!result_send)
+        //         kernelLogger() << "posixd: Error " << result_send.error().first << " sending termios getattr reply to port " << reply_right.get() << "\n" << frg::endlog;
+        // }
+        //     break;
         case IPC_Poll_NUM: {
             if (message.size() < sizeof(IPC_Poll)) {
                 kernelLogger() << "posixd: Received IPC_Poll that is too small while attending pty subordinate\n" << frg::endlog;
@@ -745,7 +779,7 @@ pmos::async::detached_task openpt_subordinate(pmos::ReceiveRight rr, std::shared
 
             auto span = std::span(message.data(), message.size());
             span = span.subspan(sizeof(IPC_Ioctl));
-            handle_ioctl(pty, ioctl_msg->request, ioctl_msg->flags, span, std::move(reply_right), msg.sender_process);
+            handle_ioctl(pty, ioctl_msg->request, ioctl_msg->flags, span, std::move(reply_right), msg.sender_process, true);
         }
             break;
         default:
