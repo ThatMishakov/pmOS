@@ -10,7 +10,7 @@ source_hostdeps="cargo"
 allow_network=yes
 
 build() {
-    TARGET_CC="clang" \
+    TARGET_CC="${C_COMPILER}" \
     cargo_build_nolock
 }
 

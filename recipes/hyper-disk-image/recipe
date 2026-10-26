@@ -1,7 +1,7 @@
 #!/bin/sh
 
 version=1
-revision=1
+revision=2
 
 source_dir=scripts
 imagedeps="e2fsprogs mtools fdisk"

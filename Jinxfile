@@ -2,11 +2,7 @@ JINX_MAJOR_VER=0.9
 JINX_DEBIAN_SNAPSHOT=20260326T203750Z
 JINX_BASE_PACKAGES="make cmake build-essential ninja-build python3 gettext-base"
 
-CLANG_LIBS="/usr/lib/libc++.so.1 /usr/lib/libc++abi.so.1 /usr/lib/libunwind.so.1"
-GCC_LIBS="/usr/local/lib/gcc/riscv64-pmos/16.2.1/libgcc_s.so.1"
-
 LIBRARIES="/usr/lib/ld.so /usr/lib/libc.so /usr/lib/libdl.so /usr/lib/libpthread.so /usr/lib/libpmoscxx.so /usr/lib/libm.so /usr/lib/librt.so /usr/lib/libpmos-helpers.so"
-LIBRARIES="$LIBRARIES $CLANG_LIBS"
 
 BOOT_SERVICES="ahcid devicesd logd processd terminald blockd ps2d tests ns16550 pmbus ext4" # ext4
 if [ "$JINX_ARCH" = "x86_64" ] || [ "$JINX_ARCH" = "i686" ]; then
@@ -14,21 +10,35 @@ if [ "$JINX_ARCH" = "x86_64" ] || [ "$JINX_ARCH" = "i686" ]; then
 fi
 PKGS="bash ncurses coreutils"
 
-# C_COMPILER="$JINX_ARCH-pmos-gcc"
-# CXX_COMPILER="$JINX_ARCH-pmos-g++"
-# TOOLS_PREFIX="$JINX_ARCH-pmos"
-
-# COMPILER_DEPS="gcc"
-# TOOLCHAIN_DEPS="binutils gcc"
-# CXX_DEPS="libstdc++"
-
-CXX_DEPS="libcxx"
-C_COMPILER="clang"
-CXX_COMPILER="clang++"
-TOOLS_PREFIX="llvm"
-
-COMPILER_DEPS="clang"
-TOOLCHAIN_DEPS="clang compiler-rt"
+# Select with `jinx init ... ARCH=x86_64 TOOLCHAIN=gcc` in a fresh build directory.
+: "${JINX_TOOLCHAIN:=clang}"
+case "$JINX_TOOLCHAIN" in
+    gcc)
+        C_COMPILER="$JINX_ARCH-pmos-gcc"
+        CXX_COMPILER="$JINX_ARCH-pmos-g++"
+        TOOLS_PREFIX="$JINX_ARCH-pmos"
+        COMPILER_DEPS="gcc"
+        TOOLCHAIN_DEPS="binutils gcc"
+        CXX_DEPS="libstdc++"
+        COMPILER_TARGET_FLAGS=""
+        MESON_TARGET_ARGS=""
+        UNWIND_LIB="gcc_s"
+        LIBRARIES="$LIBRARIES /usr/lib/libstdc++.so.6 /usr/lib/libgcc_s.so.1"
+        ;;
+    clang)
+        C_COMPILER="clang"
+        CXX_COMPILER="clang++"
+        TOOLS_PREFIX="llvm"
+        COMPILER_DEPS="clang"
+        TOOLCHAIN_DEPS="clang compiler-rt"
+        CXX_DEPS="libcxx"
+        COMPILER_TARGET_FLAGS="--target=${JINX_ARCH}-unknown-pmos"
+        MESON_TARGET_ARGS="'${COMPILER_TARGET_FLAGS}', "
+        UNWIND_LIB="unwind"
+        LIBRARIES="$LIBRARIES /usr/lib/libc++.so.1 /usr/lib/libc++abi.so.1 /usr/lib/libunwind.so.1"
+        ;;
+    *) echo "Unknown JINX_TOOLCHAIN: $JINX_TOOLCHAIN" >&2; exit 1 ;;
+esac
 
 CPU_FAMILY="${JINX_ARCH}"
 case "$JINX_ARCH" in
@@ -79,7 +89,7 @@ cargo_build_nolock() {
         CARGO_HOME="${build_dir}/.cargo" \
         CARGO_TARGET_DIR="${TARGET_DIR}" \
         CARGO_RESOLVER_LOCKFILE_PATH="${TARGET_DIR}/Cargo.lock" \
-        RUSTFLAGS="-C link-arg=--sysroot=${sysroot} -C linker=clang++ -C link-arg=--target=${JINX_ARCH}-unknown-pmos -C link-arg=-lunwind" \
+        RUSTFLAGS="-C link-arg=--sysroot=${sysroot} -C linker=${CXX_COMPILER} ${COMPILER_TARGET_FLAGS:+-C link-arg=${COMPILER_TARGET_FLAGS}} -C link-arg=-l${UNWIND_LIB}" \
     cargo build \
         -Zunstable-options \
         --target ${RUST_TARGET} \
@@ -191,7 +201,7 @@ meson_configure_noflags() {
         sysroot=${sysroot} \
         CPU_FAMILY=${CPU_FAMILY} \
         ENDIAN=${ENDIAN} \
-        COMPILE_FLAGS=${COMPILE_FLAGS} \
+        MESON_TARGET_ARGS="${MESON_TARGET_ARGS}" \
         C_COMPILER=${C_COMPILER} \
         CXX_COMPILER=${CXX_COMPILER} \
         TOOLS_PREFIX=${TOOLS_PREFIX} \

@@ -1,0 +1,11 @@
+--- a/gcc/config.gcc
++++ b/gcc/config.gcc
+@@ -2714,7 +2714,7 @@
+ 
+ loongarch*-*-pmos*)
+ 	tmake_file="${tmake_file} loongarch/t-multilib"
+-	tm_file="${tm_file} elfos.h glibc-stdint.h pmos.h"
++	tm_file="${tm_file} elfos.h glibc-stdint.h pmos.h loongarch/loongarch-driver.h"
+ 	gnu_ld=yes
+ 	gas=yes
+ 	gcc_cv_initfini_array=yes
