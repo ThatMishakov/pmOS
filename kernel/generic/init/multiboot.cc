@@ -78,6 +78,7 @@ static Temp_Mapper *get_temp_temp_mapper(void *virt_addr, ulong kernel_cr3)
 #endif
 
 extern void hcf();
+void init_smp();
 
 static multiboot_tag *find_tag(multiboot_info *info, u32 type)
 {
@@ -768,6 +769,8 @@ extern "C" void multiboot_main(multiboot_info* info) {
 
     // Switch to CPU-local temp mapper
     global_temp_mapper = nullptr;
+
+    init_smp();
 
     init_modules(temp_info);
     init_task1(temp_info);
