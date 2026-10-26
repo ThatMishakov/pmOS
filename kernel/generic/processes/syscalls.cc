@@ -43,6 +43,7 @@
 
 #include <array>
 #include <assert.h>
+#include <time.h>
 #include <clock.hh>
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>

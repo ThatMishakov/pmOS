@@ -1,3 +1,4 @@
+#include <cstring>
 #include <pmos/helpers.hh>
 #include <pmos/memory.h>
 #include <pmos/ports.h>

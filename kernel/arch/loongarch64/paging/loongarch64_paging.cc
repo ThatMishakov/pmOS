@@ -547,12 +547,12 @@ void early_detect_cpu_features()
 
 namespace kernel::paging {
 
-u64 paging::arch_phys_addr_limit()
+u64 arch_phys_addr_limit()
 {
     return (u64)1 << max_memory_bits;
 }
 
-void paging::flush_tlb_kernel()
+void flush_tlb_kernel()
 {
     flush_tlb();
 }
