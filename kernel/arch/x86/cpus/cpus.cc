@@ -561,8 +561,7 @@ void init_acpi_trampoline()
     if (result)
         panic("Failed to allocate cr3 for SMP trampoline");
 
-    #ifdef __i386__
-    // Silence the warning on i386
+    #ifndef __i386__
     assert(new_cr3 < (u64)0x100000000);
     #endif
     smp_trampoline_cr3 = static_cast<u32>(new_cr3);

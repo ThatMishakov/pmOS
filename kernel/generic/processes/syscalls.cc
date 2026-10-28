@@ -808,8 +808,11 @@ void syscall_get_message_info(TaskDescriptor *task)
                 flags_ |= r->type_as_int() << (16 + i*4);
         }
 
+        assert(msg->get_id());
+
         u64 msg_struct_size     = sizeof(Message_Descriptor);
         Message_Descriptor desc = {
+            .message_id         = msg->get_id(),
             .sender             = msg->sender_task_id(),
             .sender_process     = msg->sender_process_id(),
             .size               = msg->size(),

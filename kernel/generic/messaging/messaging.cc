@@ -97,6 +97,9 @@ kresult_t Port::atomic_send_from_system(const char *msg_ptr, size_t size)
 void Port::enqueue(klib::unique_ptr<GenericMessage> msg)
 {
     assert(lock.is_locked() && "Spinlock not locked!");
+    assert(msg);
+
+    msg->id = ++current_message_id;
 
     msg_queue.push_back(msg.release());
 

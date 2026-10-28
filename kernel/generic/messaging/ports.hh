@@ -99,6 +99,7 @@ protected:
     using Message_storage = pmos::containers::CircularDoubleList<GenericMessage, &GenericMessage::list_node>;
     Message_storage msg_queue;
     u64 current_right_id = 0;
+    u64 current_message_id = 0;
 
     union {
         pmos::containers::RBTreeNode<Port> bst_head_global;

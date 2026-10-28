@@ -157,6 +157,7 @@ impl IPCPort {
 
     pub fn pop_front_blocking(&self) -> Message {
         let mut desc = MessageDescriptor {
+            message_id: 0,
             sender: 0,
             sender_process: 0,
             size: 0,
@@ -241,6 +242,7 @@ impl IPCPort {
 
 #[repr(C)]
 struct MessageDescriptor {
+    message_id: u64,
     sender: u64,
     sender_process: u64,
     size: u64,

@@ -88,6 +88,14 @@ struct GenericMessage {
     virtual ~GenericMessage() = default;
 
     virtual void delete_self() = 0;
+
+    // Per-port message ID. Gets assigned when the message is sent to the port.
+    u64 id = 0;
+
+    u64 get_id() const
+    {
+        return id;
+    }
 };
 
 // The final here is more of an optimization, more than anything else, I might inherit from this later as well...
