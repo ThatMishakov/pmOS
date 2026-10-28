@@ -130,6 +130,22 @@ namespace proc
         // Message from the recent syscall
         ipc::GenericMessage *message_hint{};
 
+        mutable Spinlock blocked_by_lock;
+        // Holds the port condition that the task is blocked by
+        using port_blocked_by_variant = std::variant<std::monostate, u64 /* right */>;
+        port_blocked_by_variant port_blocked_by;
+
+        void set_port_blocked_by(port_blocked_by_variant port) {
+            Auto_Lock_Scope lock(blocked_by_lock);
+            port_blocked_by = std::move(port);
+        }
+        port_blocked_by_variant get_port_blocked_by() const {
+            Auto_Lock_Scope lock(blocked_by_lock);
+            return port_blocked_by;
+        }
+        static bool message_matches_filter(const ipc::GenericMessage *msg, const port_blocked_by_variant &filter);
+        bool message_will_unblock(const ipc::GenericMessage *msg) const;
+
         std::atomic<TaskGroup *> rights_namespace{};
 
         // Scheduling info
@@ -182,19 +198,12 @@ namespace proc
         // Count of handlers for interrupts. Also using sched_lock
         size_t interrupt_handlers_count = 0;
 
-        struct NoContinuation {
-        };
-        struct GetMessageData {
-            ipc::Port *port;
-        };
-
         using continuation_func_type = void (*)(TaskDescriptor *task);
         using cancel_callback_type = void (*)(TaskDescriptor *task, i64 error_code);
 
         // Continuation..?
         continuation_func_type continuation_func = nullptr;
         cancel_callback_type cancel_callback = nullptr;
-        std::variant<NoContinuation, GetMessageData> continuation_data = NoContinuation{};
 
         // Futex and sleep() syscalls stuff
         struct TaskWaiter: sched::TimerNode {

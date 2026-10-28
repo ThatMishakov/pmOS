@@ -113,7 +113,7 @@ void pmos_msgloop_loop(struct pmos_msgloop_data *data)
     bool cont = true;
     while (cont) {
         Message_Descriptor descr;
-        result_t result = syscall_get_message_info(&descr, data->port, 0);
+        result_t result = syscall_get_message_info(&descr, data->port, 0, 0);
         if (result != SUCCESS) {
             fprintf(stderr,
                     "pmOS libc: failed to get message in pmos_msgloop_loop() from port %" PRIu64

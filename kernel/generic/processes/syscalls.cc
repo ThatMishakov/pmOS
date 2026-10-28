@@ -757,8 +757,15 @@ void syscall_get_first_message(TaskDescriptor *current)
 
 void syscall_get_message_info(TaskDescriptor *task)
 {
+    auto cancel_continuation = [](TaskDescriptor *task, i64 error_code) {
+        __atomic_store_n(&task->blocked_by, nullptr, __ATOMIC_RELAXED);
+        syscall_return(task) = error_code;
+    };
+
+    task->set_continuation(syscall_get_message_info, cancel_continuation);
+
     u64 portno           = syscall_arg64(task, 0);
-    ulong message_struct = syscall_arg(task, 1, 1);
+    u64 right_id         = syscall_arg64(task, 1);
     ulong flags          = syscall_flags(task);
 
     auto result = task->get_port(portno);
@@ -770,100 +777,80 @@ void syscall_get_message_info(TaskDescriptor *task)
 
     constexpr unsigned FLAG_NOBLOCK = 0x01;
 
-    bool is_empty = port->atomic_is_empty();
+    auto msg = port->atomic_get_message_right(right_id);
+    bool is_empty = !msg;
     if (is_empty && (flags & FLAG_NOBLOCK)) {
         syscall_error(task) = -EAGAIN;
         return;
     }
 
-    static constexpr auto get_func = [](TaskDescriptor *task, ipc::Port *port, ulong message_struct, ulong flags, GenericMessage *msg) -> void {
-        assert(task);
-        assert(port);
-        assert(msg);
-        
-        auto reply_right = msg->get_reply_right();
-        bool holds_reply_right     = reply_right != nullptr;
-        bool reply_right_send_many = false;
-        if (holds_reply_right)
-            reply_right_send_many = reply_right->type() == RightType::SendMany;
-
-        unsigned flags_ = (holds_reply_right ? (unsigned)MESSAGE_FLAG_REPLY_RIGHT : 0) |
-                        (reply_right_send_many ? (unsigned)MESSAGE_FLAG_REPLY_SEND_MANY : 0);
-
-        auto const &rights = msg->get_rights();
-        for (int i = 0; i < 4; ++i) {
-            if (auto r = rights[i] ; r)
-                flags_ |= r->type_as_int() << (16 + i*4);
-        }
-
-        assert(msg->get_id());
-
-        u64 msg_struct_size     = sizeof(Message_Descriptor);
-        Message_Descriptor desc = {
-            .message_id         = msg->get_id(),
-            .sender             = msg->sender_task_id(),
-            .sender_process     = msg->sender_process_id(),
-            .size               = msg->size(),
-            .sent_with_right    = msg->sent_with_right(),
-            .other_rights_count = (unsigned)msg->rights_count(),
-            .flags              = flags_,
-        };
-
-        auto b = copy_to_user((char *)&desc, (char *)message_struct, msg_struct_size);
-        if (!b.success()) {
-            syscall_error(task) = b.result;
-            return;
-        }
-
-        if (not b.val)
-            return;
-
-        task->message_hint = msg;
-
-        syscall_success(task);
-    };
-
-    constexpr auto continuation = [](TaskDescriptor *task) {
-        auto data = std::get_if<TaskDescriptor::GetMessageData>(&task->continuation_data);
-        assert(data);
-
-        auto port = data->port;
-        assert(port);
-
-        __atomic_and_fetch(&task->wake_reason_mask, ~TaskDescriptor::SCHED_WAKE_PORT, __ATOMIC_RELAXED);
-        if (port->atomic_is_empty()) [[unlikely]] {
-            task->atomic_block_self(TaskDescriptor::SCHED_WAKE_PORT);
-            return;
-        }
-
-        auto message_struct = syscall_arg(task, 1, 1);
-        auto flags = syscall_flags(task);
-
-        auto msg = port->atomic_get_front();
-        assert(msg);
-        __atomic_store_n(&task->blocked_by, nullptr, __ATOMIC_RELAXED);
-
-        get_func(task, port, message_struct, flags, msg);
-    };
-
     if (is_empty) {
-        task->set_continuation(continuation, TaskDescriptor::cancel_syscall);
-        task->continuation_data = TaskDescriptor::GetMessageData{
-            .port  = port,
-        };
+        if (!right_id)
+            task->set_port_blocked_by({});
+        else
+            task->set_port_blocked_by(right_id);
         __atomic_store_n(&task->blocked_by, port, __ATOMIC_RELEASE);
 
         task->atomic_block_self(TaskDescriptor::SCHED_WAKE_PORT);
 
-        if (!port->atomic_is_empty())
+        if ((msg = port->atomic_get_message_right(right_id)))
             task->atomic_handle_unblock(TaskDescriptor::SCHED_WAKE_PORT);
         
         return;
     };
+    __atomic_store_n(&task->blocked_by, nullptr, __ATOMIC_RELAXED);
+    task->set_port_blocked_by({});
 
-    auto msg = port->atomic_get_front();
     assert(msg);
-    get_func(task, port, message_struct, flags, msg);
+    auto reply_right = msg->get_reply_right();
+    bool holds_reply_right     = reply_right != nullptr;
+    bool reply_right_send_many = false;
+    if (holds_reply_right)
+        reply_right_send_many = reply_right->type() == RightType::SendMany;
+
+    unsigned flags_ = (holds_reply_right ? (unsigned)MESSAGE_FLAG_REPLY_RIGHT : 0) |
+                    (reply_right_send_many ? (unsigned)MESSAGE_FLAG_REPLY_SEND_MANY : 0);
+
+    auto const &rights = msg->get_rights();
+    for (int i = 0; i < 4; ++i) {
+        if (auto r = rights[i] ; r)
+            flags_ |= r->type_as_int() << (16 + i*4);
+    }
+
+    assert(msg->get_id());
+
+    ulong message_struct;
+    auto get_result = syscall_arg_checked(task, 2, 2, message_struct);
+    if (!get_result.success()) {
+        syscall_error(task) = get_result.result;
+        return;
+    }
+    if (!get_result.val)
+        return;
+
+    u64 msg_struct_size     = sizeof(Message_Descriptor);
+    Message_Descriptor desc = {
+        .message_id         = msg->get_id(),
+        .sender             = msg->sender_task_id(),
+        .sender_process     = msg->sender_process_id(),
+        .size               = msg->size(),
+        .sent_with_right    = msg->sent_with_right(),
+        .other_rights_count = (unsigned)msg->rights_count(),
+        .flags              = flags_,
+    };
+
+    auto b = copy_to_user((char *)&desc, (char *)message_struct, msg_struct_size);
+    if (!b.success()) [[unlikely]] {
+        syscall_error(task) = b.result;
+        return;
+    }
+
+    if (not b.val) [[unlikely]]
+        return;
+
+    task->message_hint = msg;
+
+    syscall_success(task);
 }
 
 void syscall_set_attribute(TaskDescriptor *task)

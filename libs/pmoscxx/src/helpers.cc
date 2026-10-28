@@ -172,7 +172,7 @@ get_msg_return_type Port::get_first_message(bool nonblocking)
     unsigned flags = 0;
     if (nonblocking)
         flags |= FLAG_NOBLOCK;
-    auto result = ::syscall_get_message_info(&desc, id, flags);
+    auto result = ::syscall_get_message_info(&desc, id, 0, flags);
     if (result)
         return std::unexpected(static_cast<int>(-result));
 

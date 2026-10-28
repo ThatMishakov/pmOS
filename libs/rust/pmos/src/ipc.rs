@@ -65,7 +65,7 @@ struct MapMemObjectParamT {
 unsafe extern "C" {
     fn create_port(owner_pid: libc::pid_t, flags: u32) -> PortReqResult;
     fn pmos_delete_port(port: Port) -> ResultT;
-    fn syscall_get_message_info(descr: &mut MessageDescriptor, port: u64, flags: u32) -> ResultT;
+    fn syscall_get_message_info(descr: &mut MessageDescriptor, port: u64, right: u64, flags: u32) -> ResultT;
     unsafe fn read_message(buff: *mut u8, size: usize, args: u32, port: u64, message_id: u64) -> RightRequestResult;
     #[link_name = "name_right"]
     unsafe fn name_right_stdlib(
@@ -166,7 +166,7 @@ impl IPCPort {
             flags: 0,
         };
 
-        unsafe { syscall_get_message_info(&mut desc, self.port, 0) }
+        unsafe { syscall_get_message_info(&mut desc, self.port, 0, 0) }
             .result()
             .unwrap();
 

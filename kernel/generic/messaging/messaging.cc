@@ -102,10 +102,12 @@ void Port::enqueue(klib::unique_ptr<GenericMessage> msg)
     msg->id = ++current_message_id;
     msg->parent_port = this;
 
+    auto msg_ptr = msg.get();
+
     msg_queue.push_back(msg.release());
 
     assert(owner);
-    if (__atomic_load_n(&owner->blocked_by, __ATOMIC_ACQUIRE) == this)
+    if (__atomic_load_n(&owner->blocked_by, __ATOMIC_ACQUIRE) == this and owner->message_will_unblock(msg_ptr))
         owner->atomic_handle_unblock(proc::TaskDescriptor::SCHED_WAKE_PORT);
 }
 
@@ -217,6 +219,19 @@ GenericMessage *Port::get_front()
         return nullptr;
 
     return &msg_queue.front();
+}
+
+GenericMessage *Port::atomic_get_message_right(u64 right_id)
+{
+    Auto_Lock_Scope l(lock);
+    if (right_id == 0 && !msg_queue.empty())
+        return &msg_queue.front();
+
+    for (auto &msg: msg_queue) {
+        if (msg.sent_with_right() == right_id)
+            return &msg;
+    }
+    return nullptr;
 }
 
 GenericMessage *Port::atomic_get_front()

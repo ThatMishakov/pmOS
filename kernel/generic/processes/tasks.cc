@@ -1053,6 +1053,24 @@ void TaskDescriptor::interrupt_blocked(i64 error_code)
     }
 }
 
+bool TaskDescriptor::message_matches_filter(const ipc::GenericMessage *msg, const port_blocked_by_variant &filter)
+{
+    assert(msg);
+    if (auto it = std::get_if<std::monostate>(&filter); it)
+        return true;
+    else if (auto it = std::get_if<u64>(&filter); it)
+        return *it == msg->sent_with_right();
+    else {
+        assert(false);
+        return false;
+    }
+}
+
+bool TaskDescriptor::message_will_unblock(const ipc::GenericMessage *msg) const
+{
+    return message_matches_filter(msg, get_port_blocked_by());
+}
+
 void TaskDescriptor::set_continuation(TaskDescriptor::continuation_func_type func, TaskDescriptor::cancel_callback_type cancel)
 {
     continuation_func = func;

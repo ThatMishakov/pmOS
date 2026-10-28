@@ -101,6 +101,8 @@ public:
 
     bool atomic_add_to_rights(ReceiveRight *right);
     void atomic_remove_right(ReceiveRight *right);
+
+    GenericMessage *atomic_get_message_right(u64 right_id);
 protected:
     using Message_storage = pmos::containers::CircularDoubleList<GenericMessage, &GenericMessage::list_node>;
     Message_storage msg_queue;
