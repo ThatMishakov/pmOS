@@ -52,6 +52,7 @@ namespace kernel::ipc
 {
 
 struct Right;
+class Port;
 
 using rights_array   = std::array<Right *, 4>;
 using message_buffer = pmos::containers::vector<char>;
@@ -88,6 +89,10 @@ struct GenericMessage {
     virtual ~GenericMessage() = default;
 
     virtual void delete_self() = 0;
+
+    // TODO?
+    Port *parent_port = nullptr;
+    Port *get_parent_port() const { return parent_port; }
 
     // Per-port message ID. Gets assigned when the message is sent to the port.
     u64 id = 0;

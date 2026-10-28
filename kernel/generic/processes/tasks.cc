@@ -1206,4 +1206,17 @@ u64 TaskDescriptor::process_id() const
     return process->get_id();
 }
 
+ReturnStr<ipc::Port *> TaskDescriptor::get_port(u64 port_id)
+{
+    if (port_hint && port_hint->portno == port_id)
+        return port_hint;
+
+    auto it = owned_ports.find(port_id);
+    if (it == owned_ports.end())
+        return Error(-ENOENT);
+
+    port_hint = &*it;
+    return port_hint;
+}
+
 } // namespace kernel::proc

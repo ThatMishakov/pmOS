@@ -51,9 +51,15 @@ public:
 
     GenericMessage *get_front();
     GenericMessage *atomic_get_front();
+
+    GenericMessage *get_message(u64 message_id);
+    GenericMessage *atomic_get_message(u64 message_id);
+
     void pop_front() noexcept;
     bool is_empty() const noexcept;
     bool atomic_is_empty() const noexcept;
+
+    void remove_message(GenericMessage *msg);
 
     ReceiveRight *atomic_get_right(u64 right_id);
 

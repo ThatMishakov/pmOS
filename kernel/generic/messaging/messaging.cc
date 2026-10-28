@@ -100,6 +100,7 @@ void Port::enqueue(klib::unique_ptr<GenericMessage> msg)
     assert(msg);
 
     msg->id = ++current_message_id;
+    msg->parent_port = this;
 
     msg_queue.push_back(msg.release());
 
@@ -186,6 +187,16 @@ void Port::pop_front() noexcept
     begin->delete_self();
 }
 
+void Port::remove_message(GenericMessage *msg)
+{
+    assert(lock.is_locked() && "Spinlock not locked!");
+    assert(msg);
+    assert(msg->parent_port == this);
+
+    msg_queue.remove(msg);
+    msg->delete_self();
+}
+
 bool Port::is_empty() const noexcept
 {
     assert(lock.is_locked() && "Spinlock not locked!");
@@ -212,6 +223,22 @@ GenericMessage *Port::atomic_get_front()
 {
     Auto_Lock_Scope l(lock);
     return get_front();
+}
+
+GenericMessage *Port::get_message(u64 message_id)
+{
+    assert(lock.is_locked() && "Spinlock not locked!");
+    for (auto &msg: msg_queue) {
+        if (msg.id == message_id)
+            return &msg;
+    }
+    return nullptr;
+}
+
+GenericMessage *Port::atomic_get_message(u64 message_id)
+{
+    Auto_Lock_Scope l(lock);
+    return get_message(message_id);
 }
 
 bool Port::delete_self() noexcept

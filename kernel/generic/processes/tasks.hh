@@ -63,6 +63,7 @@ namespace kernel
 
 namespace ipc {
     struct MemObjectRight;
+    struct GenericMessage;
 };
 
 namespace sched
@@ -125,9 +126,11 @@ namespace proc
                                            detail::TreeCmp<ipc::Port, u64, &ipc::Port::portno>>;
         ports_tree::RBTreeHead owned_ports;
         ipc::Port *blocked_by;
-        ipc::Port *sender_hint;
+        ipc::Port *port_hint{};
+        // Message from the recent syscall
+        ipc::GenericMessage *message_hint{};
 
-        std::atomic<TaskGroup *> rights_namespace;
+        std::atomic<TaskGroup *> rights_namespace{};
 
         // Scheduling info
         TaskDescriptor *queue_next       = nullptr;
@@ -415,6 +418,8 @@ namespace proc
         result_t inherit_registers_from_current();
 
         u64 process_id() const;
+
+        ReturnStr<ipc::Port *> get_port(u64 port_id);
 
     protected:
         TaskDescriptor() = default;
