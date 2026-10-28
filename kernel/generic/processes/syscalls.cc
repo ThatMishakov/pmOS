@@ -2702,6 +2702,7 @@ void syscall_delete_port(TaskDescriptor *current)
     if (result) {
         syscall_success(current);
         current->port_hint = nullptr;
+        current->message_hint = nullptr;
     } else {
         syscall_error(current) = -ENOENT;
     }
@@ -2981,6 +2982,8 @@ void syscall_delete_receive_right(TaskDescriptor *task)
 
     if (deleted_right || poped_messages > 0) {
         syscall_return(task) = poped_messages;
+        if (poped_messages > 0)
+            task->message_hint = nullptr;
     } else {
         syscall_error(task) = -ENOMSG;
     }
