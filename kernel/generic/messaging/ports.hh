@@ -54,6 +54,7 @@ public:
 
     GenericMessage *get_message(u64 message_id);
     GenericMessage *atomic_get_message(u64 message_id);
+    GenericMessage *atomic_get_message(const std::pair<bool /* exclude */, klib::shared_ptr<const pmos::containers::vector<u64>>> &filter);
 
     void pop_front() noexcept;
     bool is_empty() const noexcept;

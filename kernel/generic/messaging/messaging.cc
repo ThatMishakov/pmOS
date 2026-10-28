@@ -256,6 +256,19 @@ GenericMessage *Port::atomic_get_message(u64 message_id)
     return get_message(message_id);
 }
 
+GenericMessage *Port::atomic_get_message(
+    const std::pair<bool /* exclude */, klib::shared_ptr<const pmos::containers::vector<u64>>> &filter)
+{
+    proc::TaskDescriptor::port_blocked_by_variant port_filter = filter;
+
+    Auto_Lock_Scope l(lock);
+    for (auto &msg: msg_queue) {
+        if (proc::TaskDescriptor::message_matches_filter(&msg, port_filter))
+            return &msg;
+    }
+    return nullptr;
+}
+
 bool Port::delete_self() noexcept
 {
     {

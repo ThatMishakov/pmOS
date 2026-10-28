@@ -43,6 +43,7 @@
 #include <pmos/utility/auxvec_builder.hh>
 #include <elf.h>
 #include "process.hh"
+#include <algorithm>
 
 namespace kernel::paging
 {
@@ -1060,7 +1061,10 @@ bool TaskDescriptor::message_matches_filter(const ipc::GenericMessage *msg, cons
         return true;
     else if (auto it = std::get_if<u64>(&filter); it)
         return *it == msg->sent_with_right();
-    else {
+    else if (auto it = std::get_if<rights_filter>(&filter); it) {
+        bool found = std::binary_search(it->second->begin(), it->second->end(), msg->sent_with_right());
+        return it->first != found;
+    } else {
         assert(false);
         return false;
     }

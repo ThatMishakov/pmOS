@@ -40,6 +40,7 @@
 // #include <cpus/cpus.hh>
 #include "task_group.hh"
 #include <processes/process.hh>
+#include <algorithm>
 
 #include <array>
 #include <assert.h>
@@ -54,6 +55,7 @@
 #include <sched/sched.hh>
 #include <sched/timers.hh>
 #include <pmos/memory.h>
+#include <pmos/ports.h>
 
 #if defined(__x86_64__) || defined(__i386__)
     #include <segments.hh>
@@ -72,7 +74,7 @@ extern void deactivate_page_table();
 namespace kernel::proc::syscalls
 {
 
-std::array<const char *, 73> syscall_names = {
+std::array<const char *, 74> syscall_names = {
     "SYSCALL EXIT",
     "SYSCALL GET TASK ID",
     "SYSCALL CREATE PROCESS",
@@ -150,6 +152,7 @@ std::array<const char *, 73> syscall_names = {
     "SYSCALL GET PROCESS ID",
     "SYSCALL RIGHT FOR TASK GROUP",
     "SYSCALL TERMINATE PROCESS",
+    "SYSCALL SELECT MESSAGE",
 };
 
 const char *syscall_name(unsigned id)
@@ -162,7 +165,7 @@ const char *syscall_name(unsigned id)
 
 using syscall_function = void (*)(TaskDescriptor *task);
 
-std::array<syscall_function, 73> syscall_table = {
+std::array<syscall_function, 74> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -240,6 +243,7 @@ std::array<syscall_function, 73> syscall_table = {
     syscall_get_process_id,
     syscall_right_for_task_group,
     syscall_terminate_process,
+    syscall_select_message,
 };
 
 void syscall_handler()
@@ -706,6 +710,11 @@ void syscall_get_first_message(TaskDescriptor *current)
         }
     }
 
+    if (!msg) {
+        syscall_error(current) = -EAGAIN;
+        return;
+    }
+
     auto result = msg->copy_to_user_buff((char *)args[0], args[1]);
     if (!result.success()) {
         syscall_error(current) = result.result;
@@ -755,14 +764,67 @@ void syscall_get_first_message(TaskDescriptor *current)
     syscall_return(current) = reply_right_id;
 }
 
-void syscall_get_message_info(TaskDescriptor *task)
+static void clear_filter(TaskDescriptor *task)
 {
-    auto cancel_continuation = [](TaskDescriptor *task, i64 error_code) {
-        __atomic_store_n(&task->blocked_by, nullptr, __ATOMIC_RELAXED);
-        syscall_return(task) = error_code;
+    task->set_port_blocked_by({});
+    __atomic_store_n(&task->blocked_by, nullptr, __ATOMIC_RELAXED);
+}
+
+static void get_message_info_generic(TaskDescriptor *task, GenericMessage *msg, u64 message_struct)
+{
+    assert(msg);
+    auto reply_right = msg->get_reply_right();
+    bool holds_reply_right     = reply_right != nullptr;
+    bool reply_right_send_many = false;
+    if (holds_reply_right)
+        reply_right_send_many = reply_right->type() == RightType::SendMany;
+
+    unsigned flags_ = (holds_reply_right ? (unsigned)MESSAGE_FLAG_REPLY_RIGHT : 0) |
+                    (reply_right_send_many ? (unsigned)MESSAGE_FLAG_REPLY_SEND_MANY : 0);
+
+    auto const &rights = msg->get_rights();
+    for (int i = 0; i < 4; ++i) {
+        if (auto r = rights[i] ; r)
+            flags_ |= r->type_as_int() << (16 + i*4);
+    }
+
+    assert(msg->get_id());
+
+    u64 msg_struct_size     = sizeof(Message_Descriptor);
+    Message_Descriptor desc = {
+        .message_id         = msg->get_id(),
+        .sender             = msg->sender_task_id(),
+        .sender_process     = msg->sender_process_id(),
+        .size               = msg->size(),
+        .sent_with_right    = msg->sent_with_right(),
+        .other_rights_count = (unsigned)msg->rights_count(),
+        .flags              = flags_,
     };
 
-    task->set_continuation(syscall_get_message_info, cancel_continuation);
+    auto b = copy_to_user((char *)&desc, (char *)message_struct, msg_struct_size);
+    if (!b.success()) [[unlikely]] {
+        clear_filter(task);
+        syscall_error(task) = b.result;
+        return;
+    }
+
+    if (not b.val) [[unlikely]]
+        return;
+
+    task->message_hint = msg;
+    clear_filter(task);
+    syscall_success(task);   
+}
+
+auto cancel_get_message(TaskDescriptor *task, i64 error_code) -> void
+{
+    clear_filter(task);
+    syscall_return(task) = error_code;
+}
+
+void syscall_get_message_info(TaskDescriptor *task)
+{
+    task->set_continuation(syscall_get_message_info, cancel_get_message);
 
     u64 portno           = syscall_arg64(task, 0);
     u64 right_id         = syscall_arg64(task, 1);
@@ -774,8 +836,6 @@ void syscall_get_message_info(TaskDescriptor *task)
         return;
     }
     auto port = result.val;
-
-    constexpr unsigned FLAG_NOBLOCK = 0x01;
 
     auto msg = port->atomic_get_message_right(right_id);
     bool is_empty = !msg;
@@ -801,56 +861,104 @@ void syscall_get_message_info(TaskDescriptor *task)
     __atomic_store_n(&task->blocked_by, nullptr, __ATOMIC_RELAXED);
     task->set_port_blocked_by({});
 
-    assert(msg);
-    auto reply_right = msg->get_reply_right();
-    bool holds_reply_right     = reply_right != nullptr;
-    bool reply_right_send_many = false;
-    if (holds_reply_right)
-        reply_right_send_many = reply_right->type() == RightType::SendMany;
-
-    unsigned flags_ = (holds_reply_right ? (unsigned)MESSAGE_FLAG_REPLY_RIGHT : 0) |
-                    (reply_right_send_many ? (unsigned)MESSAGE_FLAG_REPLY_SEND_MANY : 0);
-
-    auto const &rights = msg->get_rights();
-    for (int i = 0; i < 4; ++i) {
-        if (auto r = rights[i] ; r)
-            flags_ |= r->type_as_int() << (16 + i*4);
-    }
-
-    assert(msg->get_id());
-
     ulong message_struct;
     auto get_result = syscall_arg_checked(task, 2, 2, message_struct);
     if (!get_result.success()) {
+        clear_filter(task);
         syscall_error(task) = get_result.result;
         return;
     }
     if (!get_result.val)
         return;
+    
+    get_message_info_generic(task, msg, message_struct);
+}
 
-    u64 msg_struct_size     = sizeof(Message_Descriptor);
-    Message_Descriptor desc = {
-        .message_id         = msg->get_id(),
-        .sender             = msg->sender_task_id(),
-        .sender_process     = msg->sender_process_id(),
-        .size               = msg->size(),
-        .sent_with_right    = msg->sent_with_right(),
-        .other_rights_count = (unsigned)msg->rights_count(),
-        .flags              = flags_,
-    };
+void syscall_select_message(TaskDescriptor *task)
+{
+    task->set_continuation(syscall_select_message, cancel_get_message);
+    u64 portno = syscall_arg64(task, 0);
+    ulong array_ptr = syscall_arg(task, 1, 1);
+    ulong array_size = syscall_arg(task, 2, 1);
+    auto flags = syscall_flags(task);
+    
+    auto result = task->get_port(portno);
+    if (!result.success()) {
+        syscall_error(task) = result.result;
+        return;
+    }
+    auto port = result.val;
 
-    auto b = copy_to_user((char *)&desc, (char *)message_struct, msg_struct_size);
-    if (!b.success()) [[unlikely]] {
-        syscall_error(task) = b.result;
+    if (array_size < 1 || SIZE_MAX / sizeof(u64) < array_size) {
+        syscall_error(task) = -EINVAL;
         return;
     }
 
-    if (not b.val) [[unlikely]]
+    TaskDescriptor::rights_filter pair{};
+    if (auto i = std::get_if<TaskDescriptor::rights_filter>(&task->port_blocked_by); !i) {
+        pmos::containers::vector<u64> right_ids;
+        if (!right_ids.resize(array_size)) {
+            syscall_error(task) = -ENOMEM;
+            return;
+        }
+
+        auto b = copy_from_user(
+            reinterpret_cast<char *>(right_ids.data()),
+            reinterpret_cast<const char *>(array_ptr),
+            array_size * sizeof(u64));
+        if (!b.success()) {
+            syscall_error(task) = b.result;
+            return;
+        }
+        if (!b.val)
+            return;
+
+        std::sort(right_ids.begin(), right_ids.end(), [](u64 a, u64 b) { return a < b; });
+        right_ids.erase(std::unique(right_ids.begin(), right_ids.end()), right_ids.end());
+
+        if (right_ids.capacity()/right_ids.size() > 2)
+            right_ids.shrink_to_fit();
+
+        auto ptr = klib::make_shared<const pmos::containers::vector<u64>>(std::move(right_ids));
+        if (!ptr) {
+            syscall_error(task) = -ENOMEM;
+            return;
+        }
+        bool exclude = flags & FLAG_EXCLUDE_RIGHTS;
+        pair = std::make_pair(exclude, std::move(ptr));
+        task->set_port_blocked_by(pair);
+    } else {
+        pair = *i;
+    }
+
+    auto msg = port->atomic_get_message(pair);
+    if (!msg && (flags & FLAG_NOBLOCK)) {
+        clear_filter(task);
+        syscall_error(task) = -EAGAIN;
         return;
+    }
 
-    task->message_hint = msg;
+    if (!msg) {
+        __atomic_store_n(&task->blocked_by, port, __ATOMIC_RELEASE);
 
-    syscall_success(task);
+        task->atomic_block_self(TaskDescriptor::SCHED_WAKE_PORT);
+        if ((msg = port->atomic_get_message(pair)))
+            task->atomic_handle_unblock(TaskDescriptor::SCHED_WAKE_PORT);
+
+        return;
+    }
+
+    ulong message_struct;
+    auto get_result = syscall_arg_checked(task, 3, 1, message_struct);
+    if (!get_result.success()) {
+        clear_filter(task);
+        syscall_error(task) = get_result.result;
+        return;
+    }
+    if (!get_result.val)
+        return;
+    
+    get_message_info_generic(task, msg, message_struct);
 }
 
 void syscall_set_attribute(TaskDescriptor *task)

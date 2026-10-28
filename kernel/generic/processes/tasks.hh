@@ -130,9 +130,11 @@ namespace proc
         // Message from the recent syscall
         ipc::GenericMessage *message_hint{};
 
+        using rights_filter = std::pair<bool /* exclude */, klib::shared_ptr<const pmos::containers::vector<u64>>>;
+
         mutable Spinlock blocked_by_lock;
         // Holds the port condition that the task is blocked by
-        using port_blocked_by_variant = std::variant<std::monostate, u64 /* right */>;
+        using port_blocked_by_variant = std::variant<std::monostate, u64 /* right */, rights_filter>;
         port_blocked_by_variant port_blocked_by;
 
         void set_port_blocked_by(port_blocked_by_variant port) {
