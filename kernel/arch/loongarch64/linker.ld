@@ -12,8 +12,8 @@ PHDRS
 
 SECTIONS
 {
-    /* . = 0xFFFFFF0000000000; // 01777777760000000000000 */
-    . = 0xFFFFFFFF80000000;
+    /* The bootloader relocates this position-independent kernel. */
+    . = 0;
 
     /* Leave a symbol indicating the start of the kernel space */
     _kernel_start = .;

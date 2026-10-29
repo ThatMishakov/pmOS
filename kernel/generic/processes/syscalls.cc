@@ -40,9 +40,11 @@
 // #include <cpus/cpus.hh>
 #include "task_group.hh"
 #include <processes/process.hh>
+#include <algorithm>
 
 #include <array>
 #include <assert.h>
+#include <time.h>
 #include <clock.hh>
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
@@ -53,6 +55,7 @@
 #include <sched/sched.hh>
 #include <sched/timers.hh>
 #include <pmos/memory.h>
+#include <pmos/ports.h>
 
 #if defined(__x86_64__) || defined(__i386__)
     #include <segments.hh>
@@ -71,7 +74,7 @@ extern void deactivate_page_table();
 namespace kernel::proc::syscalls
 {
 
-std::array<const char *, 73> syscall_names = {
+std::array<const char *, 74> syscall_names = {
     "SYSCALL EXIT",
     "SYSCALL GET TASK ID",
     "SYSCALL CREATE PROCESS",
@@ -149,6 +152,7 @@ std::array<const char *, 73> syscall_names = {
     "SYSCALL GET PROCESS ID",
     "SYSCALL RIGHT FOR TASK GROUP",
     "SYSCALL TERMINATE PROCESS",
+    "SYSCALL SELECT MESSAGE",
 };
 
 const char *syscall_name(unsigned id)
@@ -161,7 +165,7 @@ const char *syscall_name(unsigned id)
 
 using syscall_function = void (*)(TaskDescriptor *task);
 
-std::array<syscall_function, 73> syscall_table = {
+std::array<syscall_function, 74> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -239,6 +243,7 @@ std::array<syscall_function, 73> syscall_table = {
     syscall_get_process_id,
     syscall_right_for_task_group,
     syscall_terminate_process,
+    syscall_select_message,
 };
 
 void syscall_handler()
@@ -669,51 +674,48 @@ void syscall_kill_task(TaskDescriptor *task)
 
 void syscall_get_first_message(TaskDescriptor *current)
 {
-    Port *port;
+    current->set_continuation(syscall_get_first_message, TaskDescriptor::cancel_syscall);
 
-    auto buff = syscall_arg(current, 1, 1);
-    auto args = syscall_flags(current);
+    u64 port_id = syscall_arg64(current, 0);
+    u64 message_id = syscall_arg64(current, 1);
+    ulong args[2];
+    auto get_result = syscall_args_checked(current, 2, 2, 2, args);
+    if (!get_result.success()) {
+        syscall_error(current) = get_result.result;
+        return;
+    }
+    if (!get_result.val)
+        return;
 
-    if (current->continuation_func) {
-        auto data = std::get_if<TaskDescriptor::GetMessageData>(&current->continuation_data);
-        assert(data);
+    auto flags = syscall_flags(current);
 
-        port = data->port;
-        assert(port);
+    auto port_result = current->get_port(port_id);
+    if (!port_result.success()) {
+        syscall_error(current) = port_result.result;
+        return;
+    }
+    auto port = port_result.val;
+
+    assert(port);
+    GenericMessage *msg = nullptr;
+    if (!message_id) {
+        msg = port->atomic_get_front();
     } else {
-        u64 portno = syscall_arg64(current, 0);
-
-        port = Port::atomic_get_port(portno);
-        if (!port) {
-            syscall_error(current) = -ENOENT;
-            return;
+        if (current->message_hint && current->message_hint->id == message_id && current->message_hint->parent_port == port)
+            msg = current->message_hint;
+        else {
+            msg = port->atomic_get_message(message_id);
+            if (msg)
+                current->message_hint = msg;
         }
-        
-        if (current != port->owner) {
-            syscall_error(current) = -EPERM;
-            return;
-        }
-
-        current->set_continuation(syscall_get_first_message, TaskDescriptor::cancel_syscall);
-        current->continuation_data = TaskDescriptor::GetMessageData {
-            .port = port,
-        };
     }
 
-    GenericMessage *top_message = nullptr;
-
-    {
-        Auto_Lock_Scope scope_lock(port->lock);
-
-        if (port->is_empty()) {
-            syscall_error(current) = -EAGAIN;
-            return;
-        }
-
-        top_message = port->get_front();
+    if (!msg) {
+        syscall_error(current) = -EAGAIN;
+        return;
     }
 
-    auto result = top_message->copy_to_user_buff((char *)buff);
+    auto result = msg->copy_to_user_buff((char *)args[0], args[1]);
     if (!result.success()) {
         syscall_error(current) = result.result;
         return;
@@ -723,10 +725,10 @@ void syscall_get_first_message(TaskDescriptor *current)
         return;
 
     u64 reply_right_id = 0;
-    if (!(args & MSG_ARG_NOPOP)) {
-        auto reply_right = top_message->get_reply_right();
+    if (!(flags & MSG_ARG_NOPOP)) {
+        auto reply_right = msg->get_reply_right();
         if (reply_right)
-            if ((!(args & MSG_ARG_REJECT_RIGHT)) && reply_right) {
+            if ((!(flags & MSG_ARG_REJECT_RIGHT)) && reply_right) {
                 auto group = current->get_rights_namespace();
                 if (!group) {
                     syscall_error(current) = -ESRCH;
@@ -749,126 +751,214 @@ void syscall_get_first_message(TaskDescriptor *current)
                     reply_right->of_message   = false;
                     reply_right->parent_group = group;
 
-                    top_message->clear_reply_right();
+                    msg->clear_reply_right();
                 }
             }
 
+        current->message_hint = nullptr;
         Auto_Lock_Scope scope_lock(port->lock);
-        port->pop_front();
+        port->remove_message(msg);
     }
 
     syscall_success(current);
     syscall_return(current) = reply_right_id;
 }
 
+static void clear_filter(TaskDescriptor *task)
+{
+    task->set_port_blocked_by({});
+    __atomic_store_n(&task->blocked_by, nullptr, __ATOMIC_RELAXED);
+}
+
+static void get_message_info_generic(TaskDescriptor *task, GenericMessage *msg, u64 message_struct)
+{
+    assert(msg);
+    auto reply_right = msg->get_reply_right();
+    bool holds_reply_right     = reply_right != nullptr;
+    bool reply_right_send_many = false;
+    if (holds_reply_right)
+        reply_right_send_many = reply_right->type() == RightType::SendMany;
+
+    unsigned flags_ = (holds_reply_right ? (unsigned)MESSAGE_FLAG_REPLY_RIGHT : 0) |
+                    (reply_right_send_many ? (unsigned)MESSAGE_FLAG_REPLY_SEND_MANY : 0);
+
+    auto const &rights = msg->get_rights();
+    for (int i = 0; i < 4; ++i) {
+        if (auto r = rights[i] ; r)
+            flags_ |= r->type_as_int() << (16 + i*4);
+    }
+
+    assert(msg->get_id());
+
+    u64 msg_struct_size     = sizeof(Message_Descriptor);
+    Message_Descriptor desc = {
+        .message_id         = msg->get_id(),
+        .sender             = msg->sender_task_id(),
+        .sender_process     = msg->sender_process_id(),
+        .size               = msg->size(),
+        .sent_with_right    = msg->sent_with_right(),
+        .other_rights_count = (unsigned)msg->rights_count(),
+        .flags              = flags_,
+    };
+
+    auto b = copy_to_user((char *)&desc, (char *)message_struct, msg_struct_size);
+    if (!b.success()) [[unlikely]] {
+        clear_filter(task);
+        syscall_error(task) = b.result;
+        return;
+    }
+
+    if (not b.val) [[unlikely]]
+        return;
+
+    task->message_hint = msg;
+    clear_filter(task);
+    syscall_success(task);   
+}
+
+auto cancel_get_message(TaskDescriptor *task, i64 error_code) -> void
+{
+    clear_filter(task);
+    syscall_return(task) = error_code;
+}
+
 void syscall_get_message_info(TaskDescriptor *task)
 {
+    task->set_continuation(syscall_get_message_info, cancel_get_message);
+
     u64 portno           = syscall_arg64(task, 0);
-    ulong message_struct = syscall_arg(task, 1, 1);
+    u64 right_id         = syscall_arg64(task, 1);
     ulong flags          = syscall_flags(task);
 
-    auto port = Port::atomic_get_port(portno);
-    if (!port) {
-        syscall_error(task) = -ENOENT;
+    auto result = task->get_port(portno);
+    if (!result.success()) {
+        syscall_error(task) = result.result;
         return;
     }
+    auto port = result.val;
 
-    if (port->owner != task) {
-        syscall_error(task) = -EPERM;
-        return;
-    }
-
-    constexpr unsigned FLAG_NOBLOCK = 0x01;
-
-    bool is_empty = port->atomic_is_empty();
+    auto msg = port->atomic_get_message_right(right_id);
+    bool is_empty = !msg;
     if (is_empty && (flags & FLAG_NOBLOCK)) {
         syscall_error(task) = -EAGAIN;
         return;
     }
 
-    static constexpr auto get_func = [](TaskDescriptor *task, ipc::Port *port, ulong message_struct, ulong flags, GenericMessage *msg) -> void {
-        assert(task);
-        assert(port);
-        assert(msg);
-        
-        auto reply_right = msg->get_reply_right();
-        bool holds_reply_right     = reply_right != nullptr;
-        bool reply_right_send_many = false;
-        if (holds_reply_right)
-            reply_right_send_many = reply_right->type() == RightType::SendMany;
-
-        unsigned flags_ = (holds_reply_right ? (unsigned)MESSAGE_FLAG_REPLY_RIGHT : 0) |
-                        (reply_right_send_many ? (unsigned)MESSAGE_FLAG_REPLY_SEND_MANY : 0);
-
-        auto const &rights = msg->get_rights();
-        for (int i = 0; i < 4; ++i) {
-            if (auto r = rights[i] ; r)
-                flags_ |= r->type_as_int() << (16 + i*4);
-        }
-
-        u64 msg_struct_size     = sizeof(Message_Descriptor);
-        Message_Descriptor desc = {
-            .sender             = msg->sender_task_id(),
-            .sender_process     = msg->sender_process_id(),
-            .size               = msg->size(),
-            .sent_with_right    = msg->sent_with_right(),
-            .other_rights_count = (unsigned)msg->rights_count(),
-            .flags              = flags_,
-        };
-
-        auto b = copy_to_user((char *)&desc, (char *)message_struct, msg_struct_size);
-        if (!b.success()) {
-            syscall_error(task) = b.result;
-            return;
-        }
-
-        if (not b.val)
-            return;
-
-        syscall_success(task);
-    };
-
-    constexpr auto continuation = [](TaskDescriptor *task) {
-        auto data = std::get_if<TaskDescriptor::GetMessageData>(&task->continuation_data);
-        assert(data);
-
-        auto port = data->port;
-        assert(port);
-
-        __atomic_and_fetch(&task->wake_reason_mask, ~TaskDescriptor::SCHED_WAKE_PORT, __ATOMIC_RELAXED);
-        if (port->atomic_is_empty()) [[unlikely]] {
-            task->atomic_block_self(TaskDescriptor::SCHED_WAKE_PORT);
-            return;
-        }
-
-        auto message_struct = syscall_arg(task, 1, 1);
-        auto flags = syscall_flags(task);
-
-        auto msg = port->atomic_get_front();
-        assert(msg);
-        __atomic_store_n(&task->blocked_by, nullptr, __ATOMIC_RELAXED);
-
-        get_func(task, port, message_struct, flags, msg);
-    };
-
     if (is_empty) {
-        task->set_continuation(continuation, TaskDescriptor::cancel_syscall);
-        task->continuation_data = TaskDescriptor::GetMessageData{
-            .port  = port,
-        };
+        if (!right_id)
+            task->set_port_blocked_by({});
+        else
+            task->set_port_blocked_by(right_id);
         __atomic_store_n(&task->blocked_by, port, __ATOMIC_RELEASE);
 
         task->atomic_block_self(TaskDescriptor::SCHED_WAKE_PORT);
 
-        if (!port->atomic_is_empty())
+        if ((msg = port->atomic_get_message_right(right_id)))
             task->atomic_handle_unblock(TaskDescriptor::SCHED_WAKE_PORT);
         
         return;
     };
+    __atomic_store_n(&task->blocked_by, nullptr, __ATOMIC_RELAXED);
+    task->set_port_blocked_by({});
 
-    auto msg = port->atomic_get_front();
-    assert(msg);
-    get_func(task, port, message_struct, flags, msg);
+    ulong message_struct;
+    auto get_result = syscall_arg_checked(task, 2, 2, message_struct);
+    if (!get_result.success()) {
+        clear_filter(task);
+        syscall_error(task) = get_result.result;
+        return;
+    }
+    if (!get_result.val)
+        return;
+    
+    get_message_info_generic(task, msg, message_struct);
+}
+
+void syscall_select_message(TaskDescriptor *task)
+{
+    task->set_continuation(syscall_select_message, cancel_get_message);
+    u64 portno = syscall_arg64(task, 0);
+    ulong array_ptr = syscall_arg(task, 1, 1);
+    ulong array_size = syscall_arg(task, 2, 1);
+    auto flags = syscall_flags(task);
+    
+    auto result = task->get_port(portno);
+    if (!result.success()) {
+        syscall_error(task) = result.result;
+        return;
+    }
+    auto port = result.val;
+
+    if (array_size < 1 || SIZE_MAX / sizeof(u64) < array_size) {
+        syscall_error(task) = -EINVAL;
+        return;
+    }
+
+    TaskDescriptor::rights_filter pair{};
+    if (auto i = std::get_if<TaskDescriptor::rights_filter>(&task->port_blocked_by); !i) {
+        pmos::containers::vector<u64> right_ids;
+        if (!right_ids.resize(array_size)) {
+            syscall_error(task) = -ENOMEM;
+            return;
+        }
+
+        auto b = copy_from_user(
+            reinterpret_cast<char *>(right_ids.data()),
+            reinterpret_cast<const char *>(array_ptr),
+            array_size * sizeof(u64));
+        if (!b.success()) {
+            syscall_error(task) = b.result;
+            return;
+        }
+        if (!b.val)
+            return;
+
+        std::sort(right_ids.begin(), right_ids.end(), [](u64 a, u64 b) { return a < b; });
+        right_ids.erase(std::unique(right_ids.begin(), right_ids.end()), right_ids.end());
+
+        if (right_ids.capacity()/right_ids.size() > 2)
+            right_ids.shrink_to_fit();
+
+        auto ptr = klib::make_shared<const pmos::containers::vector<u64>>(std::move(right_ids));
+        if (!ptr) {
+            syscall_error(task) = -ENOMEM;
+            return;
+        }
+        bool exclude = flags & FLAG_EXCLUDE_RIGHTS;
+        pair = std::make_pair(exclude, std::move(ptr));
+        task->set_port_blocked_by(pair);
+    } else {
+        pair = *i;
+    }
+
+    auto msg = port->atomic_get_message(pair);
+    if (!msg && (flags & FLAG_NOBLOCK)) {
+        clear_filter(task);
+        syscall_error(task) = -EAGAIN;
+        return;
+    }
+
+    if (!msg) {
+        __atomic_store_n(&task->blocked_by, port, __ATOMIC_RELEASE);
+
+        task->atomic_block_self(TaskDescriptor::SCHED_WAKE_PORT);
+        if ((msg = port->atomic_get_message(pair)))
+            task->atomic_handle_unblock(TaskDescriptor::SCHED_WAKE_PORT);
+
+        return;
+    }
+
+    ulong message_struct;
+    auto get_result = syscall_arg_checked(task, 3, 1, message_struct);
+    if (!get_result.success()) {
+        clear_filter(task);
+        syscall_error(task) = get_result.result;
+        return;
+    }
+    if (!get_result.val)
+        return;
+    
+    get_message_info_generic(task, msg, message_struct);
 }
 
 void syscall_set_attribute(TaskDescriptor *task)
@@ -1119,16 +1209,12 @@ void syscall_set_interrupt(TaskDescriptor *task)
     u64 right   = syscall_arg64(task, 0);
     u64 port    = syscall_arg64(task, 1);
 
-    auto port_ptr = Port::atomic_get_port(port);
-    if (!port_ptr) {
-        syscall_error(task) = -ENOENT;
+    auto result = task->get_port(port);
+    if (!result.success()) {
+        syscall_error(task) = result.result;
         return;
     }
-
-    if (port_ptr->owner != task) {
-        syscall_error(task) = -EPERM;
-        return;
-    }
+    auto port_ptr = result.val;
 
     auto handler = interrupt_handler_for_right(task, right);
     if (!handler.success()) {
@@ -1171,16 +1257,12 @@ void syscall_complete_interrupt(TaskDescriptor *task)
     u64 port = syscall_arg64(task, 0);
     u64 right_id = syscall_arg64(task, 1);
 
-    auto port_ptr = Port::atomic_get_port(port);
-    if (!port_ptr) {
-        syscall_error(task) = -ENOENT;
+    auto result = task->get_port(port);
+    if (!result.success()) {
+        syscall_error(task) = result.result;
         return;
     }
-
-    if (port_ptr->owner != task) {
-        syscall_error(task) = -EPERM;
-        return;
-    }
+    auto port_ptr = result.val;
 
     auto right = port_ptr->atomic_get_right(right_id);
     if (!right) {
@@ -2309,16 +2391,12 @@ void syscall_create_right(TaskDescriptor *current)
         return;
     }
 
-    auto port = Port::atomic_get_port(port_id);
-    if (!port) {
-        syscall_error(current) = -ESRCH;
+    auto port_result = current->get_port(port_id);
+    if (!port_result.success()) {
+        syscall_error(current) = port_result.result;
         return;
     }
-
-    if (port->owner != current) {
-        syscall_error(current) = -EPERM;
-        return;
-    }
+    auto port = port_result.val;
 
     auto right_id = port->new_right_id();
     if (ptr) {
@@ -2395,16 +2473,12 @@ void send_message_right(TaskDescriptor *current)
 
     Port *reply_port = nullptr;
     if (reply_port_id) {
-        reply_port = Port::atomic_get_port(reply_port_id);
-        if (!reply_port) {
-            syscall_error(current) = {-ENOENT, (u64)-1};
+        auto result = current->get_port(reply_port_id);
+        if (!result.success()) {
+            syscall_error(current) = result.result;
             return;
         }
-
-        if (reply_port->owner != current) {
-            syscall_error(current) = -EPERM;
-            return;
-        }
+        reply_port = result.val;
     }
 
     ipc::rights_array rights = {};
@@ -2477,8 +2551,19 @@ void syscall_delete_send_right(TaskDescriptor *current)
 
 void syscall_accept_rights(TaskDescriptor *current)
 {
-    u64 port_id = syscall_arg64(current, 0);
-    ulong ptr   = syscall_arg(current, 1, 1);
+    current->set_continuation(syscall_accept_rights, nullptr);
+
+    u64 port_id    = syscall_arg64(current, 0);
+    u64 message_id = syscall_arg64(current, 1);
+    ulong ptr;
+    auto get_result = syscall_arg_checked(current, 2, 2, ptr);
+    if (!get_result.success()) {
+        syscall_error(current) = get_result.result;
+        return;
+    }
+
+    if (!get_result.val)
+        return;
 
     auto group = current->get_rights_namespace();
     if (!group) {
@@ -2486,18 +2571,33 @@ void syscall_accept_rights(TaskDescriptor *current)
         return;
     }
 
-    auto port = Port::atomic_get_port(port_id);
-    if (!port) {
-        syscall_error(current) = -ENOENT;
-        return;
-    }
+    GenericMessage *msg = nullptr;
+    if (!message_id) {
+        auto result = current->get_port(port_id);
+        if (!result.success()) {
+            syscall_error(current) = result.result;
+            return;
+        }
 
-    if (port->owner != current) {
-        syscall_error(current) = -EPERM;
-        return;
-    }
+        auto port = result.val;
+        msg = port->atomic_get_front();
+    } else {
+        if (current->message_hint && current->message_hint->id == message_id && current->message_hint->get_parent_port()->portno == port_id)
+            msg = current->message_hint;
+        else {
+            auto result = current->get_port(port_id);
+            if (!result.success()) {
+                syscall_error(current) = result.result;
+                return;
+            }
 
-    auto msg = port->atomic_get_front();
+            auto port = result.val;
+
+            msg = port->atomic_get_message(message_id);
+            if (msg)
+                current->message_hint = msg;
+        }
+    }
     if (!msg) {
         syscall_error(current) = -EAGAIN;
         return;
@@ -2665,16 +2765,12 @@ void syscall_watch_right(TaskDescriptor *current)
         return;
     }
 
-    auto port = Port::atomic_get_port(port_id);
-    if (!port) {
-        syscall_error(current) = -ENOENT;
+    auto port_result = current->get_port(port_id);
+    if (!port_result.success()) {
+        syscall_error(current) = port_result.result;
         return;
     }
-
-    if (port->owner != current) {
-        syscall_error(current) = -EPERM;
-        return;
-    }
+    auto port = port_result.val;
 
     auto result = many_right->atomic_watch(port);
     if (!result.success()) {
@@ -2689,20 +2785,19 @@ void syscall_delete_port(TaskDescriptor *current)
 {
     u64 port_id = syscall_arg64(current, 0);
 
-    auto port = Port::atomic_get_port(port_id);
-    if (!port) {
-        syscall_error(current) = -ENOENT;
+    auto port_result = current->get_port(port_id);
+    if (!port_result.success()) {
+        syscall_error(current) = port_result.result;
         return;
     }
 
-    if (port->owner != current) {
-        syscall_error(current) = -EPERM;
-        return;
-    }
+    auto port = port_result.val;
 
     bool result = port->delete_self();
     if (result) {
         syscall_success(current);
+        current->port_hint = nullptr;
+        current->message_hint = nullptr;
     } else {
         syscall_error(current) = -ENOENT;
     }
@@ -2712,16 +2807,12 @@ void syscall_create_timer(TaskDescriptor *current)
 {
     u64 port_id = syscall_arg64(current, 0);
 
-    auto port = Port::atomic_get_port(port_id);
-    if (!port) {
-        syscall_error(current) = -ENOENT;
+    auto result = current->get_port(port_id);
+    if (!result.success()) {
+        syscall_error(current) = result.result;
         return;
     }
-
-    if (port->owner != current) {
-        syscall_error(current) = -EPERM;
-        return;
-    }
+    auto port = result.val;
 
     auto timer = TimerRight::create_for_port(port);
     if (!timer.success()) {
@@ -2751,16 +2842,12 @@ void syscall_set_timer_deadline(TaskDescriptor *task)
         return;
     }
 
-    const auto port_ptr = Port::atomic_get_port(port_id);
-    if (!port_ptr) {
-        syscall_error(task) = -ENOENT;
+    auto port_result = task->get_port(port_id);
+    if (!port_result.success()) {
+        syscall_error(task) = port_result.result;
         return;
     }
-
-    if (port_ptr->owner != task) {
-        syscall_error(task) = -EPERM;
-        return;
-    }
+    auto port_ptr = port_result.val;
 
     auto right = port_ptr->atomic_get_right(right_id);
     if (!right) {
@@ -2968,16 +3055,12 @@ void syscall_delete_receive_right(TaskDescriptor *task)
 
     bool delete_messages = flags & DELETE_RIGHT_CLEAR_MESSAGE_QUEUE;
 
-    auto port_ptr = Port::atomic_get_port(port_id);
-    if (!port_ptr) {
-        syscall_error(task) = -ENOENT;
+    auto port_result = task->get_port(port_id);
+    if (!port_result.success()) {
+        syscall_error(task) = port_result.result;
         return;
     }
-
-    if (port_ptr->owner != task) {
-        syscall_error(task) = -EPERM;
-        return;
-    }
+    auto port_ptr = port_result.val;
 
     auto right = port_ptr->atomic_get_right(right_id);
 
@@ -2994,6 +3077,8 @@ void syscall_delete_receive_right(TaskDescriptor *task)
 
     if (deleted_right || poped_messages > 0) {
         syscall_return(task) = poped_messages;
+        if (poped_messages > 0)
+            task->message_hint = nullptr;
     } else {
         syscall_error(task) = -ENOMSG;
     }
@@ -3240,6 +3325,11 @@ SyscallError::operator int() const { return syscall_ret_low(task); }
 void syscall_success(TaskDescriptor *task) {
     task->continuation_func = nullptr;
     syscall_ret_low(task, 0);
+}
+
+ReturnStr<bool> syscall_arg_checked(TaskDescriptor *task, int arg, int args64before, ulong &value)
+{
+    return syscall_args_checked(task, arg, args64before, 1, &value);
 }
 
 } // namespace kernel::proc::syscalls

@@ -1,10 +1,13 @@
+#!/bin/sh
+set -eu
+
 if [ "$#" -ne 3 ]; then
     echo "Usage: $0 <disk image file> <services> <config file name>"
     exit 1
 fi
 
 if [ -z "${SYSROOT+x}" ]; then
-    echo "Error: $SYSROOT is not set"
+    echo "Error: SYSROOT is not set"
     exit 1
 fi
 
@@ -24,12 +27,15 @@ copy_service() {
     mcopy -i "$BOOT_PARTITION" "${BOOT_DIR}/${SERVICE}.yaml" "::/${SERVICE}.yaml"
 }
 
-dd if=/dev/zero of="$DISK_IMAGE" bs=1M count=256
+# Fixed 768 MiB disk: 1 MiB partition alignment, 64 MiB boot, 703 MiB root.
+ROOTFS_MIB=703
+
+dd if=/dev/zero of="$DISK_IMAGE" bs=1M count=768
 
 # Create an MBR partition table
 echo 'label: dos' | sfdisk "$DISK_IMAGE"
 echo '2048,130048,0x0C,*' | sfdisk --append "$DISK_IMAGE"
-echo '132096,392192,0x83' | sfdisk --append "$DISK_IMAGE"
+echo "132096,$((ROOTFS_MIB * 2048)),0x83" | sfdisk --append "$DISK_IMAGE"
 
 # Create a FAT32 filesystem for the boot partition
 dd if=/dev/zero of="$BOOT_PARTITION" bs=1M count=64
@@ -63,7 +69,7 @@ for LIBRARY in $LIBRARIES; do
 done
 
 # Create an ext4 filesystem for the root partition
-dd if=/dev/zero of="$EXT4_PARTITION" bs=1M count=191
+dd if=/dev/zero of="$EXT4_PARTITION" bs=1M count="$ROOTFS_MIB"
 ROOTFS_STAGE=$(mktemp -d)
 cp -a "$SYSROOT"/. "$ROOTFS_STAGE"/
 mkdir -p "$ROOTFS_STAGE/run/initramfs"

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <pmos/ipc/bus_object.hh>
 #include <system_error>
 #include <cerrno>

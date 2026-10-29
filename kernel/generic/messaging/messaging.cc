@@ -38,14 +38,15 @@
 #include <stddef.h>
 #include <types.hh>
 #include <utils.hh>
+#include <algorithm>
 
 using namespace kernel;
 namespace kernel::ipc
 {
 
-ReturnStr<bool> Message::copy_to_user_buff(char *buff) const
+ReturnStr<bool> Message::copy_to_user_buff(char *buff, size_t max_size) const
 {
-    return copy_to_user(&content.front(), buff, content.size());
+    return copy_to_user(&content.front(), buff, std::min(max_size, content.size()));
 }
 
 Port *Port::atomic_create_port(proc::TaskDescriptor *task) noexcept
@@ -96,11 +97,17 @@ kresult_t Port::atomic_send_from_system(const char *msg_ptr, size_t size)
 void Port::enqueue(klib::unique_ptr<GenericMessage> msg)
 {
     assert(lock.is_locked() && "Spinlock not locked!");
+    assert(msg);
+
+    msg->id = ++current_message_id;
+    msg->parent_port = this;
+
+    auto msg_ptr = msg.get();
 
     msg_queue.push_back(msg.release());
 
     assert(owner);
-    if (__atomic_load_n(&owner->blocked_by, __ATOMIC_ACQUIRE) == this)
+    if (__atomic_load_n(&owner->blocked_by, __ATOMIC_ACQUIRE) == this and owner->message_will_unblock(msg_ptr))
         owner->atomic_handle_unblock(proc::TaskDescriptor::SCHED_WAKE_PORT);
 }
 
@@ -182,6 +189,16 @@ void Port::pop_front() noexcept
     begin->delete_self();
 }
 
+void Port::remove_message(GenericMessage *msg)
+{
+    assert(lock.is_locked() && "Spinlock not locked!");
+    assert(msg);
+    assert(msg->parent_port == this);
+
+    msg_queue.remove(msg);
+    msg->delete_self();
+}
+
 bool Port::is_empty() const noexcept
 {
     assert(lock.is_locked() && "Spinlock not locked!");
@@ -198,14 +215,58 @@ bool Port::atomic_is_empty() const noexcept
 GenericMessage *Port::get_front()
 {
     assert(lock.is_locked() && "Spinlock not locked!");
+    if (msg_queue.empty())
+        return nullptr;
 
     return &msg_queue.front();
+}
+
+GenericMessage *Port::atomic_get_message_right(u64 right_id)
+{
+    Auto_Lock_Scope l(lock);
+    if (right_id == 0 && !msg_queue.empty())
+        return &msg_queue.front();
+
+    for (auto &msg: msg_queue) {
+        if (msg.sent_with_right() == right_id)
+            return &msg;
+    }
+    return nullptr;
 }
 
 GenericMessage *Port::atomic_get_front()
 {
     Auto_Lock_Scope l(lock);
     return get_front();
+}
+
+GenericMessage *Port::get_message(u64 message_id)
+{
+    assert(lock.is_locked() && "Spinlock not locked!");
+    for (auto &msg: msg_queue) {
+        if (msg.id == message_id)
+            return &msg;
+    }
+    return nullptr;
+}
+
+GenericMessage *Port::atomic_get_message(u64 message_id)
+{
+    Auto_Lock_Scope l(lock);
+    return get_message(message_id);
+}
+
+GenericMessage *Port::atomic_get_message(
+    const std::pair<bool /* exclude */, klib::shared_ptr<const pmos::containers::vector<u64>>> &filter)
+{
+    proc::TaskDescriptor::port_blocked_by_variant port_filter = filter;
+
+    Auto_Lock_Scope l(lock);
+    for (auto &msg: msg_queue) {
+        if (proc::TaskDescriptor::message_matches_filter(&msg, port_filter))
+            return &msg;
+    }
+    return nullptr;
 }
 
 bool Port::delete_self() noexcept

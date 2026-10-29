@@ -113,7 +113,7 @@ void pmos_msgloop_loop(struct pmos_msgloop_data *data)
     bool cont = true;
     while (cont) {
         Message_Descriptor descr;
-        result_t result = syscall_get_message_info(&descr, data->port, 0);
+        result_t result = syscall_get_message_info(&descr, data->port, 0, 0);
         if (result != SUCCESS) {
             fprintf(stderr,
                     "pmOS libc: failed to get message in pmos_msgloop_loop() from port %" PRIu64
@@ -125,7 +125,7 @@ void pmos_msgloop_loop(struct pmos_msgloop_data *data)
         bool have_rights       = descr.other_rights_count;
         pmos_right_t rights[4] = {0};
         if (have_rights) {
-            result_t result = accept_rights(data->port, rights);
+            result_t result = accept_rights(data->port, descr.message_id, rights);
             if (result != SUCCESS) {
                 fprintf(
                     stderr,
@@ -138,7 +138,7 @@ void pmos_msgloop_loop(struct pmos_msgloop_data *data)
 
         char buff[descr.size];
 
-        right_request_t message = get_first_message(buff, 0, data->port);
+        right_request_t message = read_message(buff, descr.size, 0, data->port, descr.message_id);
         if (message.result != SUCCESS) {
             fprintf(stderr,
                     "pmOS libc: failed to get message in pmos_msgloop_loop() from port %" PRIu64

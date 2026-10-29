@@ -51,9 +51,16 @@ public:
 
     GenericMessage *get_front();
     GenericMessage *atomic_get_front();
+
+    GenericMessage *get_message(u64 message_id);
+    GenericMessage *atomic_get_message(u64 message_id);
+    GenericMessage *atomic_get_message(const std::pair<bool /* exclude */, klib::shared_ptr<const pmos::containers::vector<u64>>> &filter);
+
     void pop_front() noexcept;
     bool is_empty() const noexcept;
     bool atomic_is_empty() const noexcept;
+
+    void remove_message(GenericMessage *msg);
 
     ReceiveRight *atomic_get_right(u64 right_id);
 
@@ -95,10 +102,13 @@ public:
 
     bool atomic_add_to_rights(ReceiveRight *right);
     void atomic_remove_right(ReceiveRight *right);
+
+    GenericMessage *atomic_get_message_right(u64 right_id);
 protected:
     using Message_storage = pmos::containers::CircularDoubleList<GenericMessage, &GenericMessage::list_node>;
     Message_storage msg_queue;
     u64 current_right_id = 0;
+    u64 current_message_id = 0;
 
     union {
         pmos::containers::RBTreeNode<Port> bst_head_global;

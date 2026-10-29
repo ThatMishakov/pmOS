@@ -121,4 +121,4 @@ qemu-loongarch64: $(loongarch64-IMG) ovmf-loongarch64
 qemu-single: $(riscv64-IMG) ovmf-riscv64
 	qemu-system-riscv64 -M virt -cpu rv64 -device ramfb -device virtio-keyboard -device qemu-xhci -device usb-kbd -m 2G -drive if=pflash,unit=0,format=raw,file=ovmf-riscv64/OVMF.fd -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive file=$(riscv64-IMG),if=none,id=hdd0 -serial stdio
 
-.PHONY: $(x86_64-IMG) $(riscv64-IMG) $(loongarch64-IMG) $(i686-IMG) $(x86_64-HYPER-IMG) $(x86_64-GRUB-ISO) $(x86_64-HYPER-ISO)
+# .PHONY: $(x86_64-IMG) $(riscv64-IMG) $(loongarch64-IMG) $(i686-IMG) $(x86_64-HYPER-IMG) $(x86_64-GRUB-ISO) $(x86_64-HYPER-ISO)

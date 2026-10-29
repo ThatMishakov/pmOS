@@ -10,9 +10,9 @@ deps="mlibc $CXX_DEPS"
 hostdeps="$TOOLCHAIN_DEPS"
 
 configure() {
-	CC="clang --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot}" \
-	CXX="clang++ --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot}" \
-	CPP="clang --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot} -E" \
+	CC="${C_COMPILER} ${COMPILER_TARGET_FLAGS} --sysroot=${sysroot}" \
+	CXX="${CXX_COMPILER} ${COMPILER_TARGET_FLAGS} --sysroot=${sysroot}" \
+	CPP="${C_COMPILER} ${COMPILER_TARGET_FLAGS} --sysroot=${sysroot} -E" \
 	CPPFLAGS="-D_GNU_SOURCE" \
 	${source_dir}/configure --build=$(uname -m)-pc-linux-gnu --host=$JINX_ARCH-pmos --prefix=${prefix} --with-shared --without-normal --with-termlib --enable-pc-files --enable-widec \
 		--with-build-cc=gcc \
@@ -27,7 +27,7 @@ package() {
 	# ncurses hardcodes a bare `install -s` (INSTALL_OPT_S), which would strip the
 	# x86_64 target binaries with the host's native strip and fail on non-x86_64
 	# hosts. Point install at the cross strip so the binaries are still stripped.
-	make install DESTDIR="${dest_dir}" INSTALL_PROG='$(INSTALL) -s --strip-program=llvm-strip'
+	make install DESTDIR="${dest_dir}" INSTALL_PROG="\$(INSTALL) -s --strip-program=${TOOLS_PREFIX}-strip"
 
 	echo "INPUT(-lncursesw)" > ${dest_dir}${prefix}/lib/libncurses.so
 	echo "INPUT(-ltinfow)" > ${dest_dir}${prefix}/lib/libtinfo.so

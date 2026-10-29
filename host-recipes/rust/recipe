@@ -7,6 +7,10 @@ deps="mlibc"
 hostdeps="$TOOLCHAIN_DEPS"
 
 configure() {
+    rust_target_flags=
+    if [ -n "$COMPILER_TARGET_FLAGS" ]; then
+        rust_target_flags=", \"-C\", \"link-arg=${COMPILER_TARGET_FLAGS}\""
+    fi
     cat <<EOF > bootstrap.toml
 change-id = 148671
 
@@ -19,7 +23,8 @@ build-dir = "${build_dir}/host-builds/rust"
 docs = false
 
 [target.${RUST_TARGET}]
-rustflags = ["-C", "link-arg=--sysroot=${sysroot}", "-C", "link-arg=--target=${JINX_ARCH}-unknown-pmos"]
+linker = "${CXX_COMPILER}"
+rustflags = ["-C", "link-arg=--sysroot=${sysroot}", "-C", "link-arg=-l${UNWIND_LIB}"${rust_target_flags}]
 
 [install]
 prefix = "${prefix}"

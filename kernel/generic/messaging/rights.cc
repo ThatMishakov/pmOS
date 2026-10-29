@@ -504,9 +504,9 @@ size_t ReceiveRight::size() const
     return sizeof(destroyed_msg);
 }
 
-ReturnStr<bool> ReceiveRight::copy_to_user_buff(char *buff) const
+ReturnStr<bool> ReceiveRight::copy_to_user_buff(char *buff, size_t max_size) const
 {
-    return copy_to_user(reinterpret_cast<const char *>(&destroyed_msg), buff, sizeof(destroyed_msg));
+    return copy_to_user(reinterpret_cast<const char *>(&destroyed_msg), buff, std::min<size_t>(max_size, sizeof(destroyed_msg)));
 }
 
 static constinit IPC_Kernel_Right_Destroyed send_destroyed_msg = {
@@ -522,9 +522,9 @@ size_t SendManyRight::size() const
     return sizeof(send_destroyed_msg);
 }
 
-ReturnStr<bool> SendManyRight::copy_to_user_buff(char *buff) const
+ReturnStr<bool> SendManyRight::copy_to_user_buff(char *buff, size_t max_size) const
 {
-    return copy_to_user(reinterpret_cast<const char *>(&send_destroyed_msg), buff, sizeof(send_destroyed_msg));
+    return copy_to_user(reinterpret_cast<const char *>(&send_destroyed_msg), buff, std::min<size_t>(max_size, sizeof(send_destroyed_msg)));
 }
 
 bool SendRight::destroy_receive_right()

@@ -1211,7 +1211,7 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
 
             std::string stat_msg_path(stat_msg->path, message.size() - sizeof(IPC_Stat));
 
-            stat_handle(nullptr, std::move(reply_right), stat_msg->flags, std::move(stat_msg_path));
+            stat_handle(process->cwd_vnode, std::move(reply_right), stat_msg->flags, std::move(stat_msg_path));
         }
             break;
         

@@ -65,8 +65,8 @@ struct MapMemObjectParamT {
 unsafe extern "C" {
     fn create_port(owner_pid: libc::pid_t, flags: u32) -> PortReqResult;
     fn pmos_delete_port(port: Port) -> ResultT;
-    fn syscall_get_message_info(descr: &mut MessageDescriptor, port: u64, flags: u32) -> ResultT;
-    unsafe fn get_first_message(buff: *mut u8, args: u32, port: u64) -> RightRequestResult;
+    fn syscall_get_message_info(descr: &mut MessageDescriptor, port: u64, right: u64, flags: u32) -> ResultT;
+    unsafe fn read_message(buff: *mut u8, size: usize, args: u32, port: u64, message_id: u64) -> RightRequestResult;
     #[link_name = "name_right"]
     unsafe fn name_right_stdlib(
         right: Right,
@@ -81,7 +81,7 @@ unsafe extern "C" {
         id_in_receiver: *mut Right,
         flags: u32,
     ) -> RightRequestResult;
-    unsafe fn accept_rights(port: Port, rights_array: *mut u64) -> ResultT;
+    unsafe fn accept_rights(port: Port, message_id: u64, rights_array: *mut u64) -> ResultT;
     #[link_name = "send_message_right"]
     unsafe fn send_message_right_stdlib(
         send_right: Right,
@@ -157,6 +157,7 @@ impl IPCPort {
 
     pub fn pop_front_blocking(&self) -> Message {
         let mut desc = MessageDescriptor {
+            message_id: 0,
             sender: 0,
             sender_process: 0,
             size: 0,
@@ -165,14 +166,14 @@ impl IPCPort {
             flags: 0,
         };
 
-        unsafe { syscall_get_message_info(&mut desc, self.port, 0) }
+        unsafe { syscall_get_message_info(&mut desc, self.port, 0, 0) }
             .result()
             .unwrap();
 
         let mut other_rights = [const { None }; 4];
         if desc.other_rights_count > 0 {
             let mut other_rights_raw = [0u64; 4];
-            unsafe { accept_rights(self.port, other_rights_raw.as_mut_ptr()) }
+            unsafe { accept_rights(self.port, desc.message_id, other_rights_raw.as_mut_ptr()) }
                 .result()
                 .unwrap();
 
@@ -192,7 +193,7 @@ impl IPCPort {
         }
 
         let mut buffer = vec![0u8; desc.size as usize];
-        let r = unsafe { get_first_message(buffer.as_mut_ptr(), 0, self.port) }
+        let r = unsafe { read_message(buffer.as_mut_ptr(), buffer.len(), 0, self.port, desc.message_id) }
             .result()
             .unwrap();
 
@@ -241,6 +242,7 @@ impl IPCPort {
 
 #[repr(C)]
 struct MessageDescriptor {
+    message_id: u64,
     sender: u64,
     sender_process: u64,
     size: u64,

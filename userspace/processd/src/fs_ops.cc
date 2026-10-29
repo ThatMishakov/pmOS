@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "fs_ops.hh"
 #include <pmos/ipc.h>
 

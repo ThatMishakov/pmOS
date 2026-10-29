@@ -6,7 +6,7 @@ nm = '$TOOLS_PREFIX-nm'
 objcopy = '$TOOLS_PREFIX-objcopy'
 ranlib = '$TOOLS_PREFIX-ranlib'
 strip = '$TOOLS_PREFIX-strip'
-pkg-config = '$TOOLS_PREFIX-pkg-config'
+pkg-config = 'pkg-config'
 llvm-config = '/base_dir/support/llvm-config'
 
 [host_machine]
@@ -17,10 +17,11 @@ endian = '${ENDIAN}'
 
 [built-in options]
 libdir = 'lib'
-c_args = ['--target=${JINX_ARCH}-unknown-pmos', '--sysroot=${sysroot}']
-cpp_args = ['--target=${JINX_ARCH}-unknown-pmos', '--sysroot=${sysroot}']
-c_link_args = ['--target=${JINX_ARCH}-unknown-pmos', '--sysroot=${sysroot}']
-cpp_link_args = ['--target=${JINX_ARCH}-unknown-pmos', '--sysroot=${sysroot}']
+c_args = [${MESON_TARGET_ARGS}'--sysroot=${sysroot}']
+cpp_args = [${MESON_TARGET_ARGS}'--sysroot=${sysroot}']
+c_link_args = [${MESON_TARGET_ARGS}'--sysroot=${sysroot}']
+cpp_link_args = [${MESON_TARGET_ARGS}'--sysroot=${sysroot}']
 
 [properties]
 sys_root = '${sysroot}'
+pkg_config_libdir = ['${sysroot}/usr/lib/pkgconfig', '${sysroot}/usr/share/pkgconfig']

@@ -73,7 +73,7 @@ write_library_entry_multiboot() {
     NAME=${NAME##*/}
     LIBPATH="$3"
     cat <<EOF >> "$FILE"
-    module_path: boot():/${NAME}
+    module_path: boot():/${LIBPATH}/${NAME}
     module_string: /${LIBPATH}/${NAME};file
 
 EOF
@@ -107,7 +107,7 @@ EOF
         write_service_entry_multiboot "$FILE" "$SERVICE"
     done
     for LIBRARY in $LIBRARIES; do
-        write_library_entry "$FILE" "$LIBRARY" $LIBDIR
+        write_library_entry_multiboot "$FILE" "$LIBRARY" $LIBDIR
     done
 elif [ "$ARCH" = "x86_64" ]; then
     # Non-kaslr

@@ -1,3 +1,4 @@
+#include <cstring>
 #include <pmos/helpers.hh>
 #include <pmos/memory.h>
 #include <pmos/ports.h>
@@ -171,7 +172,7 @@ get_msg_return_type Port::get_first_message(bool nonblocking)
     unsigned flags = 0;
     if (nonblocking)
         flags |= FLAG_NOBLOCK;
-    auto result = ::syscall_get_message_info(&desc, id, flags);
+    auto result = ::syscall_get_message_info(&desc, id, 0, flags);
     if (result)
         return std::unexpected(static_cast<int>(-result));
 
@@ -180,7 +181,7 @@ get_msg_return_type Port::get_first_message(bool nonblocking)
 
     if (desc.other_rights_count) {
         std::array<pmos_right_t, 4> rights_ids = {};
-        auto result                            = ::accept_rights(id, rights_ids.data());
+        auto result                            = ::accept_rights(id, desc.message_id, rights_ids.data());
         if (result)
             return std::unexpected(static_cast<int>(-result));
 
@@ -190,7 +191,7 @@ get_msg_return_type Port::get_first_message(bool nonblocking)
             }
     }
 
-    auto r = ::get_first_message(reinterpret_cast<char *>(data.data()), 0, id);
+    auto r = ::read_message(reinterpret_cast<char *>(data.data()), desc.size, 0, id, desc.message_id);
     if (r.result)
         return std::unexpected(static_cast<int>(-r.result));
 

@@ -1,5 +1,6 @@
 #include "timers.hh"
 #include <pmos/ipc.h>
+#include <algorithm>
 
 namespace kernel::sched
 {
@@ -9,7 +10,7 @@ size_t TimerRight::size() const
     return sizeof(IPC_Timer_Expired);
 }
 
-ReturnStr<bool> TimerRight::copy_to_user_buff(char *buff) const
+ReturnStr<bool> TimerRight::copy_to_user_buff(char *buff, size_t max_size) const
 {
     IPC_Timer_Expired msg = {
         .type = IPC_Timer_Expired_NUM,
@@ -17,7 +18,7 @@ ReturnStr<bool> TimerRight::copy_to_user_buff(char *buff) const
         .deadline = fire_at_ns,
     };
 
-    return copy_to_user(reinterpret_cast<const char *>(&msg), buff, sizeof(msg));
+    return copy_to_user(reinterpret_cast<const char *>(&msg), buff, std::min(max_size, sizeof(msg)));
 }
 
 ReturnStr<TimerRight *> TimerRight::create_for_port(ipc::Port *port)

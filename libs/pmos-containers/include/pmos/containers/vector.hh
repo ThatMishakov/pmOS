@@ -395,6 +395,38 @@ constexpr bool vector<T, Allocator>::push_back(T &&p) noexcept
 }
 
 template<class T, class Allocator>
+constexpr typename vector<T, Allocator>::iterator
+vector<T, Allocator>::erase(
+    const_iterator first, const_iterator last) noexcept
+{
+    if (first == last) {
+        if (size_ == 0)
+            return begin();
+
+        return begin() + (first - cbegin());
+    }
+
+    const size_t start = first - storage_;
+    const size_t finish = last - storage_;
+
+    // assert(start <= finish && finish <= size_);
+
+    const size_t count = finish - start;
+    if (count == 0)
+        return begin() + start;
+
+    for (size_t src = finish; src < size_; ++src)
+        storage_[src - count] = std::move(storage_[src]);
+
+    const size_t new_size = size_ - count;
+    for (size_t i = new_size; i < size_; ++i)
+        storage_[i].~T();
+
+    size_ = new_size;
+    return begin() + start;
+}
+
+template<class T, class Allocator>
 template<detail::container_compatible_range<T> R>
 constexpr bool vector<T, Allocator>::append_range(R&& rg) noexcept
 {
@@ -439,6 +471,34 @@ constexpr bool vector<T, Allocator>::expand(size_t new_capacity) noexcept
     storage_ = ptr;
     capacity_ = new_capacity;
     return true;
+}
+
+template<class T, class Allocator>
+constexpr void vector<T, Allocator>::shrink_to_fit() noexcept
+{
+    if (size_ == capacity_)
+        return;
+
+    if (size_ == 0) {
+        allocator_.deallocate(storage_, capacity_);
+        storage_ = nullptr;
+        capacity_ = 0;
+        return;
+    }
+
+    auto ptr = allocator_.allocate(size_);
+    if (!ptr)
+        return;
+
+    for (size_t i = 0; i < size_; ++i)
+        new (&ptr[i]) T(std::move(storage_[i]));
+
+    for (size_t i = 0; i < size_; ++i)
+        storage_[i].~T();
+
+    allocator_.deallocate(storage_, capacity_);
+    storage_ = ptr;
+    capacity_ = size_;
 }
 
 } // namespace pmos::containers

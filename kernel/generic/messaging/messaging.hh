@@ -52,6 +52,7 @@ namespace kernel::ipc
 {
 
 struct Right;
+class Port;
 
 using rights_array   = std::array<Right *, 4>;
 using message_buffer = pmos::containers::vector<char>;
@@ -83,11 +84,23 @@ struct GenericMessage {
         return i;
     }
 
-    virtual ReturnStr<bool> copy_to_user_buff(char *buff) const = 0;
+    virtual ReturnStr<bool> copy_to_user_buff(char *buff, size_t max_size) const = 0;
 
     virtual ~GenericMessage() = default;
 
     virtual void delete_self() = 0;
+
+    // TODO?
+    Port *parent_port = nullptr;
+    Port *get_parent_port() const { return parent_port; }
+
+    // Per-port message ID. Gets assigned when the message is sent to the port.
+    u64 id = 0;
+
+    u64 get_id() const
+    {
+        return id;
+    }
 };
 
 // The final here is more of an optimization, more than anything else, I might inherit from this later as well...
@@ -107,7 +120,7 @@ struct Message final: public GenericMessage {
     virtual inline size_t size() const override { return content.size(); }
 
     // Returns true if done successfully, false otherwise (e.g. when syscall needs to be repeated)
-    virtual ReturnStr<bool> copy_to_user_buff(char *buff) const override;
+    virtual ReturnStr<bool> copy_to_user_buff(char *buff, size_t max_size) const override;
 
     virtual Right *get_reply_right() const override;
     virtual void clear_reply_right() override;

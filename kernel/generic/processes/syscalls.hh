@@ -313,6 +313,9 @@ void syscall_right_for_task_group(TaskDescriptor *task);
 void syscall_terminate_process(TaskDescriptor *task);
 // Parameters: u64 task_group_id
 
+void syscall_select_message(TaskDescriptor *task);
+// Parameters: u64 port_id, ulong rights_array, ulong array_size, ulong message_struct, flags
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);

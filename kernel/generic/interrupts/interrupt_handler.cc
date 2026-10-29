@@ -71,13 +71,13 @@ size_t IntNotificationRight::size() const
     return sizeof(IPC_Kernel_Interrupt);
 }
 
-ReturnStr<bool> IntNotificationRight::copy_to_user_buff(char *buff) const
+ReturnStr<bool> IntNotificationRight::copy_to_user_buff(char *buff, size_t max_size) const
 {
     IPC_Kernel_Interrupt interrupt = {
         .type = IPC_Kernel_Interrupt_NUM,
     };
 
-    return copy_to_user((const char *)&interrupt, buff, sizeof(interrupt));
+    return copy_to_user((const char *)&interrupt, buff, std::min(max_size, sizeof(interrupt)));
 }
 
 // Didn't like having a private struct member

@@ -1,0 +1,22 @@
+#!/bin/sh
+
+version=16
+revision=1
+from_source=gcc
+imagedeps="gcc build-essential pkg-config libgmp-dev libmpfr-dev libmpc-dev flex texinfo bison libisl-dev gettext"
+deps="mlibc-headers mlibc"
+hostdeps="$TOOLCHAIN_DEPS"
+
+configure() {
+    # Each build directory supplies libc for one architecture.
+    ${source_dir}/configure --target=${JINX_ARCH}-pmos --with-sysroot="${sysroot}" --prefix=${prefix} --with-toolexeclibdir=/usr/lib --with-gxx-include-dir=/usr/include/c++ --enable-languages=c,c++ --enable-shared --with-pic --disable-multilib
+}
+
+build() {
+    make -j ${parallelism} all-target-libstdc++-v3 all-target-libatomic
+}
+
+package() {
+    make DESTDIR="${dest_dir}" gxx_include_dir="${prefix}/include/c++" \
+        install-target-libstdc++-v3 install-target-libatomic
+}

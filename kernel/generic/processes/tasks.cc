@@ -43,6 +43,7 @@
 #include <pmos/utility/auxvec_builder.hh>
 #include <elf.h>
 #include "process.hh"
+#include <algorithm>
 
 namespace kernel::paging
 {
@@ -1053,6 +1054,27 @@ void TaskDescriptor::interrupt_blocked(i64 error_code)
     }
 }
 
+bool TaskDescriptor::message_matches_filter(const ipc::GenericMessage *msg, const port_blocked_by_variant &filter)
+{
+    assert(msg);
+    if (auto it = std::get_if<std::monostate>(&filter); it)
+        return true;
+    else if (auto it = std::get_if<u64>(&filter); it)
+        return *it == msg->sent_with_right();
+    else if (auto it = std::get_if<rights_filter>(&filter); it) {
+        bool found = std::binary_search(it->second->begin(), it->second->end(), msg->sent_with_right());
+        return it->first != found;
+    } else {
+        assert(false);
+        return false;
+    }
+}
+
+bool TaskDescriptor::message_will_unblock(const ipc::GenericMessage *msg) const
+{
+    return message_matches_filter(msg, get_port_blocked_by());
+}
+
 void TaskDescriptor::set_continuation(TaskDescriptor::continuation_func_type func, TaskDescriptor::cancel_callback_type cancel)
 {
     continuation_func = func;
@@ -1204,6 +1226,19 @@ u64 TaskDescriptor::process_id() const
 {
     assert(process);
     return process->get_id();
+}
+
+ReturnStr<ipc::Port *> TaskDescriptor::get_port(u64 port_id)
+{
+    if (port_hint && port_hint->portno == port_id)
+        return port_hint;
+
+    auto it = owned_ports.find(port_id);
+    if (it == owned_ports.end())
+        return Error(-ENOENT);
+
+    port_hint = &*it;
+    return port_hint;
 }
 
 } // namespace kernel::proc

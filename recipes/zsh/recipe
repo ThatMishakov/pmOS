@@ -11,9 +11,9 @@ deps="ncurses mlibc $CXX_DEPS"
 hostdeps="$TOOLCHAIN_DEPS"
 
 configure() {
-	CC="clang --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot}" \
-	CXX="clang++ --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot}" \
-	CPP="clang --target=${JINX_ARCH}-unknown-pmos --sysroot=${sysroot} -E" \
+	CC="${C_COMPILER} ${COMPILER_TARGET_FLAGS} --sysroot=${sysroot}" \
+	CXX="${CXX_COMPILER} ${COMPILER_TARGET_FLAGS} --sysroot=${sysroot}" \
+	CPP="${C_COMPILER} ${COMPILER_TARGET_FLAGS} --sysroot=${sysroot} -E" \
 	CPPFLAGS="-D_GNU_SOURCE" \
 	${source_dir}/configure --build=$(uname -m)-pc-linux-gnu --host=$JINX_ARCH-pmos --prefix=${prefix} --bindir=/bin
 }

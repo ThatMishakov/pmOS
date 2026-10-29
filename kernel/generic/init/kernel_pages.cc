@@ -48,6 +48,19 @@ void kernel::map_kernel_pages(ptable_top_ptr_t kernel_pt_top, phys_addr_t kernel
         Elf64_Ehdr *ehdr = (Elf64_Ehdr *)&__ehdr_start;
 
         Elf64_Phdr *phdrs = (Elf64_Phdr *)((char *)&_kernel_start + ehdr->e_phoff);
+        // The file-header segment identifies the link-time base. Its runtime
+        // address may differ when a position-independent kernel is relocated.
+        u64 load_bias = 0;
+        bool found_header_segment = false;
+        for (size_t i = 0; i < ehdr->e_phnum; ++i) {
+            if (phdrs[i].p_type == PT_LOAD && phdrs[i].p_offset == 0) {
+                load_bias = (u64)&_kernel_start - phdrs[i].p_vaddr;
+                found_header_segment = true;
+                break;
+            }
+        }
+        assert(found_header_segment);
+
         for (size_t i = 0; i < ehdr->e_phnum; ++i) {
             auto &phdr = phdrs[i];
             if (phdr.p_type != PT_LOAD)
@@ -65,7 +78,7 @@ void kernel::map_kernel_pages(ptable_top_ptr_t kernel_pt_top, phys_addr_t kernel
             constexpr ulong PAGE_MASK = PAGE_SIZE - 1;
 
             size_t offset = phdr.p_vaddr & PAGE_MASK;
-            void *virt_addr = (void *)(phdr.p_vaddr - offset);
+            void *virt_addr = (void *)(phdr.p_vaddr + load_bias - offset);
             phys_addr_t phys_addr = kernel_phys + ((ulong)virt_addr - (ulong)&_kernel_start);
             size_t map_size = phdr.p_memsz + offset;
             map_size = (map_size + PAGE_MASK) & ~PAGE_MASK;
