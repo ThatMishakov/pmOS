@@ -42,12 +42,13 @@ struct Process {
     mutable Spinlock lock;
     bool alive = true;
     tasks_tree child_tasks;
+    i32 exit_code{};
 
     static Process *create();
 
     void atomic_destroy_cleanup();
 
-    kresult_t atomic_terminate();
+    kresult_t atomic_terminate(i32 exit_code);
 
     u64 get_id() const;
 

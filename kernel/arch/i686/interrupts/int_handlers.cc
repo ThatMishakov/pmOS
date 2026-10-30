@@ -194,7 +194,7 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
         print_registers(task, serial_logger);
         //  print_stack_trace(task, global_logger);
 
-        task->atomic_kill();
+        task->atomic_kill(SIGSEGV + 128, true);
     }
 
     kernel::sched::handle_scheduling();
@@ -217,7 +217,7 @@ extern "C" void general_protection_fault_handler(kernel_registers_context *ctx, 
                          "PID %li (%s) RIP %h CS %h... Killing the process\n",
                          err, task->task_id, task->name.c_str(), task->regs.program_counter(),
                          task->regs.cs);
-    task->atomic_kill();
+    task->atomic_kill(128 + SIGSEGV);
     kernel::sched::handle_scheduling();
 }
 

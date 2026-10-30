@@ -259,7 +259,7 @@ namespace proc
         void atomic_erase_from_queue(sched::sched_queue *queue) noexcept;
 
         // Kills the task
-        void atomic_kill(bool destoy_process = true);
+        void atomic_kill(i32 exit_code, bool destoy_process = true);
 
         // Returns 0 if there are no unblocking events pending. Otherwise returns 0.
         u64 check_unblock_immediately(u64 reason, u64 extra);

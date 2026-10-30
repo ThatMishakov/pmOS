@@ -189,7 +189,7 @@ void page_fault(u64 addr, u64 scause)
                              result);
 
         print_registers(task, serial_logger);
-        task->atomic_kill();
+        task->atomic_kill(128 + SIGSEGV);
     }
 }
 
@@ -199,7 +199,7 @@ void misaligned_access(u64 addr, u64 )
 
     serial_logger.printf("Misaligned access at %h, task %i (%s)\n", addr, task->task_id, task->name.c_str());
     print_registers(get_cpu_struct()->current_task, serial_logger);
-    task->atomic_kill();
+    task->atomic_kill(128 + SIGSEGV);
 }
 
 bool instruction_is_csr(u32 instruction)
@@ -280,7 +280,7 @@ void illegal_instruction(u32 instruction)
                              task->task_id, task->name.c_str(), task->regs.pc, instruction, result);
 
         print_registers(task, serial_logger);
-        task->atomic_kill();
+        task->atomic_kill(128 + SIGSEGV);
     }
 }
 

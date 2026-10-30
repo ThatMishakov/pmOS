@@ -37,15 +37,16 @@ void Process::atomic_destroy_cleanup()
     sched::get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
 }
 
-kresult_t Process::atomic_terminate()
+kresult_t Process::atomic_terminate(i32 exit_code)
 {
     Auto_Lock_Scope l(lock);
     if (!alive)
         return -ESRCH;
 
     alive = false;
+    this->exit_code = exit_code;
     for (auto &t: child_tasks)
-        t.atomic_kill(false);
+        t.atomic_kill(exit_code, false);
     return 0;
 }
 

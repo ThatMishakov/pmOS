@@ -655,7 +655,7 @@ void syscall_exit(TaskDescriptor *task)
 
     syscall_success(task);
     // Kill the process
-    task->atomic_kill(arg2);
+    task->atomic_kill(static_cast<i32>(arg1), arg2);
 }
 
 void syscall_kill_task(TaskDescriptor *task)
@@ -669,7 +669,7 @@ void syscall_kill_task(TaskDescriptor *task)
     }
 
     syscall_success(task);
-    t->atomic_kill();
+    t->atomic_kill(0, false);
 }
 
 void syscall_get_first_message(TaskDescriptor *current)
@@ -3283,7 +3283,7 @@ void syscall_terminate_process(TaskDescriptor *task)
     //     return;
     // }
 
-    syscall_error(task) = process->atomic_terminate();
+    syscall_error(task) = process->atomic_terminate(return_value);
 }
 
 unsigned syscall_number(TaskDescriptor *task) { return call_flags(task) & 0xFF; }

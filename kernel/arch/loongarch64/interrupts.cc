@@ -270,7 +270,7 @@ void page_fault(u32 error)
                              result);
         print_registers(&task->regs, global_logger);
         print_registers(&task->regs, serial_logger);
-        task->atomic_kill();
+        task->atomic_kill(SIGSEGV + 128);
     }
 }
 
@@ -326,7 +326,7 @@ extern "C" void handle_interrupt()
                                  "%i). Killing it...\n",
                                  task->task_id, task->name.c_str(), code);
             print_registers(&task->regs, serial_logger);
-            task->atomic_kill();
+            task->atomic_kill(128 + SIGSEGV);
         }
 
     } break;

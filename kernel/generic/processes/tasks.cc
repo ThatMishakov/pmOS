@@ -269,11 +269,11 @@ void TaskDescriptor::init()
     }
 }
 
-void TaskDescriptor::atomic_kill(bool kill_process)
+void TaskDescriptor::atomic_kill(i32 exit_code, bool kill_process)
 {
     if (kill_process) {
         assert(process);
-        process->atomic_terminate();
+        process->atomic_terminate(exit_code);
         return;
     }
 
