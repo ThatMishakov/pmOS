@@ -89,6 +89,10 @@ struct Right {
     virtual void remove_from_parent() = 0;
 
     unsigned type_as_int() const;
+
+    // Don't take task group here, since it doesn't matter if userspace tries to race this, and gets
+    // to run this after the right had been sent.
+    virtual ReturnStr<u64> atomic_watch(Port *port);
 };
 
 struct ReceiveRight: GenericMessage {
@@ -156,7 +160,7 @@ struct SendManyRight final: SendRight {
 
     // Don't take task group here, since it doesn't matter if userspace tries to race this, and gets
     // to run this after the right had been sent.
-    ReturnStr<u64> atomic_watch(Port *port);
+    ReturnStr<u64> atomic_watch(Port *port) override;
 
     // GenericMessage overrides
     virtual size_t size() const override;
@@ -176,7 +180,7 @@ struct SendOnceRight final: SendRight {
 
     virtual Port *parent_port() override;
 
-    static klib::unique_ptr<SendRight> create_for_message();
+    static klib::unique_ptr<SendOnceRight> create_for_message();
 };
 
 struct SendManyRightShared final: ReceiveRight {

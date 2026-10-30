@@ -2759,12 +2759,6 @@ void syscall_watch_right(TaskDescriptor *current)
         return;
     }
 
-    auto many_right = to_send_many_right(right);
-    if (!many_right) {
-        syscall_error(current) = -ENOSYS;
-        return;
-    }
-
     auto port_result = current->get_port(port_id);
     if (!port_result.success()) {
         syscall_error(current) = port_result.result;
@@ -2772,7 +2766,7 @@ void syscall_watch_right(TaskDescriptor *current)
     }
     auto port = port_result.val;
 
-    auto result = many_right->atomic_watch(port);
+    auto result = right->atomic_watch(port);
     if (!result.success()) {
         syscall_error(current) = result.result;
         return;

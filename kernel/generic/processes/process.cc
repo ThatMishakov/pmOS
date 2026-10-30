@@ -1,4 +1,5 @@
 #include "process.hh"
+#include <pmos/ipc.h>
 
 namespace kernel::proc {
 
@@ -27,7 +28,7 @@ void Process::atomic_destroy_cleanup()
     };
 
     while (auto right = front_right()) {
-        right->destroy(ProcessRight::DestroyReason::DeletedByReceiver);
+        right->destroy(ProcessRight::DestroyReason::SendingMessage);
     }
 
     rcu_head.rcu_func = [](void *self, bool) {
@@ -94,9 +95,18 @@ ipc::RightType ProcessRight::type() const
 
 void ProcessRight::remove_from_parent()
 {
-    assert(process);
-    Auto_Lock_Scope l(process->lock);
-    process->rights.erase(this);
+    {
+        assert(process);
+        Auto_Lock_Scope l(process->lock);
+        process->rights.erase(this);
+    }
+
+    if (notification_port) {
+        notification_port = false;
+        assert(port);
+        Auto_Lock_Scope l(port->rights_lock);
+        port->rights.erase(this);
+    }
 }
 
 void ProcessRight::rcu_push()
@@ -151,6 +161,124 @@ bool Process::atomic_alive() const
 {
     Auto_Lock_Scope l(lock);
     return alive;
+}
+
+void ProcessRight::delete_self()
+{
+    Auto_Lock_Scope l(lock);
+
+    assert(!alive);
+    assert(sent);
+    sent = false;
+
+    if (!of_message) {
+        rcu_push();
+    }
+}
+
+bool ProcessRight::destroy_nolock(DestroyReason reason, proc::TaskGroup *match_group)
+{
+    assert(lock.is_locked());
+    
+    if (!alive)
+        return false;
+
+    if (match_group && (of_message || parent_group != match_group))
+        return false;
+
+    alive = false;
+
+    auto saved_port = port;
+
+    bool send_notification = notification_port && reason != DestroyReason::DeletedByReceiver;
+
+    remove_from_parent();
+
+    if (!of_message) {
+        auto group = parent_group;
+        assert(group);
+
+        {
+            Auto_Lock_Scope l(group->rights_lock);
+            group->rights.erase(this);
+        }
+    }
+
+    if (!send_notification and !of_message) {
+        rcu_push();
+    }
+
+    if (send_notification) {
+        if (reason == DestroyReason::SendingMessage) {
+            saved_process_id = process->get_id();
+            exit_code = process->exit_code;
+        }
+
+        assert(saved_port);
+
+        {
+            Auto_Lock_Scope l(saved_port->lock);
+            saved_port->enqueue(klib::unique_ptr(this));
+        }
+
+        sent = true;
+    }
+
+    return true;
+}
+
+ipc::RightType ProcessRight::receive_type() const
+{
+    return ipc::RightType::Process;
+}
+
+size_t ProcessRight::size() const
+{
+    if (exit_code)
+        return sizeof(IPC_Kernel_Process_Exited);
+    else
+        return sizeof(IPC_Kernel_Right_Destroyed);
+}
+
+ReturnStr<bool> ProcessRight::copy_to_user_buff(char *buff, size_t max_size) const
+{
+    if (exit_code) {
+        IPC_Kernel_Process_Exited msg = {
+            .type  = IPC_Kernel_Process_Exited_NUM,
+            .flags = 0,
+            .process_id = saved_process_id,
+            .exit_code = *exit_code,
+            .reserved = 0,
+        };
+        auto size = std::min<size_t>(max_size, sizeof(msg));
+        return copy_to_user(reinterpret_cast<const char *>(&msg), buff, size);
+    } else {
+        IPC_Kernel_Right_Destroyed msg = {
+            .type  = IPC_Kernel_Right_Destroyed_NUM,
+            .flags = 0,
+            .right_type = static_cast<uint16_t>(this->type_as_int()),
+        };
+        auto size = std::min<size_t>(max_size, sizeof(msg));
+        return copy_to_user(reinterpret_cast<const char *>(&msg), buff, size);
+    }
+}
+
+bool ProcessRight::destroy_receive_right()
+{
+    Auto_Lock_Scope l(lock);
+    if (!alive)
+        return false;
+
+    if (!notification_port)
+        return false;
+
+    notification_port = false;
+
+    assert(port);
+    Auto_Lock_Scope l2(port->rights_lock);
+    port->rights.erase(this);
+
+    return true;
 }
 
 } // namespace kernel::proc
