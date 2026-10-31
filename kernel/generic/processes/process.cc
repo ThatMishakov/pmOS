@@ -103,9 +103,9 @@ void ProcessRight::remove_from_parent()
 
     if (notification_port) {
         notification_port = false;
-        assert(port);
-        Auto_Lock_Scope l(port->rights_lock);
-        port->rights.erase(this);
+        assert(parent);
+        Auto_Lock_Scope l(parent->rights_lock);
+        parent->rights.erase(this);
     }
 }
 
@@ -188,7 +188,7 @@ bool ProcessRight::destroy_nolock(DestroyReason reason, proc::TaskGroup *match_g
 
     alive = false;
 
-    auto saved_port = port;
+    auto saved_port = parent;
 
     bool send_notification = notification_port && reason != DestroyReason::DeletedByReceiver;
 
@@ -229,7 +229,7 @@ bool ProcessRight::destroy_nolock(DestroyReason reason, proc::TaskGroup *match_g
 
 ipc::RightType ProcessRight::receive_type() const
 {
-    return ipc::RightType::Process;
+    return ipc::RightType::SendOnce;
 }
 
 size_t ProcessRight::size() const
@@ -274,11 +274,34 @@ bool ProcessRight::destroy_receive_right()
 
     notification_port = false;
 
-    assert(port);
-    Auto_Lock_Scope l2(port->rights_lock);
-    port->rights.erase(this);
+    assert(parent);
+    Auto_Lock_Scope l2(parent->rights_lock);
+    parent->rights.erase(this);
 
     return true;
+}
+
+ReturnStr<u64> ProcessRight::atomic_watch(ipc::Port *port)
+{
+    assert(port);
+
+    Auto_Lock_Scope l(lock);
+    if (!alive)
+        return Error(-ENOENT);
+
+    if (notification_port)
+        return Error(-EEXIST);
+
+    Auto_Lock_Scope ll(port->rights_lock);
+    if (!port->atomic_alive())
+        return Error(-ENOENT);
+
+    notification_port = true;
+    right_parent_id = port->new_right_id();
+    parent = port;
+
+    port->rights.insert(this);
+    return Success(right_parent_id);
 }
 
 } // namespace kernel::proc

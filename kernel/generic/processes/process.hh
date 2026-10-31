@@ -12,8 +12,6 @@ struct Process;
 
 struct ProcessRight final: ipc::Right, ipc::ReceiveRight {
     Process *process = nullptr;
-    // Notification port
-    ipc::Port *port = nullptr;
     union {
         pmos::containers::DoubleListHead<ProcessRight> parent_head = {};
         memory::RCU_Head rcu_head;
@@ -26,6 +24,7 @@ struct ProcessRight final: ipc::Right, ipc::ReceiveRight {
     virtual ReturnStr<std::pair<ipc::Right *, u64>> duplicate(proc::TaskGroup *) override;
     virtual ipc::RightType type() const override;
     virtual void remove_from_parent() override;
+    virtual ReturnStr<u64> atomic_watch(ipc::Port *port) override;
 
     virtual void rcu_push() override;
 

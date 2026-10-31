@@ -819,6 +819,7 @@ pmos::async::task<std::expected<uint64_t, int>> load_executable(uint64_t task_id
         co_return entry_point;
 }
 
+pmos::async::detached_task handle_watch_process(pmos::ReceiveRight right, std::shared_ptr<Process> process);
 pmos::async::detached_task execve_handle(std::shared_ptr<Process> process, std::vector<std::byte> data, pmos::Right reply_right, pmos::Right fs_right, pmos::Right task_group_right)
 {
     if (process->running_exec) {
@@ -898,6 +899,11 @@ pmos::async::detached_task execve_handle(std::shared_ptr<Process> process, std::
         co_return;
     }
     auto process_right = pmos::Right(process_result.right, pmos::RightType::Process);
+    auto process_id = process_right.process_id();
+    if (!process_id) {
+        execve_reply(std::move(reply_right), -ENOMEM);
+        co_return;
+    }
 
     auto right = main_port.create_right(pmos::RightType::SendMany);
     auto [send_right, receive_right] = std::move(right.value());
@@ -909,8 +915,17 @@ pmos::async::detached_task execve_handle(std::shared_ptr<Process> process, std::
     }
     auto entry_point = exec_result.value();
 
+    auto watch_result = watch_right(main_port, process_right);
+    if (!watch_result) {
+        execve_reply(std::move(reply_right), watch_result.error());
+        co_return;
+    }
+
+    process->kernel_process_id = process_id.value();
+    handle_watch_process(std::move(watch_result.value()), process);
     terminate_process(process->process_right.get(), 0);
     process->process_right = std::move(process_right);
+
 
     auto start_result = syscall_start_task(new_task.value, entry_point, 0, 0, 0);
     if (start_result != SUCCESS) {
@@ -1176,7 +1191,7 @@ static void uname_handle(pmos::Right reply_right)
 pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::shared_ptr<Process> process)
 {
     process->receive_right_id = rr.get();
-    auto saved_right_id = rr.get();
+    // auto saved_right_id = rr.get();
 
     while (1) {
         auto [msg, message, reply_right, extra_rights] = (co_await dispatcher.get_message(rr)).value();
@@ -1353,10 +1368,38 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::s
     }
 finish:
 
-    if (process->receive_right_id == saved_right_id) {
-        process->receive_right_id = 0;
+    // TODO?
+}
+
+pmos::async::detached_task handle_watch_process(pmos::ReceiveRight right, std::shared_ptr<Process> process)
+{
+    auto saved_id = process->kernel_process_id;
+    auto [msg, message, _, _] = (co_await dispatcher.get_message(right)).value();
+    int exit_code{};
+
+    IPC_Generic_Msg *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(message.data());
+    switch (ipc_msg->type) {
+    case IPC_Kernel_Right_Destroyed_NUM:
+        break;
+    case IPC_Kernel_Process_Exited_NUM: {
+        if (msg.size < sizeof(IPC_Kernel_Process_Exited)) {
+            kernelLogger() << "processd: Received IPC_Kernel_Process_Exited that is too small from process watch right of size " << msg.size << "\n" << frg::endlog;
+            break;
+        }
+
+        IPC_Kernel_Process_Exited *m = reinterpret_cast<IPC_Kernel_Process_Exited *>(ipc_msg);
+        exit_code = m->exit_code;
+        break;
+    }
+    default:
+        kernelLogger() << "processd: Unknown message type " << ipc_msg->type << " from process watch right\n" << frg::endlog;
+        break;
+    }
+
+    if (process->kernel_process_id == saved_id) {
+        process->kernel_process_id = 0;
         if (!process->running_exec)
-            delete_process(process);
+            delete_process(process, exit_code);
     }
 }
 
@@ -1409,7 +1452,23 @@ void register_process(IPC_Register_Process *msg, pmos::Right reply_right, std::s
         return;
     }
 
+    auto watch_result = watch_right(main_port, process_right);
+    if (!watch_result) {
+        kernelLogger() << "processd: Error " << watch_result.error() << " watching right " << process_right.get() << " for register_process\n" << frg::endlog;
+        IPC_Register_Process_Reply reply = {
+            .type = IPC_Register_Process_Reply_NUM,
+            .flags = 0,
+            .result = -EINVAL,
+            .pid = 0,
+        };
+        auto r = pmos::send_message_right_one(reply_right, reply, {}, true);
+        if (!r)
+            kernelLogger() << "processd: Error " << r.error().first << " sending message to right " << reply_right.get() << " for register_process\n" << frg::endlog;
+        return;
+    }
+
     auto new_process = create_process(process, std::move(process_right), process_id.value());
+    handle_watch_process(std::move(watch_result.value()), new_process);
 
     auto right = main_port.create_right(pmos::RightType::SendMany);
     auto [send_right, receive_right] = std::move(right.value());
