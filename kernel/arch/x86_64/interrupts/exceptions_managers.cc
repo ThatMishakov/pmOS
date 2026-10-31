@@ -255,7 +255,7 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
         print_registers(task, serial_logger);
         print_stack_trace(task, serial_logger);
 
-        task->atomic_kill();
+        task->atomic_kill(128 + SIGSEGV);
     }
 
     kernel::sched::handle_scheduling();
@@ -313,7 +313,7 @@ extern "C" void general_protection_fault_manager(NestedIntContext *kernel_ctx, u
                          task->regs.program_counter(), 1234);
     print_registers(get_cpu_struct()->current_task, global_logger);
     // print_stack_trace(task, global_logger);
-    task->atomic_kill();
+    task->atomic_kill(128 + SIGSEGV);
 
     handle_scheduling();
 }
@@ -333,7 +333,7 @@ extern "C" void overflow_manager(NestedIntContext *kernel_ctx, ulong)
     global_logger.printf("!!! Overflow error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err,
                          task->regs.program_counter(), task->regs.stack_pointer(), task->task_id,
                          task->name.c_str());
-    task->atomic_kill();
+    task->atomic_kill(128 + SIGFPE);
 
     kernel::sched::handle_scheduling();
 }
@@ -353,7 +353,7 @@ extern "C" void simd_fp_exception_manager(NestedIntContext *kernel_ctx, ulong)
     global_logger.printf("!!! SIMD FP Exception error %h RIP %h RSP %h PID %h (%s)\n",
                          task->regs.int_err, task->regs.program_counter(),
                          task->regs.stack_pointer(), task->task_id, task->name.c_str());
-    task->atomic_kill();
+    task->atomic_kill(128 + SIGFPE);
 
     kernel::sched::handle_scheduling();
 }
@@ -372,7 +372,7 @@ extern "C" void invalid_opcode_manager(NestedIntContext *kernel_ctx, ulong)
                          task->name.c_str());
     global_logger.printf("!!! Invalid op-code (UD) instr %h\n",
                          get_cpu_struct()->current_task->regs.program_counter());
-    task->atomic_kill();
+    task->atomic_kill(128 + SIGILL);
 
     kernel::sched::handle_scheduling();
 }
@@ -391,7 +391,7 @@ extern "C" void stack_segment_fault_manager(NestedIntContext *kernel_ctx, ulong)
                   task->task_id, task->name.c_str());
     global_logger.printf("!!! Stack-Segment Fault error %lx RIP %lx RSP %lx\n", task->regs.int_err,
                          task->regs.program_counter(), task->regs.stack_pointer());
-    task->atomic_kill();
+    task->atomic_kill(128 + SIGSEGV);
 
     kernel::sched::handle_scheduling();
 }
@@ -439,7 +439,7 @@ extern "C" void division_error_manager(NestedIntContext *kernel_ctx, ulong)
                          task->name.c_str());
     print_registers(task, serial_logger);
     print_stack_trace(task, serial_logger);
-    task->atomic_kill();
+    task->atomic_kill(128 + SIGFPE);
 
     kernel::sched::handle_scheduling();
 }

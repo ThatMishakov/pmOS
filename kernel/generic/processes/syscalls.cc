@@ -655,7 +655,7 @@ void syscall_exit(TaskDescriptor *task)
 
     syscall_success(task);
     // Kill the process
-    task->atomic_kill(arg2);
+    task->atomic_kill(static_cast<i32>(arg1), arg2);
 }
 
 void syscall_kill_task(TaskDescriptor *task)
@@ -669,7 +669,7 @@ void syscall_kill_task(TaskDescriptor *task)
     }
 
     syscall_success(task);
-    t->atomic_kill();
+    t->atomic_kill(0, false);
 }
 
 void syscall_get_first_message(TaskDescriptor *current)
@@ -2759,12 +2759,6 @@ void syscall_watch_right(TaskDescriptor *current)
         return;
     }
 
-    auto many_right = to_send_many_right(right);
-    if (!many_right) {
-        syscall_error(current) = -ENOSYS;
-        return;
-    }
-
     auto port_result = current->get_port(port_id);
     if (!port_result.success()) {
         syscall_error(current) = port_result.result;
@@ -2772,7 +2766,7 @@ void syscall_watch_right(TaskDescriptor *current)
     }
     auto port = port_result.val;
 
-    auto result = many_right->atomic_watch(port);
+    auto result = right->atomic_watch(port);
     if (!result.success()) {
         syscall_error(current) = result.result;
         return;
@@ -3283,7 +3277,7 @@ void syscall_terminate_process(TaskDescriptor *task)
     //     return;
     // }
 
-    syscall_error(task) = process->atomic_terminate();
+    syscall_error(task) = process->atomic_terminate(return_value);
 }
 
 unsigned syscall_number(TaskDescriptor *task) { return call_flags(task) & 0xFF; }

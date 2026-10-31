@@ -532,7 +532,7 @@ bool SendRight::destroy_receive_right()
     return destroy(DestroyReason::DeletedByReceiver);
 }
 
-klib::unique_ptr<SendRight> SendOnceRight::create_for_message()
+klib::unique_ptr<SendOnceRight> SendOnceRight::create_for_message()
 {
     return new SendOnceRight();
 }
@@ -707,7 +707,7 @@ bool SendManyRight::destroy_nolock(DestroyReason, proc::TaskGroup *match_group)
 
             auto parent = shared->parent;
             assert(parent);
-            Auto_Lock_Scope l(parent->lock);
+            Auto_Lock_Scope l(parent->rights_lock);
             parent->rights.erase(shared);
         }
     }
@@ -776,6 +776,11 @@ u32 Right::atomic_get_permissions_mask() const
 u32 Right::atomic_set_permissions_mask(u32 mask_to_and)
 {
     return __atomic_fetch_and(&permissions_mask, mask_to_and, __ATOMIC_ACQUIRE);
+}
+
+ReturnStr<u64> Right::atomic_watch(Port *)
+{
+    return Error(-ENOTSUP);
 }
 
 } // namespace kernel::ipc

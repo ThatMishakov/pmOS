@@ -17,6 +17,10 @@ namespace kernel::interrupts {
 struct IntNotificationRight;
 }
 
+namespace kernel::proc {
+struct ProcessRight;
+}
+
 namespace kernel::ipc
 {
 
@@ -141,6 +145,7 @@ protected:
     friend struct SendOnceRight;
     friend struct SendManyRightShared;
     friend struct interrupts::IntNotificationRight;
+    friend struct proc::ProcessRight;
 };
 
 }

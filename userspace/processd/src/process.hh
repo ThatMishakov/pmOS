@@ -87,7 +87,7 @@ std::shared_ptr<Process> create_process(std::shared_ptr<Process> parent, pmos::R
 std::shared_ptr<Process> process_for_pid(int32_t pid);
 std::shared_ptr<ProcessGroup> group_for_pgid(int32_t pgid);
 
-void delete_process(std::shared_ptr<Process> process);
+void delete_process(std::shared_ptr<Process> process, int exit_code = 0);
 void setsid_handle(std::shared_ptr<Process> process, pmos::Right reply_right);
 void setpgid_handle(std::shared_ptr<Process> process, pmos::Right reply_right, pid_t pid, pid_t pgid);
 void waitpid_handle(std::shared_ptr<Process> process, pmos::Right reply_right, pid_t pid, int options);

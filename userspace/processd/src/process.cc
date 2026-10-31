@@ -62,6 +62,7 @@ std::shared_ptr<Process> create_process(std::shared_ptr<Process> parent, pmos::R
     process->parent = parent;
     process->process_group = parent->process_group;
     process->process_right = std::move(process_right);
+    process->kernel_process_id = kernel_process_id;
     processes[process->pid] = process;
     parent->process_group->processes[process->pid] = process;
     processes_by_kernel_id[kernel_process_id] = process;
@@ -135,12 +136,13 @@ void waitpid_handle(std::shared_ptr<Process> process)
         waitpid_handle(parent, std::move(request.reply_right), request.pid, request.options);
 }
 
-void delete_process(std::shared_ptr<Process> process)
+void delete_process(std::shared_ptr<Process> process, int exit_code)
 {
     if (!process)
         return;
 
     process->zombie = true;
+    process->exit_code = exit_code;
 
     remove_process_from_group(process->process_group, process);
     processes.erase(process->pid);
@@ -472,7 +474,7 @@ void waitpid_handle(std::shared_ptr<Process> process, pmos::Right reply_right, p
         .type = IPC_Waitpid_Reply_NUM,
         .result_code = 0,
         .child_pid = child->pid,
-        .status = child->exit_code,
+        .status = (child->exit_code & 0xff) << 8,
         .rusage = {},
     };
     auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);

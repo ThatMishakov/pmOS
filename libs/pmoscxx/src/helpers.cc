@@ -390,7 +390,7 @@ std::expected<ReceiveRight, int> watch_right(const Port &port, const Right &righ
 {
     auto result = ::watch_right(right.get(), port.get());
     if (result.result)
-        std::unexpected(-static_cast<int>(result.result));
+        return std::unexpected(-static_cast<int>(result.result));
 
     return ReceiveRight{result.right, RightType::SendOnce, port.get()};
 }
