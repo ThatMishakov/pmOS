@@ -44,6 +44,3 @@ klib::string module_cmdline(char *name, size_t max_len);
 klib::string module_path(char *name, size_t max_len);
 
 klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp();
-
-template <typename e820_entry_t>
-void map_hhdm(void *location, e820_entry_t *mem_begin, e820_entry_t *mem_end, bool (*is_ram)(e820_entry_t *entry));

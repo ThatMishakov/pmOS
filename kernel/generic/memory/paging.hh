@@ -40,7 +40,7 @@
 #include <types.hh>
 #include <utility>
 
-#if defined(__x86_64__) || defined(__riscv64)
+#if defined(__x86_64__) || defined(__riscv)
 #define USE_SOFTWARE_DIRECT_MAP
 #endif
 

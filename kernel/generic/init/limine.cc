@@ -212,11 +212,28 @@ void construct_paging()
     const u64 heap_space_start = (-1UL) << (heap_space_shift + 8);
     const u64 heap_addr_size   = -heap_space_start;
 
+    kernel::vmm::ReservedEntry reserved_entries[4];
+    size_t reserved_count = 0;
+
+    #if defined(USE_SOFTWARE_DIRECT_MAP)
+    phys_addr_t ram_limit = 0;
+    for (uint64_t i = 0; i < resp.entry_count; i++) {
+        if (resp.entries[i]->type == LIMINE_MEMMAP_USABLE
+            || resp.entries[i]->type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE
+            || resp.entries[i]->type == LIMINE_MEMMAP_EXECUTABLE_AND_MODULES)
+            ram_limit = resp.entries[i]->base + resp.entries[i]->length;
+    }
+    reserved_entries[reserved_count++] = {direct_map_location, ram_limit};
+    #elif defined(USE_HARDWARE_DIRECT_MAP)
+    loongarch64::paging::set_dmws(true);
+    #endif
+
     const size_t PAGE_MASK = PAGE_SIZE - 1;
     void *kernel_start     = (void *)(((size_t)&_kernel_start + PAGE_MASK) & ~PAGE_MASK);
     const size_t kernel_size =
         ((char *)&_kernel_end - (char *)kernel_start + PAGE_SIZE - 1) & ~PAGE_MASK;
-    vmm::virtmem_init((void *)heap_space_start, heap_addr_size, kernel_start, kernel_size);
+    reserved_entries[reserved_count++] = {kernel_start, kernel_size};
+    vmm::virtmem_init((void *)heap_space_start, heap_addr_size, reserved_entries, reserved_count);
 
     kernel_ptable_top = pmm::get_memory_for_kernel(1);
     clear_page(kernel_ptable_top);
@@ -226,10 +243,37 @@ void construct_paging()
     riscv64::paging::idle_pt = kernel_ptable_top;
     #endif
 
-    #if defined(USE_SOFTWARE_DIRECT_MAP)
-    map_hhdm((void *)hhdm_request.response->offset, mem_begin, mem_end, is_ram);
-    #elif defined(USE_HARDWARE_DIRECT_MAP)
-    loongarch64::paging::set_dmws(true);
+    #ifdef USE_SOFTWARE_DIRECT_MAP
+    auto map_entry = [=](u64 first, u64 last) {
+        u64 base = resp.entries[first]->base;
+        u64 size = resp.entries[last]->base + resp.entries[last]->length - base;
+        Page_Table_Arguments arg = {.readable           = true,
+                                           .writeable          = true,
+                                           .user_access        = false,
+                                           .global             = true,
+                                           .execution_disabled = true,
+                                           .extra              = PAGING_FLAG_NOFREE,
+                                           .cache_policy       = paging::Memory_Type::Normal};
+        auto result = map_kernel_pages(base, (void *)((char *)direct_map_location + base), size, arg);
+        if (result)
+            panic("Failed to map memory region into kernel\n");
+    };
+
+    u64 first_ram = -1;
+    for (uint64_t i = 0; i < resp.entry_count; i++) {
+        if (resp.entries[i]->type == LIMINE_MEMMAP_USABLE
+            || resp.entries[i]->type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE
+            || resp.entries[i]->type == LIMINE_MEMMAP_EXECUTABLE_AND_MODULES) {
+                if (first_ram == -1)
+                    first_ram = i;
+            } else {
+                if (first_ram != -1)
+                    map_entry(first_ram, i - 1);
+                first_ram = -1;
+            }
+        }
+    if (first_ram != -1)
+        map_entry(first_ram, resp.entry_count - 1);
     #elif defined(__m68k__)
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(
         16, 4); // 16 pages aligned to 16 pages boundary
