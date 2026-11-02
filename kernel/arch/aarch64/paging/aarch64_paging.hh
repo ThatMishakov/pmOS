@@ -37,6 +37,7 @@ public:
 
 private:
     u64 page_directory = 0;
+    unsigned flags = 0;
 };
 
 } // namespace kernel::aarch64::paging
