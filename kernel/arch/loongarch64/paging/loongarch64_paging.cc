@@ -1,7 +1,5 @@
 #include "loongarch64_paging.hh"
 
-#include "loong_temp_mapper.hh"
-
 #include <csr.hh>
 #include <kern_logger/kern_logger.hh>
 #include <loongarch_asm.hh>
@@ -31,12 +29,17 @@ u32 stlbps = 12;
 
 void set_page_size() { csrwr<CSR_STLBPS>(stlbps); }
 
-void kernel::loongarch64::paging::set_dmws()
+constexpr u64 DIRECT_MAP_REGION = 0x9000000000000000;
+
+void kernel::loongarch64::paging::set_dmws(bool override_hhdm)
 {
     csrwr<CSR_DMW0>(0x9000000000000011);
     csrwr<CSR_DMW0 + 1>(0);
     csrwr<CSR_DMW0 + 2>(0);
     csrwr<CSR_DMW0 + 3>(0);
+
+    if (override_hhdm)
+        direct_map_location = (void *)(DIRECT_MAP_REGION);
 }
 
 u32 pwcl = (12) | (9 << 5) | (21 << 10) | (9 << 15) | (30 << 20) | (9 << 25) | (0 << 30);
@@ -69,11 +72,7 @@ void set_early_exceptions()
 namespace kernel::loongarch64::paging
 {
 
-constexpr u64 DIRECT_MAP_REGION = 0x9000000000000000;
-
 unsigned valen = 48;
-
-LoongArch64TempMapper temp_mapper;
 
 u64 loongarch_cache_bits(kernel::paging::Memory_Type t)
 {
@@ -101,12 +100,6 @@ kernel::paging::Memory_Type pte_cache_policy(u64 e)
         return kernel::paging::Memory_Type::IONoCache;
     }
 }
-
-void *LoongArch64TempMapper::kern_map(u64 phys_frame)
-{
-    return (void *)(phys_frame + DIRECT_MAP_REGION);
-}
-void LoongArch64TempMapper::return_map(void *) {}
 
 void LoongArch64_Page_Table::apply() noexcept
 {
@@ -474,11 +467,6 @@ klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::create_clone()
 }
 
 } // namespace kernel::loongarch64::paging
-
-kernel::paging::Temp_Mapper &kernel::sched::CPU_Info::get_temp_mapper()
-{
-    return loongarch64::paging::temp_mapper;
-}
 
 void paging::invalidate_tlb_kernel(void *addr) { invalidate_kernel_page(addr, 0); }
 void paging::invalidate_tlb_kernel(void *addr, size_t size)

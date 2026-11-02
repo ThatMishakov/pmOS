@@ -112,26 +112,10 @@ __attribute__((used)) limine_paging_mode_request paging_request = {
 
 extern void hcf();
 
-Direct_Mapper init_mapper;
-
 static Temp_Mapper *temp_temp_mapper = nullptr;
 
     // Temporary temporary mapper
-    #ifdef __x86_64__
-        #include <paging/x86_temp_mapper.hh>
-        #include <x86_asm.hh>
-using Arch_Temp_Mapper = x86_64::paging::x86_PAE_Temp_Mapper;
-Arch_Temp_Mapper temp_temp_mapper_instance;
-
-    #elif defined(__riscv)
-        #include <paging/riscv64_temp_mapper.hh>
-using Arch_Temp_Mapper = kernel::riscv64::paging::RISCV64_Temp_Mapper;
-Arch_Temp_Mapper temp_temp_mapper_instance;
-
-    #elif defined(__loongarch64)
-        #include <paging/loong_temp_mapper.hh>
-
-    #elif defined(__m68k__)
+#if defined(__m68k__)
 #include <paging/m68k_temp_mapper.hh>
 #endif
 
@@ -180,6 +164,7 @@ void construct_paging()
     limine_memmap_response resp = *r;
 
     hhdm_offset = hhdm_request.response->offset;
+    direct_map_location = (void *)hhdm_request.response->offset;
 
     for (uint64_t i = 0; i < resp.entry_count; i++) {
         uint64_t type = resp.entries[i]->type;
@@ -199,9 +184,6 @@ void construct_paging()
 
     serial_logger.printf("Found the largest memory region at 0x%lh, size 0x%lh\n", temp_alloc_base,
                          temp_alloc_size);
-
-    init_mapper.virt_offset = hhdm_request.response->offset;
-    global_temp_mapper      = &init_mapper;
 
     serial_logger.printf("Initializing paging...\n");
 
@@ -244,20 +226,14 @@ void construct_paging()
     riscv64::paging::idle_pt = kernel_ptable_top;
     #endif
 
-    #ifdef __loongarch64
-
+    #if defined(USE_SOFTWARE_DIRECT_MAP)
+    map_hhdm((void *)hhdm_request.response->offset, mem_begin, mem_end, is_ram);
+    #elif defined(USE_HARDWARE_DIRECT_MAP)
+    loongarch64::paging::set_dmws(true);
     #elif defined(__m68k__)
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(
         16, 4); // 16 pages aligned to 16 pages boundary
     temp_temp_mapper = kernel::m68k::paging::get_temp_temp_mapper(temp_mapper_start, kernel_ptable_top);
-    #else
-    // Init temp mapper with direct map, while it is still available
-    void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(
-        16, 4); // 16 pages aligned to 16 pages boundary
-    temp_temp_mapper_instance = Arch_Temp_Mapper(temp_mapper_start, kernel_ptable_top);
-    // TODO: This stuff should really be unified between the boot protocols
-
-    temp_temp_mapper = &temp_temp_mapper_instance;
     #endif
 
     kernel_phys_base = kernel_address_request.response->physical_base;
@@ -266,14 +242,6 @@ void construct_paging()
     serial_logger.printf("Switching to in-kernel page table...\n");
 
     apply_page_table(kernel_ptable_top);
-
-    // Set up the right mapper (since there is no direct map anymore) and bitmap
-    #ifndef __loongarch64
-    global_temp_mapper = temp_temp_mapper;
-    #else
-    loongarch64::paging::set_dmws();
-    global_temp_mapper = &loongarch64::paging::temp_mapper;
-    #endif
 
     serial_logger.printf("Paging initialized!\n");
 

@@ -151,16 +151,10 @@ class Direct_Mapper final: public Temp_Mapper
 public:
     virtual void *kern_map(u64 phys_frame) override;
     virtual void return_map(void *) override;
-
-    /**
-     * Virtual offset of the direct mapping
-     *
-     * This offset is added to the physical address to obtain the virtual address
-     */
-    u64 virt_offset = 0;
 };
 
 // nullptr indicates that the per-CPU mapper must be used
 extern Temp_Mapper *global_temp_mapper;
+extern void *direct_map_location;
 
 } // namespace kernel::paging
