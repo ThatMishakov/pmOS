@@ -52,14 +52,14 @@
 
 #if defined(__x86_64__) || defined(__i386__)
     #include <interrupts/gdt.hh>
-    #include <paging/x86_temp_mapper.hh>
 #elif defined(__riscv)
     #include <cpus/floating_point.hh>
-    #include <paging/riscv64_temp_mapper.hh>
 #elif defined(__m68k__)
     #include <paging/m68k_temp_mapper.hh>
 #elif defined(__loongarch64)
     struct EIOPIC;
+#elif defined(__aarch64__)
+    #include <paging/aarch64_temp_mapper.hh>
 #endif
 
 namespace kernel::sched
@@ -132,14 +132,6 @@ struct CPU_Info {
 #if defined(__i386__)
     paging::Temp_Mapper *temp_mapper;
     paging::Temp_Mapper &get_temp_mapper() { return *temp_mapper; }
-#elif defined(__x86_64__)
-    x86_64::paging::x86_PAE_Temp_Mapper temp_mapper;
-    x86_64::paging::x86_PAE_Temp_Mapper &get_temp_mapper() { return temp_mapper; }
-#elif defined(__riscv)
-    riscv64::paging::RISCV64_Temp_Mapper temp_mapper;
-    riscv64::paging::RISCV64_Temp_Mapper &get_temp_mapper() { return temp_mapper; }
-#elif defined(__loongarch__)
-    paging::Temp_Mapper &get_temp_mapper();
 #elif defined(__m68k__)
     m68k::paging::M68K_Temp_Mapper *temp_mapper;
     m68k::paging::M68K_Temp_Mapper &get_temp_mapper() { return *temp_mapper; }

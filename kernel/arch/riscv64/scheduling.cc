@@ -416,10 +416,6 @@ void init_scheduling(u64 hart_id)
 
     i->kernel_stack_top     = i->kernel_stack.get_stack_top();
     i->hart_id              = hart_id;
-    void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
-    i->temp_mapper =
-        RISCV64_Temp_Mapper(temp_mapper_start, kernel::paging::idle_page_table->get_root());
-
     set_cpu_struct(i);
 
     // The registers are either stored in TaskDescriptor of U-mode originating
@@ -502,10 +498,6 @@ CPU_Info *prepare_cpu(u64 hart_id)
     i->hart_id          = hart_id;
 
     i->kernel_pt_generation = -1;
-
-    void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
-    i->temp_mapper =
-        RISCV64_Temp_Mapper(temp_mapper_start, kernel::paging::idle_page_table->get_root());
 
     i->cpu_id = cpus.size();
     if (!cpus.push_back(i))
@@ -641,10 +633,6 @@ pmos::containers::vector<u64> initialize_cpus(const pmos::containers::vector<u64
 
         i->kernel_stack_top = i->kernel_stack.get_stack_top();
         i->hart_id          = hart_id;
-
-        void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
-        i->temp_mapper =
-            RISCV64_Temp_Mapper(temp_mapper_start, kernel::paging::idle_page_table->get_root());
 
         i->cpu_id = cpus.size();
         cpus.push_back(i);

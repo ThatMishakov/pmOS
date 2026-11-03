@@ -986,7 +986,7 @@ static bool check_level_safe(void *ptr, unsigned level, u64 phys_page_level, ulo
         assert(!"level 0");
 
     unsigned idx = ((ulong)ptr >> (12 + (level - 1) * 9)) & 0x1ff;
-    Temp_Mapper_Obj<u64> mapper(find_cpu_info()->temp_mapper);
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
     mapper.map(phys_page_level);
 
     auto pte = x86_PAE_Entry::atomic_load(mapper.ptr + idx);

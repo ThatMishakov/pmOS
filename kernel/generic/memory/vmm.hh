@@ -108,9 +108,14 @@ int virtmem_ensure_tags(size_t size);
 // of the allocator during the kernel boot.
 void virtmem_fill_initial_tags();
 
+struct ReservedEntry {
+    void *virt_start;
+    size_t size;
+};
+
 // Initialize the allocator during booting, and add the space designated for the allocator to the
 // freelist
-void virtmem_init(void *virtmem_base, size_t virtmem_size, void *kernel_start, size_t kernel_size);
+void virtmem_init(void *virtmem_base, size_t virtmem_size, const ReservedEntry *reserved, size_t reserved_count);
 
 template<int QUANTUM, int MAX_ORDER> class VirtMem
 {
@@ -214,8 +219,7 @@ protected:
     VirtmemBoundaryTag segment_ll_dummy_head;
 
     friend int virtmem_ensure_tags(size_t size);
-    friend void virtmem_init(void *virtmem_base, size_t virtmem_size, void *kernel_start,
-                             size_t kernel_size);
+    friend void virtmem_init(void *virtmem_base, size_t virtmem_size, const ReservedEntry *reserved, size_t reserved_count);
 };
 
 inline constinit VirtMem<12, 63> kernel_space_allocator;

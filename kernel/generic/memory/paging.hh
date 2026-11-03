@@ -40,6 +40,18 @@
 #include <types.hh>
 #include <utility>
 
+#if defined(__x86_64__) || defined(__riscv)
+#define USE_SOFTWARE_DIRECT_MAP
+#endif
+
+#if defined(__loongarch64)
+#define USE_HARDWARE_DIRECT_MAP
+#endif
+
+#if defined(USE_SOFTWARE_DIRECT_MAP) || defined(USE_HARDWARE_DIRECT_MAP)
+#define USE_DIRECT_MAP
+#endif
+
 namespace kernel::paging {
 
 /// TODO: I don't use this anymore but it still comes up in a couple of places and needs to be
