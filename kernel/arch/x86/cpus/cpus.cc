@@ -8,7 +8,6 @@
 #include <interrupts/pic.hh>
 #include <kern_logger/kern_logger.hh>
 #include <memory/vmm.hh>
-#include <paging/x86_temp_mapper.hh>
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
 #include <x86_asm.hh>
@@ -20,6 +19,10 @@
 #include <time/x86_timers.hh>
 #include <memory/pmm.hh>
 #include <processes/syscalls.hh>
+
+#ifdef __i386__
+#include <paging/x86_temp_mapper.hh>
+#endif
 
 using namespace kernel;
 using namespace kernel::x86;
@@ -236,8 +239,8 @@ void init_per_cpu(u64 lapic_id)
     if (!temp_mapper_start)
         panic("Failed to allocate memory for temp_mapper_start\n");
 
-    c->temp_mapper = create_temp_mapper(temp_mapper_start, getCR3());
     #ifdef __i386__
+    c->temp_mapper = create_temp_mapper(temp_mapper_start, getCR3());
     if (!c->temp_mapper)
         panic("Failed to create temp mapper\n");
     #endif
@@ -349,8 +352,8 @@ CPU_Info *prepare_cpu(u32 lapic_id)
     if (!temp_mapper_start)
         panic("Failed to allocate memory for temp_mapper_start\n");
 
-    c->temp_mapper = create_temp_mapper(temp_mapper_start, getCR3());
     #ifdef __i386__
+    c->temp_mapper = create_temp_mapper(temp_mapper_start, getCR3());
     if (!c->temp_mapper)
         panic("Failed to create temp mapper\n");
     #endif

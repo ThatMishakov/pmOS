@@ -38,36 +38,15 @@ extern long temp_alloc_entry_id;
 
 #ifdef __i386__
 constexpr phys_addr_t temp_mapper_memory_limit = 0x40000000;
-static ulong hhdm_offset = 0xC0000000;
 #else
 constexpr phys_addr_t temp_mapper_memory_limit = 1UL << 52;
-static ulong hhdm_offset = 0; // Defined at boot, either 0xFF00'0000'0000'0000 or 0xFFFF'8000'0000'0000
-                       // depending on paging levels
 #endif
-
-class Init_Temp_Mapper: public Temp_Mapper
-{
-    virtual void *kern_map(u64 phys_frame) override
-    {
-        assert(phys_frame % PAGE_SIZE == 0);
-        assert(phys_frame < temp_mapper_memory_limit);
-        return (void *)(phys_frame + hhdm_offset);
-    }
-    virtual void return_map(void *) override { /* noop */ }
-} ultra_temp_mapper;
 
 static Temp_Mapper *temp_temp_mapper = nullptr;
 #ifdef __i386__
 namespace kernel::ia32::paging
 {
 Temp_Mapper *get_temp_temp_mapper(void *virt_addr, u32 kernel_cr3);
-}
-#else
-static x86_64::paging::x86_PAE_Temp_Mapper temp_temp_mapper_instance;
-Temp_Mapper *get_temp_temp_mapper(void *virt_addr, ulong kernel_cr3)
-{
-    temp_temp_mapper_instance = x86_64::paging::x86_PAE_Temp_Mapper(virt_addr, kernel_cr3);
-    return &temp_temp_mapper_instance;
 }
 #endif
 
@@ -120,16 +99,17 @@ void init_memory(ultra_boot_context *ctx)
 
     #ifdef __x86_64__
     if (kernel::x86_64::paging::use_5lvl_paging)
-        hhdm_offset = 0xFF00'0000'0000'0000;
+        direct_map_location = (void *)0xFF00'0000'0000'0000;
     else
-        hhdm_offset = 0xFFFF'8000'0000'0000;
+        direct_map_location = (void *)0xFFFF'8000'0000'0000;
+    #elif defined(__i386__)
+    direct_map_location = (void *)0xC0000000;
     #endif
-    global_temp_mapper = &ultra_temp_mapper;
 
     auto mem = ultra_memory_map(ctx);
 
     auto number_of_entries = ULTRA_MEMORY_MAP_ENTRY_COUNT(mem->header);
-    auto entries           = mem->entries;
+    auto &entries           = mem->entries;
     for (unsigned i = 0; i < number_of_entries; ++i) {
         serial_logger.printf(
             "Memory map entry %d: 0x%lx - 0x%lx, type %lx\n", i, mem->entries[i].physical_address,
@@ -212,18 +192,77 @@ void init_memory(ultra_boot_context *ctx)
 
     ulong heap_space_size  = 0 - heap_space_start;
 
+    kernel::vmm::ReservedEntry reserved_entries[4];
+    size_t reserved_count = 0;
+
+    #if defined(USE_SOFTWARE_DIRECT_MAP)
+    phys_addr_t ram_limit = 0;
+    for (size_t i = 0; i < number_of_entries; i++) {
+        auto entry = mem->entries[i];
+        if (entry.type == ULTRA_MEMORY_TYPE_FREE
+            || entry.type == ULTRA_MEMORY_TYPE_LOADER_RECLAIMABLE
+            || entry.type == ULTRA_MEMORY_TYPE_MODULE
+            || entry.type == ULTRA_MEMORY_TYPE_KERNEL_BINARY
+            || entry.type == ULTRA_MEMORY_TYPE_KERNEL_STACK)
+            ram_limit = entry.physical_address + entry.size;
+    }
+    reserved_entries[reserved_count++] = {direct_map_location, ram_limit};
+    #endif
+
     const ulong PAGE_MASK = PAGE_SIZE - 1;
     void *kernel_start     = (void *)(((ulong)&_kernel_start + PAGE_MASK) & ~PAGE_MASK);
     const ulong kernel_size =
         ((char *)&_kernel_end - (char *)kernel_start + PAGE_SIZE - 1) & ~PAGE_MASK;
 
-    vmm::virtmem_init((void *)heap_space_start, heap_space_size, kernel_start, kernel_size);
+    reserved_entries[reserved_count++] = {kernel_start, kernel_size};
+    vmm::virtmem_init((void *)heap_space_start, heap_space_size, reserved_entries, reserved_count);
 
+    #ifdef USE_SOFTWARE_DIRECT_MAP
+    auto map_entry = [=](u64 first, u64 last) {
+        auto entry = mem->entries[first];
+        u64 base = entry.physical_address;
+        u64 size = mem->entries[last].physical_address + mem->entries[last].size - base;
+        Page_Table_Arguments arg = {.readable           = true,
+                                           .writeable          = true,
+                                           .user_access        = false,
+                                           .global             = true,
+                                           .execution_disabled = true,
+                                           .extra              = PAGING_FLAG_NOFREE,
+                                           .cache_policy       = paging::Memory_Type::Normal};
+        auto result = map_kernel_pages(base, (void *)((char *)direct_map_location + base), size, arg);
+        if (result)
+            panic("Failed to map memory region into kernel\n");
+    };
+
+    u64 first_ram = -1;
+    for (size_t i = 0; i < number_of_entries; i++) {
+        auto entry = mem->entries[i];
+        if (entry.type == ULTRA_MEMORY_TYPE_FREE
+            || entry.type == ULTRA_MEMORY_TYPE_LOADER_RECLAIMABLE
+            || entry.type == ULTRA_MEMORY_TYPE_MODULE
+            || entry.type == ULTRA_MEMORY_TYPE_KERNEL_BINARY
+            || entry.type == ULTRA_MEMORY_TYPE_KERNEL_STACK) {
+                if (first_ram == -1) {
+                    first_ram = i;
+                } else if (mem->entries[i-1].physical_address + mem->entries[i-1].size != entry.physical_address) {
+                    map_entry(first_ram, i - 1);
+                    first_ram = i;
+                }
+                continue;
+            }
+            if (first_ram != -1)
+                map_entry(first_ram, i - 1);
+            first_ram = -1;
+        }
+    if (first_ram != -1)
+        map_entry(first_ram, number_of_entries - 1);
+    #elif !defined(USE_DIRECT_MAP)
     // 16 pages aligned to 16 pages boundary
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
     if (!temp_mapper_start)
         panic("Failed to allocate virtual memory for temp mapper\n");
     temp_temp_mapper = get_temp_temp_mapper(temp_mapper_start, idle_cr3);
+    #endif
 
     map_kernel(ctx);
 
@@ -238,7 +277,7 @@ void init_memory(ultra_boot_context *ctx)
     if (!regions_data.resize(number_of_entries))
         panic("Failed to reserve memory for regions_data\n");
 
-    copy_from_phys((ulong)entries - hhdm_offset, regions_data.data(),
+    copy_from_phys((ulong)entries - (ulong)direct_map_location, regions_data.data(),
                    number_of_entries * sizeof(ultra_memory_map_entry));
 
 
@@ -564,7 +603,7 @@ void ultra_main(struct ultra_boot_context *ctx, uint32_t magic)
     if (!cctx)
         panic("Couldn't allocate memory for Ultra modules...");
 
-    copy_from_phys((ulong)ctx - hhdm_offset, (void *)cctx.get(), size);
+    copy_from_phys((ulong)ctx - (ulong)direct_map_location, (void *)cctx.get(), size);
     auto new_ctx = (ultra_boot_context *)cctx.get();
 
     init_smp();
