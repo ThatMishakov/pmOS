@@ -51,29 +51,11 @@ struct multiboot_info {
     u32 reserved;
 };
 
-class Init_Temp_Mapper: public Temp_Mapper
-{
-    virtual void *kern_map(u64 phys_frame) override
-    {
-        assert(phys_frame % PAGE_SIZE == 0);
-        assert(phys_frame < (1ULL << 32)); // Only 4GB is mapped by the trampoline
-        return (void *)(phys_frame);
-    }
-    virtual void return_map(void *) override { /* noop */ }
-} multiboot_temp_mapper;
-
 static Temp_Mapper *temp_temp_mapper = nullptr;
 #ifdef __i386__
 namespace kernel::ia32::paging
 {
 Temp_Mapper *get_temp_temp_mapper(void *virt_addr, u32 kernel_cr3);
-}
-#else
-static x86_64::paging::x86_PAE_Temp_Mapper temp_temp_mapper_instance;
-static Temp_Mapper *get_temp_temp_mapper(void *virt_addr, ulong kernel_cr3)
-{
-    temp_temp_mapper_instance = x86_64::paging::x86_PAE_Temp_Mapper(virt_addr, kernel_cr3);
-    return &temp_temp_mapper_instance;
 }
 #endif
 
@@ -443,8 +425,6 @@ static void init_memory(multiboot_info *info)
 
     serial_logger.printf("Initializing memory\n");
 
-    global_temp_mapper = &multiboot_temp_mapper;
-
     print_memory_map(info);
 
     build_memory_map(info);
@@ -518,20 +498,71 @@ static void init_memory(multiboot_info *info)
     const ulong PAGE_MASK = PAGE_SIZE - 1;
     void *kernel_start     = (void *)(((ulong)&_kernel_start + PAGE_MASK) & ~PAGE_MASK);
 
-    vmm::virtmem_init((void *)heap_space_start, heap_space_size, kernel_start, kernel_size);
+    kernel::vmm::ReservedEntry reserved_entries[4];
+    size_t reserved_count = 0;
 
+    #if defined(USE_SOFTWARE_DIRECT_MAP)
+    phys_addr_t ram_limit = 0;
+    for (size_t i = 0; i < memory_regions_count; i++) {
+        auto entry = temp_memory_regions[i];
+        if (entry.type == paging::MemoryRegionType::Usable
+            || entry.type == paging::MemoryRegionType::UsableReservedOnBoot)
+            ram_limit = entry.start + entry.size;
+    }
+    reserved_entries[reserved_count++] = {(void *)heap_space_start, ram_limit};
+    #endif
+
+    reserved_entries[reserved_count++] = {kernel_start, static_cast<size_t>(kernel_size)};
+    vmm::virtmem_init((void *)heap_space_start, heap_space_size, reserved_entries, reserved_count);
+
+    #ifdef USE_SOFTWARE_DIRECT_MAP
+    auto map_entry = [=](u64 first, u64 last) {
+        u64 base = temp_memory_regions[first].start;
+        u64 size = temp_memory_regions[last].start + temp_memory_regions[last].size - base;
+        Page_Table_Arguments arg = {.readable           = true,
+                                    .writeable          = true,
+                                    .user_access        = false,
+                                    .global             = true,
+                                    .execution_disabled = true,
+                                    .extra              = PAGING_FLAG_NOFREE,
+                                    .cache_policy       = paging::Memory_Type::Normal};
+        auto result = map_kernel_pages(base, (void *)(heap_space_start + base), size, arg);
+        if (result)
+            panic("Failed to map memory region into kernel\n");
+    };
+
+    u64 first_ram = -1;
+    for (uint64_t i = 0; i < memory_regions_count; i++) {
+        if (temp_memory_regions[i].type == paging::MemoryRegionType::Usable
+            || temp_memory_regions[i].type == paging::MemoryRegionType::UsableReservedOnBoot) {
+                if (first_ram == -1) {
+                    first_ram = i;
+                } else if (temp_memory_regions[i-1].start + temp_memory_regions[i-1].size != temp_memory_regions[i].start) {
+                    map_entry(first_ram, i - 1);
+                    first_ram = i;
+                }
+                continue;
+            }
+            if (first_ram != -1)
+                map_entry(first_ram, i - 1);
+            first_ram = -1;
+        }
+    if (first_ram != -1)
+        map_entry(first_ram, memory_regions_count - 1);
+    #elif !defined(USE_DIRECT_MAP)
     // 16 pages aligned to 16 pages boundary
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
     if (!temp_mapper_start)
         panic("Failed to allocate virtual memory for temp mapper\n");
     temp_temp_mapper = get_temp_temp_mapper(temp_mapper_start, idle_cr3);
+    global_temp_mapper = temp_temp_mapper;
+    #endif
 
     map_kernel_pages(idle_cr3, multiboot_kernel_base);
 
-    global_temp_mapper = temp_temp_mapper;
-
     serial_logger.printf("Switching to kernel page tables...\n");
     apply_page_table(idle_cr3);
+    direct_map_location = (void *)heap_space_start;
 
     serial_logger.printf("Paging initialized!\n");
 

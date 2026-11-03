@@ -115,7 +115,9 @@ extern void hcf();
 static Temp_Mapper *temp_temp_mapper = nullptr;
 
     // Temporary temporary mapper
-#if defined(__m68k__)
+#ifdef __x86_64__
+#include <x86_asm.hh>
+#elif defined(__m68k__)
 #include <paging/m68k_temp_mapper.hh>
 #endif
 
@@ -264,13 +266,17 @@ void construct_paging()
         if (resp.entries[i]->type == LIMINE_MEMMAP_USABLE
             || resp.entries[i]->type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE
             || resp.entries[i]->type == LIMINE_MEMMAP_EXECUTABLE_AND_MODULES) {
-                if (first_ram == -1)
+                if (first_ram == -1) {
                     first_ram = i;
-            } else {
-                if (first_ram != -1)
+                } else if (resp.entries[i-1]->base + resp.entries[i-1]->length != resp.entries[i]->base) {
                     map_entry(first_ram, i - 1);
-                first_ram = -1;
+                    first_ram = i;
+                }
+                continue;
             }
+            if (first_ram != -1)
+                map_entry(first_ram, i - 1);
+            first_ram = -1;
         }
     if (first_ram != -1)
         map_entry(first_ram, resp.entry_count - 1);

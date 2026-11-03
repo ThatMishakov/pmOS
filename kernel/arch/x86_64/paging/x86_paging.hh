@@ -114,7 +114,7 @@ public:
     u64 pt_top_phys = -1UL;
     u64 bitmap_pages_phys = -1UL;
 
-    virtual u64 get_cr3() const { return (u64)pt_top_phys; }
+    u64 get_cr3() const { return (u64)pt_top_phys; }
 
     /**
      * @brief Creates an initial page table, capturing pointer to the root level
