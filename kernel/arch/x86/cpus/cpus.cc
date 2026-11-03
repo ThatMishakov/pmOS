@@ -20,6 +20,10 @@
 #include <memory/pmm.hh>
 #include <processes/syscalls.hh>
 
+#ifdef __i386__
+#include <paging/x86_temp_mapper.hh>
+#endif
+
 using namespace kernel;
 using namespace kernel::x86;
 using namespace kernel::sched;
