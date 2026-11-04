@@ -58,8 +58,6 @@
     #include <paging/m68k_temp_mapper.hh>
 #elif defined(__loongarch64)
     struct EIOPIC;
-#elif defined(__aarch64__)
-    #include <paging/aarch64_temp_mapper.hh>
 #endif
 
 namespace kernel::sched
