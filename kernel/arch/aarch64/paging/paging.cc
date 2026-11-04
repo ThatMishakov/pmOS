@@ -53,6 +53,7 @@ unsigned paging_levels = 0;
 unsigned top_level = 0;
 unsigned page_table_mask = 0;
 unsigned top_level_mask = 0;
+unsigned va_bits = 0;
 
 unsigned page_ptr_idx(void *virt_addr, unsigned level)
 {
@@ -205,4 +206,65 @@ kresult_t kernel::paging::map_kernel_page(phys_addr_t phys_addr, void *virt_addr
 kresult_t kernel::paging::map_kernel_pages(phys_addr_t phys_addr, void *virt_addr, size_t size, kernel::paging::Page_Table_Arguments arg)
 {
     return map_pages(kernel_page_table, phys_addr, virt_addr, size, arg);
+}
+
+klib::shared_ptr<AArch64_Page_Table> AArch64_Page_Table::create_empty(int flags)
+{
+    auto new_table = klib::make_shared<AArch64_Page_Table>();
+    if (!new_table)
+        return nullptr;
+
+    new_table->flags = flags;
+
+    auto n = pmm::get_memory_for_kernel(1);
+    if (pmm::alloc_failure(n))
+        return nullptr;
+
+    new_table->page_directory = n;
+
+    clear_page(new_table->page_directory);
+
+    auto result = insert_global_page_tables(new_table);
+    return result ? nullptr : new_table;
+}
+
+kresult_t AArch64_Page_Table::map(u64 page_addr, void *virt_addr, ::kernel::paging::Page_Table_Arguments arg)
+{
+    return map_page(page_directory, page_addr, virt_addr, arg);
+}
+
+pmos::containers::map<u64, klib::shared_ptr<AArch64_Page_Table>> page_tables;
+Spinlock page_tables_lock;
+
+kresult_t
+    AArch64_Page_Table::insert_global_page_tables(klib::shared_ptr<AArch64_Page_Table> t)
+{
+    assert(t);
+    auto id = t->id;
+    Auto_Lock_Scope l(page_tables_lock);
+    return page_tables.insert_noexcept({id, std::move(t)}).second ? 0 : -ENOMEM;
+}
+
+void AArch64_Page_Table::takeout_global_page_tables()
+{
+    Auto_Lock_Scope l(page_tables_lock);
+    page_tables.erase(id);
+}
+
+AArch64_Page_Table::~AArch64_Page_Table()
+{
+    if (page_directory != PAGE_DIRECTORY_INITIALIZER) {
+        free_all_pages();
+        pmm::free_memory_for_kernel(page_directory, 1);
+    }
+
+    takeout_global_page_tables();
+}
+
+void *AArch64_Page_Table::user_addr_max() const
+{
+    if (is_32bit())
+        return (void *)0x10000000; // 4GB
+    else
+        return (void *)((u64)1 << va_bits);
 }
