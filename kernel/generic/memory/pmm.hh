@@ -108,9 +108,9 @@ namespace pmm
         /// @brief Allocates a page
         /// @param alignment_log Logarithm of the alignment of the page (e.g. 12 for 4096 bytes)
         /// @return Newly allocated page. Throws on error
-        static ReturnStr<Page_Descriptor> allocate_page(u8 alignment_log);
+        static ReturnStr<Page_Descriptor> allocate_page();
 
-        static ReturnStr<Page_Descriptor> allocate_page_zeroed(u8 alignment_log);
+        static ReturnStr<Page_Descriptor> allocate_page_zeroed();
 
         /// Creates a page descriptor, allocating a new page struct, taking ownership of the given
         /// page

@@ -71,7 +71,7 @@ ReturnStr<Mem_Object_Reference *>
     unsigned flags = Mem_Object::FLAG_ANONYMOUS;
     if (dma)
         flags |= Mem_Object::FLAG_DMA;
-    auto object = Mem_Object::create(page_order, page_aligned_size / PAGE_SIZE, flags);
+    auto object = Mem_Object::create(page_aligned_size / PAGE_SIZE, flags);
     if (!object)
         return Error(-ENOMEM);
 

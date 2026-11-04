@@ -35,7 +35,7 @@ ReturnStr<Page_Descriptor> Page_Descriptor::create_copy() const noexcept
 {
     assert(page_struct_ptr);
 
-    auto new_page = allocate_page(12);
+    auto new_page = allocate_page();
     if (!new_page.success())
         return new_page.propagate();
 
@@ -69,10 +69,8 @@ Page::page_addr_t Page_Descriptor::takeout_page() noexcept
     return p;
 }
 
-ReturnStr<Page_Descriptor> Page_Descriptor::allocate_page(u8 alignment_log)
+ReturnStr<Page_Descriptor> Page_Descriptor::allocate_page()
 {
-    assert(alignment_log == 12 && "Only 4K pages are currently supported");
-
     Page *p = pmm::alloc_pages(1);
     if (p == nullptr)
         return Error(-ENOMEM);
@@ -85,10 +83,8 @@ ReturnStr<Page_Descriptor> Page_Descriptor::allocate_page(u8 alignment_log)
     return Page_Descriptor(p);
 }
 
-ReturnStr<Page_Descriptor> Page_Descriptor::allocate_page_zeroed(u8 alignment_log)
+ReturnStr<Page_Descriptor> Page_Descriptor::allocate_page_zeroed()
 {
-    assert(alignment_log == 12 && "Only 4K pages are currently supported");
-
     Page *p = pmm::alloc_pages(1);
     if (p == nullptr)
         return Error(-ENOMEM);
@@ -213,7 +209,7 @@ Page_Descriptor Page_Table::Page_Info::create_copy() const
     assert(!nofree);
 
     // Return a copy
-    auto new_page = Page_Descriptor::allocate_page(12);
+    auto new_page = Page_Descriptor::allocate_page();
     if (!new_page.success())
         return {};
 

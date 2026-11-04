@@ -1662,10 +1662,8 @@ void syscall_create_mem_object(TaskDescriptor *current_task)
         return;
     }
 
-    const auto page_size_log = 12; // 2^12 = 4096 bytes
-    const auto size_pages    = size_bytes / 4096;
-
-    const auto ptr = Mem_Object::create(page_size_log, size_pages, flags);
+    const auto size_pages    = size_bytes / PAGE_SIZE;
+    const auto ptr = Mem_Object::create(size_pages, flags);
     if (!ptr) {
         syscall_error(current_task) = -ENOMEM;
         return;
