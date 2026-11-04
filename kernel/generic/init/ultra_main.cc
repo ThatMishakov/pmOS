@@ -169,11 +169,11 @@ void init_memory(ultra_boot_context *ctx)
         idle_cr3 = (u32)alloc_pages_from_temp_pool(1);
         if (idle_cr3 == 0)
             panic("Failed to allocate memory for idle_cr3\n");
-        clear_page(idle_cr3, 0);
+        clear_page(idle_cr3);
     }
     #elif defined(__x86_64__)
     idle_cr3 = (u64)alloc_pages_from_temp_pool(1);
-    clear_page(idle_cr3, 0);
+    clear_page(idle_cr3);
     #else
     #error "Unsupported architecture"
     #endif
