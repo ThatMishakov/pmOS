@@ -85,11 +85,10 @@ public:
      *
      * Creates and prepares a memory object, initializing all the internal structures
      *
-     * @param page_size_log log2 of the size of page
      * @param size_pages Size of the object in the number of pages
      * @return klib::shared_ptr<Mem_Object> newly created object
      */
-    static klib::shared_ptr<Mem_Object> create(u64 page_size_log, u64 size_pages,
+    static klib::shared_ptr<Mem_Object> create(u64 size_pages,
                                                 int flags = 0);
 
     /**
@@ -195,11 +194,10 @@ protected:
     Mem_Object() = delete;
 
     /// @brief Constructs an object
-    /// @param page_size_log log2 of the size of page
     /// @param size_pages Size of the memory in pages. Creates the pages vector of this size
     /// @param max_user_permission Maximum user permission that can be granted to user space
     /// mapping the pages
-    Mem_Object(u64 page_size_log, u64 size_pages, u32 max_user_permission, int flags);
+    Mem_Object(u64 size_pages, u32 max_user_permission, int flags);
 
     /**
      * @brief Id of the memory region
@@ -221,15 +219,6 @@ protected:
         return counter.atomic_next();
     }
 
-    /**
-     * @brief Size of the single page
-     *
-     * This number can be used to get the page size by shifting 2 by this number. This allows
-     * for supporting different architectures with different page sizes. This also indicates the
-     * alignment.
-     */
-    u8 page_size_log = 12;
-
     // Storage for the pages, in form of a linked list
     // TODO: Replace this with a hash table
     kernel::pmm::Page *pages_storage      = nullptr;
@@ -245,14 +234,6 @@ protected:
     /// Lock that must be acquired when resizing the memory object
     Spinlock resize_lock;
 
-    /**
-     * @brief Finds the index for the pointer
-     *
-     * @param ptr Pointer to the start of the page for which the index is needed
-     * @return Index to the pages vector
-     */
-    size_t page_vec_index(u64 ptr) const noexcept { return ptr >> page_size_log; }
-
     u32 max_user_access_perm = 0;
 
     /**
@@ -266,6 +247,11 @@ protected:
     ipc::Port *pager = nullptr;
 
     kresult_t push_anonymous_page(kernel::pmm::Page *page);
+
+    inline unsigned page_size_log() const
+    {
+        return page_order;
+    }
 
 public:
     /**
