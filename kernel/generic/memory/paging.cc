@@ -474,6 +474,22 @@ int kernel_pt_active_cpus_count[2] = {0, 0};
 
 void Page_Table::trigger_shootdown(Page_Table *maybe_page_table, sched::CPU_Info *cpu)
 {
+    if (!cpu) {
+        // Casual early boot kernel shootdown
+        assert(!maybe_page_table);
+
+        assert(kernel_shootdown_desc != nullptr);
+        auto &desc = *kernel_shootdown_desc;
+
+        for (auto page: desc.iterate_over_pages())
+            invalidate_tlb_kernel(page);
+
+        for (auto range: desc.iterate_over_ranges())
+            invalidate_tlb_kernel(range.start, range.size);
+
+        return;   
+    }
+
     if (kernel_pt_generation != cpu->kernel_pt_generation) {
         assert(kernel_pt_generation != -1);
         // Kernel shootdown
@@ -660,26 +676,25 @@ void TLBShootdownContext::finalize()
     assert(for_kernel() || sched::cpu_struct_works ||
            !"CPU struct is not working (kernel uninitialized) and invalidating userspace pages");
 
+    sched::CPU_Info *my_cpu{};
+    if (sched::cpu_struct_works)
+        my_cpu = sched::get_cpu_struct(); 
+
+    bool skip_ipis = !sched::other_cpus_online;
+
     if (for_kernel()) {
-        if (!sched::cpu_struct_works || !sched::other_cpus_online) {
-            // Just flush the pages and call it a day
-            for (auto page: iterate_over_pages())
-                invalidate_tlb_kernel(page);
+        auto my_cpu = sched::get_cpu_struct();
 
-            for (auto range: iterate_over_ranges())
-                invalidate_tlb_kernel(range.start, range.size);
-        } else {
-            auto my_cpu = sched::get_cpu_struct();
+        Auto_Lock_Scope l(shootdown_barrier);
 
-            Auto_Lock_Scope l(shootdown_barrier);
+        kernel_shootdown_desc = this;
 
-            kernel_shootdown_desc = this;
+        int old_generation   = kernel_pt_generation;
+        kernel_pt_generation = kernel_pt_generation == 0 ? 1 : 0;
 
-            int old_generation   = kernel_pt_generation;
-            kernel_pt_generation = kernel_pt_generation == 0 ? 1 : 0;
+        __sync_synchronize();
 
-            __sync_synchronize();
-
+        if (!skip_ipis)
             for (auto cpu: sched::cpus) {
                 if (cpu == my_cpu)
                     continue;
@@ -688,11 +703,11 @@ void TLBShootdownContext::finalize()
                 cpu->ipi_tlb_shootdown();
             }
 
-            Page_Table::trigger_shootdown(nullptr, my_cpu);
+        Page_Table::trigger_shootdown(nullptr, my_cpu);
 
-            while (__atomic_load_n(&kernel_pt_active_cpus_count[old_generation], __ATOMIC_ACQUIRE))
-                spin_pause();
-        }
+        if (!skip_ipis)
+        while (__atomic_load_n(&kernel_pt_active_cpus_count[old_generation], __ATOMIC_ACQUIRE))
+            spin_pause();
     } else {
         auto my_cpu = sched::get_cpu_struct();
 
@@ -706,17 +721,19 @@ void TLBShootdownContext::finalize()
             page_table->paging_generation    = page_table->paging_generation == 0 ? 1 : 0;
             page_table->shootdown_descriptor = this;
 
-            for (auto &cpu: page_table->active_cpus[old_generation]) {
-                if (&cpu == my_cpu)
-                    continue;
-                cpu.ipi_tlb_shootdown();
-            }
+            if (!skip_ipis)
+                for (auto &cpu: page_table->active_cpus[old_generation]) {
+                    if (&cpu == my_cpu)
+                        continue;
+                    cpu.ipi_tlb_shootdown();
+                }
         }
 
         // If this CPU has this page table, also flush it
         if (my_cpu->current_task->page_table.get() == page_table)
             Page_Table::trigger_shootdown(page_table, my_cpu);
 
+        if (!skip_ipis)
         // Wait for other CPUs
         while (__atomic_load_n(&page_table->active_cpus_count[old_generation], __ATOMIC_ACQUIRE)) {
             spin_pause();
