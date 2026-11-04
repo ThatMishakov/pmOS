@@ -713,7 +713,7 @@ ReturnStr<bool>
     if (!auxvals.push_back({AT_PHNUM, (int64_t) phdr_tag.phdr_num}))
         return Error(-ENOMEM);
 
-    if (!auxvals.push_back({AT_PAGESZ, (int64_t) 4096})) // TODO...
+    if (!auxvals.push_back({AT_PAGESZ, (int64_t) PAGE_SIZE}))
         return Error(-ENOMEM);
 
     if (!auxvals.push_back({AT_ENTRY, (uint64_t) program_entry}))
@@ -790,7 +790,8 @@ ReturnStr<bool>
                        .header = LOAD_TAG_CLOSE_HEADER,
     };
 
-    const u64 tag_size_page = (size + 0xFFF) & ~0xFFFUL;
+    const u64 page_mask = PAGE_SIZE - 1;
+    const u64 tag_size_page = (size + page_mask) & ~page_mask;
 
     auto pos_p = table->atomic_create_normal_region(0, tag_size_page,
                                                     paging::Page_Table::Protection::Readable |

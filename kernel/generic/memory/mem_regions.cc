@@ -471,7 +471,7 @@ Mem_Object_Reference::Mem_Object_Reference(void *start_addr, size_t size, klib::
 {
     assert(cow or (object_size_bytes == size) or
            !"non-CoW region cannot have size different from the object size");
-    assert((object_offset_bytes & 0xfff) == 0 or
+    assert((object_offset_bytes & (PAGE_SIZE - 1)) == 0 or
            !"Object page-misaligned with region");
 }
 

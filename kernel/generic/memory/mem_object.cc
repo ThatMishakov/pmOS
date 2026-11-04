@@ -106,9 +106,10 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
                                                           bool take_ownership,
                                                           u32 max_user_permissions)
 {
-    const u64 size_aligned  = (size_bytes + 0xFFF) & ~0xFFFUL;
-    const u64 start_aligned = phys_addr & ~0xFFFUL;
-    const u64 pages_count    = size_aligned >> 12;
+    const u64 page_mask = PAGE_SIZE - 1;
+    const u64 size_aligned  = (size_bytes + page_mask) & ~page_mask;
+    const u64 start_aligned = phys_addr & ~page_mask;
+    const u64 pages_count    = size_aligned >> page_order;
 
     assert(take_ownership && "not taking ownership is not implemented");
 
@@ -123,10 +124,10 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
     // Provide the pages
     // This can't fail
     for (u64 i = 0; i < pages_count; ++i) {
-        auto page = pmm::Page_Descriptor::create_from_allocated(start_aligned + i * 0x1000);
+        auto page = pmm::Page_Descriptor::create_from_allocated(start_aligned + i * PAGE_SIZE);
         auto c    = page.page_struct_ptr;
         page.takeout_page();
-        c->l.offset        = i * 0x1000;
+        c->l.offset        = i * PAGE_SIZE;
         c->l.next          = ptr->pages_storage;
         ptr->pages_storage = c;
     }
@@ -238,7 +239,7 @@ ReturnStr<pmm::Page_Descriptor> Mem_Object::request_page(u64 offset, bool write,
     if (pages_size <= index)
         return Error(-EINVAL);
 
-    offset &= ~0xfffUL;
+    offset &= ~page_mask();
     auto page = pages_storage;
     while (page and page->l.offset != offset)
         page = page->l.next;
@@ -365,9 +366,10 @@ ReturnStr<bool> Mem_Object::read_to_kernel(u64 offset, void *buffer, u64 size)
     Auto_Lock_Scope l(lock);
 
     assert(!(flags & FLAG_ANONYMOUS));
+    const auto mask = page_mask();
 
     Temp_Mapper_Obj<char> mapper(request_temp_mapper());
-    for (u64 i = offset & ~0xfffUL; i < offset + size; i += 0x1000) {
+    for (u64 i = offset & ~mask; i < offset + size; i += PAGE_SIZE) {
         const auto page = request_page(i, false, false);
         if (!page.success())
             return page.propagate();
@@ -380,9 +382,9 @@ ReturnStr<bool> Mem_Object::read_to_kernel(u64 offset, void *buffer, u64 size)
         char *ptr = mapper.map(page_struct->get_phys_addr());
 
         const u64 start = i < offset ? offset : i;
-        const u64 end   = i + 0x1000 < offset + size ? i + 0x1000 : offset + size;
+        const u64 end   = i + PAGE_SIZE < offset + size ? i + PAGE_SIZE : offset + size;
         const u64 len   = end - start;
-        memcpy(reinterpret_cast<char *>(buffer) + start - offset, ptr + (start & 0xfff), len);
+        memcpy(reinterpret_cast<char *>(buffer) + start - offset, ptr + (start & mask), len);
     }
 
     return true;
@@ -396,9 +398,10 @@ ReturnStr<bool> Mem_Object::write_from_kernel(u64 offset, const void *buffer, u6
     Auto_Lock_Scope l(lock);
 
     assert(!(flags & FLAG_ANONYMOUS));
+    const auto mask = page_mask();
 
     Temp_Mapper_Obj<char> mapper(request_temp_mapper());
-    for (u64 i = offset & ~0xfffUL; i < offset + size; i += 0x1000) {
+    for (u64 i = offset & ~mask; i < offset + size; i += PAGE_SIZE) {
         const auto page = request_page(i, true, false);
         if (!page.success())
             return page.propagate();
@@ -411,9 +414,9 @@ ReturnStr<bool> Mem_Object::write_from_kernel(u64 offset, const void *buffer, u6
         char *ptr = mapper.map(page_struct->get_phys_addr());
 
         const u64 start = i < offset ? offset : i;
-        const u64 end   = i + 0x1000 < offset + size ? i + 0x1000 : offset + size;
+        const u64 end   = i + PAGE_SIZE < offset + size ? i + PAGE_SIZE : offset + size;
         const u64 len   = end - start;
-        memcpy(ptr + (start & 0xfff), reinterpret_cast<const char *>(buffer) + start - offset, len);
+        memcpy(ptr + (start & mask), reinterpret_cast<const char *>(buffer) + start - offset, len);
     }
 
     return true;
@@ -442,7 +445,7 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
     }
 
     // TODO: Remove magic number
-    void *mem_virt = vmm::kernel_space_allocator.virtmem_alloc(size >> 12);
+    void *mem_virt = vmm::kernel_space_allocator.virtmem_alloc(size >> page_size_log());
     if (mem_virt == nullptr)
         return Error(-ENOMEM);
 

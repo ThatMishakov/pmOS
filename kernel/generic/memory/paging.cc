@@ -314,7 +314,7 @@ ReturnStr<Mem_Object_Reference *> Page_Table::atomic_create_mem_object_region(
     if (not cow and object_size_bytes != page_aligned_size)
         return Error(-EINVAL);
 
-    if ((object_offset_bytes & 0xfff) != 0)
+    if ((object_offset_bytes & (PAGE_SIZE - 1)) != 0)
         return Error(-EINVAL);
 
     auto region = klib::make_unique<Mem_Object_Reference>(
