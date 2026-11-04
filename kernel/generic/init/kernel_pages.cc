@@ -75,7 +75,7 @@ void kernel::map_kernel_pages(ptable_top_ptr_t kernel_pt_top, phys_addr_t kernel
                 .extra              = PAGING_FLAG_STRUCT_PAGE,
             };
 
-            constexpr ulong PAGE_MASK = PAGE_SIZE - 1;
+            const ulong PAGE_MASK = PAGE_SIZE - 1;
 
             size_t offset = phdr.p_vaddr & PAGE_MASK;
             void *virt_addr = (void *)(phdr.p_vaddr + load_bias - offset);
@@ -107,7 +107,7 @@ void kernel::map_kernel_pages(ptable_top_ptr_t kernel_pt_top, phys_addr_t kernel
                 .extra              = PAGING_FLAG_STRUCT_PAGE,
             };
 
-            constexpr ulong PAGE_MASK = PAGE_SIZE - 1;
+            const ulong PAGE_MASK = PAGE_SIZE - 1;
 
             size_t offset = phdr.p_vaddr & PAGE_MASK;
             void *virt_addr = (void *)(phdr.p_vaddr - offset);

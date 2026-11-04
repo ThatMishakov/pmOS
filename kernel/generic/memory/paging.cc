@@ -71,7 +71,7 @@ ReturnStr<Mem_Object_Reference *>
     unsigned flags = Mem_Object::FLAG_ANONYMOUS;
     if (dma)
         flags |= Mem_Object::FLAG_DMA;
-    auto object = Mem_Object::create(12, page_aligned_size / PAGE_SIZE, flags);
+    auto object = Mem_Object::create(page_order, page_aligned_size / PAGE_SIZE, flags);
     if (!object)
         return Error(-ENOMEM);
 
@@ -599,7 +599,7 @@ TLBShootdownContext TLBShootdownContext::create_kernel()
 
 void TLBShootdownContext::invalidate_page(void *page)
 {
-    constexpr phys_addr_t PAGE_MASK = ~(PAGE_SIZE - 1);
+    const phys_addr_t PAGE_MASK = ~(PAGE_SIZE - 1);
     page = (void *)((ulong)page & PAGE_MASK);
 
     if ((pages_count == MAX_PAGES) and for_kernel())

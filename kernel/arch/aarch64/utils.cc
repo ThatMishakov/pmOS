@@ -10,3 +10,6 @@ sched::CPU_Info *sched::get_cpu_struct()
 }
 
 void halt() { asm volatile("wfi"); }
+
+extern "C" void print_stack_trace()
+{};

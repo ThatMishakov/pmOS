@@ -14,11 +14,11 @@ Kernel_Stack_Pointer::Kernel_Stack_Pointer()
     if (!vaddr)
         panic("Failed to allocate memory for kernel stack\n");
 
-    auto paddr = pmm::get_memory_for_kernel(STACK_SIZE / PAGE_SIZE);
+    auto paddr = pmm::get_memory_for_kernel(stack_size() / PAGE_SIZE);
     if (pmm::alloc_failure(paddr))
         panic("Failed to allocate physical memory for kernel stack\n");
 
-    void *actual_start = (void *)((char *)vaddr + GUARD_SIZE);
+    void *actual_start = (void *)((char *)vaddr + guard_size());
 
     Page_Table_Arguments arg = {
         .readable = true,
@@ -28,7 +28,7 @@ Kernel_Stack_Pointer::Kernel_Stack_Pointer()
         .execution_disabled = true,
     };
 
-    auto result = map_kernel_pages(paddr, actual_start, STACK_SIZE, arg);
+    auto result = map_kernel_pages(paddr, actual_start, stack_size(), arg);
     if (result)
         panic("Failed to map kernel pages for stack, %i\n", result);
 

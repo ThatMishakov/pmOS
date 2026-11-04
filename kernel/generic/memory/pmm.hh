@@ -204,7 +204,8 @@ namespace pmm
         {
         }
 
-        inline static constexpr auto page_lists = 30 - PAGE_ORDER; // 1GB max allocation
+        // Take 12 (4KB) as the base page addr, even on arches with variable page size
+        inline static constexpr auto page_lists = 30 - 12 /* PAGE_ORDER */; // 1GB max allocation
         PageLL free_pages_list[page_lists];
 
         static PMMRegion *get(Page::page_addr_t start_addr);
