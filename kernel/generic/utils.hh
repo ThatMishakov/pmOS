@@ -69,7 +69,7 @@ ReturnStr<bool> atomic_read_from_user(u32 *to, const u32 *from);
 // Copies a frame (ppn)
 void copy_frame(u64 from, u64 to);
 
-void clear_page(u64 phys_addr, u64 pattern = 0);
+void clear_page(u64 phys_addr);
 
 void copy_from_phys(u64 phys_addr, void *to, size_t size);
 klib::string capture_from_phys(u64 phys_addr);
