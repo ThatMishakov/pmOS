@@ -557,7 +557,8 @@ void syscall_load_executable(TaskDescriptor *task)
                            .header = LOAD_TAG_CLOSE_HEADER,
         };
 
-        const u64 tag_size_page = (size + 0xFFF) & ~0xFFFUL;
+        const u64 page_mask = PAGE_SIZE - 1;
+        const u64 tag_size_page = (size + page_mask) & ~page_mask;
 
         auto pos_p = table->atomic_create_normal_region(
             0, tag_size_page,

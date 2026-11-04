@@ -424,6 +424,7 @@ void init_modules()
     if (!::modules.reserve(r.module_count))
         panic("Failed to reserve memory for modules");
 
+    const u64 page_mask = PAGE_SIZE - 1;
     for (auto &mm: modules) {
         limine_file f;
         copy_from_phys((u64)mm - hhdm_offset, &f, sizeof(f));
@@ -433,7 +434,7 @@ void init_modules()
             .phys_addr = (u64)f.address - hhdm_offset,
             .size      = f.size,
             .object    = Mem_Object::create_from_phys((u64)f.address - hhdm_offset,
-                                                      (f.size + 0xfff) & ~0xfffUL, true),
+                                                      (f.size + page_mask) & ~page_mask, true),
         };
 
         serial_logger.printf("Module: %s, cmdline: %s\n", m.path.c_str(), m.cmdline.c_str());

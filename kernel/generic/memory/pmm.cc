@@ -45,9 +45,7 @@ ReturnStr<Page_Descriptor> Page_Descriptor::create_copy() const noexcept
     this_mapping.map(page_struct_ptr->get_phys_addr());
     new_mapping.map(new_page.val.page_struct_ptr->get_phys_addr());
 
-    const auto page_size_bytes = 4096;
-
-    memcpy(new_mapping.ptr, this_mapping.ptr, page_size_bytes);
+    memcpy(new_mapping.ptr, this_mapping.ptr, PAGE_SIZE);
 
     return new_page;
 }
@@ -219,9 +217,7 @@ Page_Descriptor Page_Table::Page_Info::create_copy() const
     this_mapping.map(page_addr);
     new_mapping.map(new_page.val.page_struct_ptr->get_phys_addr());
 
-    const auto page_size_bytes = 4096;
-
-    memcpy(new_mapping.ptr, this_mapping.ptr, page_size_bytes);
+    memcpy(new_mapping.ptr, this_mapping.ptr, PAGE_SIZE);
 
     return klib::move(new_page.val);
 }

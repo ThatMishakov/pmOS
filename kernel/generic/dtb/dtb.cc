@@ -35,9 +35,10 @@ void init_dtb(phys_addr_t phys_addr)
         return;
     }
 
+    const size_t page_mask = PAGE_SIZE - 1;
     u32 total_size = be32(h.totalsize);
     // Align up to the nearest page
-    total_size     = (total_size + 0xfff) & ~0xfff;
+    total_size     = (total_size + page_mask) & ~page_mask;
 
     log::serial_logger.printf("FDT at %p, size %x\n", phys_addr, total_size);
 

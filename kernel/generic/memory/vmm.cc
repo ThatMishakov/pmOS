@@ -151,13 +151,14 @@ int virtmem_ensure_tags(size_t size)
     }
 
     // Slice the page into boundary tags
+    const ulong page_size = PAGE_SIZE;
     VirtmemBoundaryTag *new_tags = (VirtmemBoundaryTag *)addr;
-    for (size_t i = 0; i < 4096 / sizeof(VirtmemBoundaryTag); ++i) {
+    for (size_t i = 0; i < page_size / sizeof(VirtmemBoundaryTag); ++i) {
         virtmem_return_tag(&new_tags[i]);
     }
 
     // Add a new boundary tag
-    if (tag->size == 4096) {
+    if (tag->size == page_size) {
         // Boundary tag is an exact fit. Take it out of free and mark as used
         kernel_space_allocator.virtmem_remove_from_free_list(tag);
 
@@ -166,11 +167,11 @@ int virtmem_ensure_tags(size_t size)
     } else {
         auto new_tag   = virtmem_get_free_tag();
         new_tag->base  = tag->base;
-        new_tag->size  = 4096;
+        new_tag->size  = page_size;
         new_tag->state = VirtmemBoundaryTag::State::ALLOCATED;
 
-        tag->base += 4096;
-        tag->size -= 4096;
+        tag->base += page_size;
+        tag->size -= page_size;
         virtmem_link_tag(tag->segment_prev, new_tag);
         kernel_space_allocator.virtmem_save_to_alloc_hashtable(new_tag);
 

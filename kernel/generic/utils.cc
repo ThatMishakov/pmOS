@@ -537,10 +537,12 @@ extern "C" int strcmp(const char *str1, const char *str2)
 void copy_from_phys(u64 phys_addr, void *to, size_t size)
 {
     Temp_Mapper_Obj<void> mapper(request_temp_mapper());
-    for (u64 i = phys_addr & ~0xfffULL; i < phys_addr + size; i += 0x1000) {
+    const phys_addr_t page_size = PAGE_SIZE;
+    const phys_addr_t page_mask = page_size - 1;
+    for (u64 i = phys_addr & ~page_mask; i < phys_addr + size; i += page_size) {
         mapper.map(i);
         const u64 start = i < phys_addr ? phys_addr : i;
-        const u64 end   = i + 0x1000 < phys_addr + size ? i + 0x1000 : phys_addr + size;
+        const u64 end   = i + page_size < phys_addr + size ? i + page_size : phys_addr + size;
         memcpy((char *)to + (start - phys_addr), (char *)mapper.ptr + (start - i), end - start);
     }
 }
@@ -548,12 +550,14 @@ void copy_from_phys(u64 phys_addr, void *to, size_t size)
 size_t strlen_over_phys(u64 phys_addr)
 {
     Temp_Mapper_Obj<char> mapper(request_temp_mapper());
+    const phys_addr_t page_size = PAGE_SIZE;
+    const phys_addr_t page_mask = page_size - 1;
 
     size_t len = 0;
-    for (u64 i = phys_addr & ~0xfffULL;; i += 0x1000) {
+    for (u64 i = phys_addr & ~page_mask;; i += page_size) {
         mapper.map(i);
         const u64 start = i < phys_addr ? phys_addr : i;
-        const u64 end   = i + 0x1000;
+        const u64 end   = i + page_size;
         for (u64 j = start; j < end; ++j) {
             if (mapper.ptr[j - i] == '\0')
                 return len;

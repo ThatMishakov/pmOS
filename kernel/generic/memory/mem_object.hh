@@ -252,6 +252,10 @@ protected:
     {
         return page_order;
     }
+    inline u64 page_mask() const
+    {
+        return ((u64)1 << page_order) - 1;
+    }
 
 public:
     /**
