@@ -114,7 +114,13 @@ constexpr u64 arg_to_ap(Page_Table_Arguments arg)
     return ap;
 }
 
-u64 phys_addr_to_pte(u64 phys_addr);
+u64 phys_addr_to_pte(u64 phys_addr)
+{
+    if (page_order == 16)
+        return (phys_addr & 0x0000ffffffff0000) | (phys_addr >> 36 & 0xf000); 
+    else
+        return (phys_addr & 0x0003fffffffff000) | (phys_addr >> 42 & 0x300);
+}
 u64 pte_to_phys_addr(u64 pte);
 
 u64 construct_pte(u64 phys_addr, Page_Table_Arguments arg, bool block = false)
