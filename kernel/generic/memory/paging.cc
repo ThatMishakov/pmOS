@@ -487,6 +487,7 @@ void Page_Table::trigger_shootdown(Page_Table *maybe_page_table, sched::CPU_Info
         for (auto range: desc.iterate_over_ranges())
             invalidate_tlb_kernel(range.start, range.size);
 
+        arch_tlb_finalize(true);
         return;   
     }
 
@@ -502,6 +503,8 @@ void Page_Table::trigger_shootdown(Page_Table *maybe_page_table, sched::CPU_Info
 
         for (auto range: desc.iterate_over_ranges())
             invalidate_tlb_kernel(range.start, range.size);
+
+        arch_tlb_finalize(true);
 
         int old_gen = cpu->kernel_pt_generation;
         int new_gen = kernel_pt_generation;
@@ -539,6 +542,8 @@ void Page_Table::trigger_shootdown(Page_Table *maybe_page_table, sched::CPU_Info
 
         if (desc.get_arch_flags())
             maybe_page_table->arch_specific_shutdown_stuff(desc.get_arch_flags());
+
+        arch_tlb_finalize(false);
 
         // Make sure the invalidation is done before the generation change
         __sync_synchronize();

@@ -1,16 +1,27 @@
 #pragma once
 
-static inline void dsb_ishst()
+enum class Barrier : unsigned {
+    SY    = 0xF,
+    ISH   = 0xB,
+    ISHST = 0xA,
+    ISHLD = 0x9,
+    OSH   = 0x3,
+    NSH   = 0x7,
+};
+
+template<Barrier B>
+inline void dsb()
 {
-    asm volatile("dsb ishst" ::: "memory");
+    __builtin_arm_dsb(static_cast<unsigned>(B));
 }
 
-static inline void dsb_ish()
+template<Barrier B>
+inline void dmb()
 {
-    asm volatile("dsb ish" ::: "memory");
+    __builtin_arm_dmb(static_cast<unsigned>(B));
 }
 
-static inline void isb()
+inline void isb()
 {
-    asm volatile("isb" ::: "memory");
+    __builtin_arm_isb(0xF);
 }
