@@ -3,6 +3,10 @@
 
 using namespace kernel::proc;
 
+bool TaskDescriptor::is_32bit() const {
+    return false;
+}
+
 ulong syscalls::syscall_arg(TaskDescriptor *d, int number, int)
 {
     switch (number) {
