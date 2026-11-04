@@ -36,8 +36,14 @@ public:
     void apply();
 
 private:
-    u64 page_directory = 0;
+    constexpr static u64 PAGE_DIRECTORY_INITIALIZER = -1UL;
+    u64 page_directory = PAGE_DIRECTORY_INITIALIZER;
     unsigned flags = 0;
+
+    static kresult_t insert_global_page_tables(klib::shared_ptr<AArch64_Page_Table>);
+    void takeout_global_page_tables();
+
+    void free_all_pages();
 };
 
 } // namespace kernel::aarch64::paging
