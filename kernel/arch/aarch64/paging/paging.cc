@@ -166,7 +166,7 @@ result_t map_page_recursive(u64 page_table_addr, u64 phys_addr, void *virt_addr,
 
         pte = construct_pte(phys_addr, arg);
         store_pte(page_table, idx, pte);
-        dsb_ishst();
+        dsb<Barrier::ISHST>();
         return 0;
     } else {
         if (!(pte & DESCR_PRESENT)) {
@@ -175,10 +175,11 @@ result_t map_page_recursive(u64 page_table_addr, u64 phys_addr, void *virt_addr,
                 return -ENOMEM;
 
             clear_page(new_table);
+            dmb<Barrier::ISHST>();
 
             pte = construct_table(new_table, arg);
             store_pte(page_table, idx, pte);
-            dsb_ishst();
+            dsb<Barrier::ISHST>();
         }
         if ((pte & DESCR_TABLE) == 0) {
             // Huge page
@@ -267,4 +268,73 @@ void *AArch64_Page_Table::user_addr_max() const
         return (void *)0x10000000; // 4GB
     else
         return (void *)((u64)1 << va_bits);
+}
+
+namespace {
+
+void flush_tlb()
+{
+    asm volatile("tlbi vmalle1is" ::: "memory");
+}
+
+void flush_page(void *page)
+{
+    auto operand = reinterpret_cast<u64>(page) >> 12;
+    asm volatile("tlbi vaae1is, %0" :: "r"(operand) : "memory");
+}
+
+void flush_range(void *start, size_t size)
+{
+    size_t page_size = PAGE_SIZE;
+    if (size/page_size > 32) {
+        flush_tlb();
+        return;
+    }
+
+    for (char *i = (char *)start; i < (char *)start + size; i += page_size) {
+        flush_page(i);
+    }
+}
+
+} // namespace
+
+void kernel::paging::arch_tlb_finalize(bool)
+{
+    dsb<Barrier::ISHST>();
+    isb();
+}
+
+bool kernel::paging::arch_tlb_dont_ipi()
+{
+    return true;
+}
+
+void kernel::paging::flush_tlb_kernel()
+{
+    flush_tlb();
+}
+
+void kernel::paging::invalidate_tlb_kernel(void *page)
+{
+    flush_page(page);
+}
+
+void kernel::paging::invalidate_tlb_kernel(void *start, size_t size)
+{
+    flush_range(start, size);
+}
+
+void AArch64_Page_Table::invalidate_tlb(void *page)
+{
+    flush_page(page);
+}
+
+void AArch64_Page_Table::invalidate_tlb(void *start, size_t size)
+{
+    flush_range(start, size);
+}
+
+void AArch64_Page_Table::tlb_flush_all()
+{
+    flush_tlb();
 }

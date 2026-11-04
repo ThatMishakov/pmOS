@@ -13,3 +13,8 @@ void halt() { asm volatile("wfi"); }
 
 extern "C" void print_stack_trace()
 {};
+
+void sched::CPU_Info::ipi_tlb_shootdown()
+{
+    assert(false);
+}

@@ -605,4 +605,7 @@ void flush_tlb_kernel();
 void online_cpu(sched::CPU_Info *cpu);
 void offline_cpu(sched::CPU_Info *cpu);
 
+void arch_tlb_finalize(bool for_kernel);
+bool arch_tlb_dont_ipi();
+
 } // namespace kernel::paging
