@@ -5,7 +5,7 @@ struct AArch64Regs {
     u64 x[31] = {0};
     u64 pc = 0;
     u64 sp = 0;
-    u64 pstate = 0;
+    u64 spsr_el1 = 0;
     u64 tpidr_el0 = 0;
     u64 tpidrro_el0 = 0;
 
