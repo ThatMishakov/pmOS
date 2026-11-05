@@ -427,3 +427,12 @@ void AArch64_Page_Table::tlb_flush_all()
 {
     flush_tlb();
 }
+
+void AArch64_Page_Table::apply()
+{
+    assert(page_directory != PAGE_DIRECTORY_INITIALIZER);
+    asm volatile("msr ttbr0_el1, %0" :: "r"(page_directory) : "memory");
+    flush_tlb();
+    dsb<Barrier::ISHST>();
+    isb();
+}
