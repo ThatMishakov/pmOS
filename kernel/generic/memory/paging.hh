@@ -165,6 +165,7 @@ struct Page_Info {
     bool writeable : 1    = 0;
     bool executable : 1   = 0;
     bool readable : 1     = 0;
+    bool invalid : 1      = 0;
     Memory_Type cache_policy = Memory_Type::Normal;
     u64 page_addr         = 0;
 

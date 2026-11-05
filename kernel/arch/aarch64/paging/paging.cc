@@ -97,6 +97,26 @@ constexpr u64 type_to_attridx(Memory_Type type)
 
     return attr << 2;
 }
+Memory_Type pte_to_type(u64 attridx)
+{
+    attridx >>= 2;
+    attridx &= 0x7;
+
+    switch (attridx) {
+    case MT_NORMAL:
+        return Memory_Type::Normal;
+    case MT_NORMAL_NC:
+        return Memory_Type::MemoryNoCache;
+    case MT_DEVICE_nGnRnE:
+        return Memory_Type::IONoCache;
+    case MT_DEVICE_nGnRE:
+        return Memory_Type::Framebuffer;
+    default:
+        assert(false && "Invalid memory type");
+        return Memory_Type::Normal;
+    }
+}
+
 constexpr u64 arg_to_ap(Page_Table_Arguments arg)
 {
     u64 ap = 0;
@@ -115,6 +135,15 @@ constexpr u64 arg_to_ap(Page_Table_Arguments arg)
     return ap;
 }
 
+u64 extra_to_flags(u8 extra)
+{
+    return (extra & 0x3) << 2;
+}
+u8 flags_to_extra(u64 flags)
+{
+    return (flags >> 2) & 0x3;
+}
+
 u64 phys_addr_to_pte(u64 phys_addr)
 {
     if (page_order == 16)
@@ -122,7 +151,13 @@ u64 phys_addr_to_pte(u64 phys_addr)
     else
         return (phys_addr & 0x0003fffffffff000) | (phys_addr >> 42 & 0x300);
 }
-u64 pte_to_phys_addr(u64 pte);
+u64 pte_to_phys_addr(u64 pte)
+{
+    if (page_order == 16)
+        return (pte & 0x0000ffffffff0000) | ((pte & 0xf000) << 36);
+    else
+        return (pte & 0x0003fffffffff000) | ((pte & 0x300) << 42);
+}
 
 u64 construct_pte(u64 phys_addr, Page_Table_Arguments arg, bool block = false)
 {
@@ -134,6 +169,7 @@ u64 construct_pte(u64 phys_addr, Page_Table_Arguments arg, bool block = false)
     pte |= arg_to_ap(arg);
     pte |= DESCR_INNER_SHAREABLE;
     pte |= DESCR_ACCESS;
+    pte |= extra_to_flags(arg.extra);
 
     return pte;
 }
@@ -150,6 +186,28 @@ u64 construct_table(u64 phys_addr, Page_Table_Arguments arg)
         pte |= DESCR_UXN;
 
     return pte;
+}
+
+Page_Info decode_pte(u64 pte, unsigned level)
+{
+    bool is_block = level != 0;
+
+    Page_Info i {};
+    i.is_allocated = !!(pte & DESCR_PRESENT);
+    i.invalid       = is_block == !(pte & DESCR_TABLE);
+    i.user_access   = !!(pte & (1 << 6));
+    i.writeable     = !(pte & (1 << 7));
+    i.readable      = i.is_allocated;
+    i.executable    = !(pte & DESCR_PXN) && !(pte & DESCR_UXN);
+    i.cache_policy  = pte_to_type(pte);
+    i.flags         = flags_to_extra(pte);
+    i.page_addr     = pte_to_phys_addr(pte);
+    i.nofree        = !!(i.flags & PAGING_FLAG_NOFREE);
+    i.page_addr     = pte_to_phys_addr(pte);
+
+    // TODO: Check reserved bits here for the invalid bit...
+
+    return i;
 }
 
 result_t map_page_recursive(u64 page_table_addr, u64 phys_addr, void *virt_addr, ::kernel::paging::Page_Table_Arguments arg, unsigned level)
@@ -191,6 +249,31 @@ result_t map_page_recursive(u64 page_table_addr, u64 phys_addr, void *virt_addr,
     }
 }
 
+Page_Info get_mapping_recursive(u64 page_table_addr, void *virt_addr, unsigned level)
+{
+    Page_Info i {};
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
+    u64 *page_table = mapper.map(page_table_addr);
+    auto idx = page_ptr_idx(virt_addr, level);
+    auto pte = load_pte(page_table, idx);
+
+    if (!(pte & DESCR_PRESENT)) {
+        return i;
+    }
+
+    if (level == 0) {
+        return decode_pte(pte, level);
+    } else {
+        if (!(pte & DESCR_TABLE)) {
+            // Block descriptor
+            return decode_pte(pte, level);
+        }
+
+        auto next_table = pte_to_phys_addr(pte);
+        return get_mapping_recursive(next_table, virt_addr, level - 1);
+    }
+}
+
 } // namespace
 
 kresult_t kernel::paging::map_page(u64 page_table, u64 phys_addr, void *virt_addr, ::kernel::paging::Page_Table_Arguments arg)
@@ -207,6 +290,12 @@ kresult_t kernel::paging::map_kernel_page(phys_addr_t phys_addr, void *virt_addr
 kresult_t kernel::paging::map_kernel_pages(phys_addr_t phys_addr, void *virt_addr, size_t size, kernel::paging::Page_Table_Arguments arg)
 {
     return map_pages(kernel_page_table, phys_addr, virt_addr, size, arg);
+}
+
+Page_Info AArch64_Page_Table::get_page_mapping(void *virt_addr) const
+{
+    assert(page_directory != PAGE_DIRECTORY_INITIALIZER);
+    return get_mapping_recursive(page_directory, virt_addr, top_level);
 }
 
 klib::shared_ptr<AArch64_Page_Table> AArch64_Page_Table::create_empty(int flags)
