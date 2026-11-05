@@ -103,3 +103,13 @@ i64 kernel::proc::syscalls::syscall_ret_low(TaskDescriptor *d)
 {
     return d->regs.syscall_retval_low();
 }
+
+void TaskDescriptor::after_task_switch()
+{
+    // TODO
+}
+
+void TaskDescriptor::before_task_switch()
+{
+    // TODO
+}
