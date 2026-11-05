@@ -18,3 +18,13 @@ void sched::CPU_Info::ipi_tlb_shootdown()
 {
     assert(false);
 }
+
+void arch_specific_park_pre_offline()
+{
+
+}
+
+void arch_specific_park_stop()
+{
+    halt();
+}

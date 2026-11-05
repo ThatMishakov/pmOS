@@ -137,11 +137,11 @@ constexpr u64 arg_to_ap(Page_Table_Arguments arg)
 
 u64 extra_to_flags(u8 extra)
 {
-    return (extra & 0x3) << 2;
+    return u64(extra & 0x3) << 55;
 }
 u8 flags_to_extra(u64 flags)
 {
-    return (flags >> 2) & 0x3;
+    return (flags >> 55) & 0x3;
 }
 
 u64 phys_addr_to_pte(u64 phys_addr)
@@ -274,6 +274,107 @@ Page_Info get_mapping_recursive(u64 page_table_addr, void *virt_addr, unsigned l
     }
 }
 
+unsigned entries_for_level(unsigned level)
+{
+    if (level == top_level)
+        return 1 << (va_bits - page_order - (page_order - 3) * level);
+    else
+        return 1 << (page_order - 3);
+}
+
+void free_level(u64 page_table_addr, unsigned level)
+{
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
+    u64 *page_table = mapper.map(page_table_addr);
+
+    auto entries = entries_for_level(level);
+    for (unsigned i = 0; i < entries; i++) {
+        auto pte = load_pte(page_table, i);
+        if (!(pte & DESCR_PRESENT))
+            continue;
+
+        store_pte(page_table, i, 0);
+        dsb<Barrier::ISHST>();
+
+        if (level != 0 && (pte & DESCR_TABLE)) {
+            auto next_table = pte_to_phys_addr(pte);
+            free_level(next_table, level - 1);
+            pmm::free_memory_for_kernel(next_table, 1);
+        } else {
+            auto extra_flags = flags_to_extra(pte);
+            if (extra_flags & PAGING_FLAG_NOFREE)
+                continue;
+
+            assert(level == 0);
+
+            auto page_addr = pte_to_phys_addr(pte);
+            if (extra_flags & PAGING_FLAG_STRUCT_PAGE) {
+                auto p = pmm::Page_Descriptor::find_page_struct(page_addr);
+                assert(p.page_struct_ptr && "page struct must be present");
+                p.release_taken_out_page();
+            } else {
+                pmm::free_memory_for_kernel(page_addr, 1);
+            }
+        }
+    }
+}
+
+void invalidate_level(::kernel::paging::TLBShootdownContext& ctx, u64 page_table, void *virt_addr_start, size_t size_bytes, bool free, unsigned level)
+{
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
+    u64 *active_pt = mapper.map(page_table);
+    const ulong level_size = 1UL << (page_order + (page_order - 3) * level);
+    const ulong level_mask = level_size - 1;
+
+    const ulong end = reinterpret_cast<ulong>(virt_addr_start) + size_bytes;
+
+    const ulong start_aligned = reinterpret_cast<ulong>(virt_addr_start) & ~level_mask;
+    const ulong end_aligned = (reinterpret_cast<ulong>(virt_addr_start) + size_bytes + level_mask) & ~level_mask;
+
+    const unsigned start_idx = page_ptr_idx((void *)start_aligned, level);
+    const unsigned end_idx = start_idx + (end_aligned - start_aligned) / level_size;
+
+    for (unsigned i = start_idx; i < end_idx; i++) {
+        auto pte = load_pte(active_pt, i);
+        if (!(pte & DESCR_PRESENT))
+            continue;
+
+        auto phys_addr = pte_to_phys_addr(pte);
+
+        if (level != 0 && (pte & DESCR_TABLE)) {
+            ulong level_start = start_aligned + (i - start_idx) * level_size;
+            ulong level_end = level_start + level_size;
+
+            ulong sub_start = std::max(level_start, reinterpret_cast<ulong>(virt_addr_start));
+            ulong sub_end = end == 0 || level_end < end ? level_end : end;
+
+            invalidate_level(ctx, phys_addr, (void *)sub_start, sub_end - sub_start, free, level - 1);
+        } else {
+            store_pte(active_pt, i, 0);
+            dsb<Barrier::ISHST>();
+            ctx.invalidate_page((void *)(start_aligned + (i - start_idx) * level_size));
+            
+            auto extra_flags = flags_to_extra(pte);
+            if (free && !(extra_flags & PAGING_FLAG_NOFREE)) {
+                assert(level == 0);
+
+                if (extra_flags & PAGING_FLAG_STRUCT_PAGE) {
+                    auto p = pmm::Page_Descriptor::find_page_struct(phys_addr);
+                    assert(p.page_struct_ptr && "page struct must be present");
+                    p.release_taken_out_page();
+                } else {
+                    pmm::free_memory_for_kernel(phys_addr, 1);
+                }
+            }
+        }
+    }
+}
+
+void invalidate_pages(::kernel::paging::TLBShootdownContext& ctx, u64 page_table, void *virt_addr, size_t size_bytes, bool free)
+{
+    return invalidate_level(ctx, page_table, virt_addr, size_bytes, free, top_level);
+}
+
 } // namespace
 
 kresult_t kernel::paging::map_page(u64 page_table, u64 phys_addr, void *virt_addr, ::kernel::paging::Page_Table_Arguments arg)
@@ -296,6 +397,24 @@ Page_Info AArch64_Page_Table::get_page_mapping(void *virt_addr) const
 {
     assert(page_directory != PAGE_DIRECTORY_INITIALIZER);
     return get_mapping_recursive(page_directory, virt_addr, top_level);
+}
+
+void AArch64_Page_Table::invalidate(::kernel::paging::TLBShootdownContext& ctx, void *virt_addr, bool free) noexcept
+{
+    assert(page_directory != PAGE_DIRECTORY_INITIALIZER);
+    invalidate_pages(ctx, page_directory, virt_addr, PAGE_SIZE, free);
+}
+
+void AArch64_Page_Table::invalidate_range(::kernel::paging::TLBShootdownContext& ctx, void *virt_addr, size_t size_bytes, bool free)
+{
+    assert(page_directory != PAGE_DIRECTORY_INITIALIZER);
+    invalidate_pages(ctx, page_directory, virt_addr, size_bytes, free);
+}
+
+kresult_t paging::unmap_kernel_page(kernel::paging::TLBShootdownContext& ctx, void* virt_addr, bool free)
+{
+    invalidate_pages(ctx, kernel_page_table, virt_addr, PAGE_SIZE, free);
+    return 0;
 }
 
 klib::shared_ptr<AArch64_Page_Table> AArch64_Page_Table::create_empty(int flags)
@@ -339,6 +458,12 @@ void AArch64_Page_Table::takeout_global_page_tables()
 {
     Auto_Lock_Scope l(page_tables_lock);
     page_tables.erase(id);
+}
+
+void AArch64_Page_Table::free_all_pages()
+{
+    assert(page_directory != PAGE_DIRECTORY_INITIALIZER);
+    free_level(page_directory, top_level);
 }
 
 AArch64_Page_Table::~AArch64_Page_Table()
