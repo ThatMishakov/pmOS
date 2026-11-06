@@ -1,6 +1,7 @@
 #include "aarch64_paging.hh"
 #include <types.hh>
 #include <arm_asm.hh>
+#include <pmos/utility/scope_guard.hh>
 
 using namespace kernel::aarch64::paging;
 using namespace kernel::paging;
@@ -437,6 +438,52 @@ klib::shared_ptr<AArch64_Page_Table> AArch64_Page_Table::create_empty(int flags)
     return result ? nullptr : new_table;
 }
 
+klib::shared_ptr<AArch64_Page_Table> AArch64_Page_Table::create_clone()
+{
+    klib::shared_ptr<AArch64_Page_Table> new_table = create_empty();
+    if (!new_table)
+        return nullptr;
+
+    Auto_Lock_Scope_Double scope_guard(this->lock, new_table->lock);
+
+    if (!new_table->paging_regions.empty())
+        return nullptr; // "page table is already cloned"
+
+    // This gets called on error
+    auto guard = pmos::utility::make_scope_guard([&]() {
+        auto tlb_ctx = TLBShootdownContext::create_userspace(*new_table);
+
+        auto it = new_table->paging_regions.begin();
+        while (it != new_table->paging_regions.end()) {
+            auto region_start = it->start_addr;
+            auto region_size  = it->size;
+
+            it->prepare_deletion();
+            new_table->paging_regions.erase(it);
+
+            new_table->invalidate_range(tlb_ctx, region_start, region_size, true);
+
+            it = new_table->paging_regions.begin();
+        }
+    });
+
+    free_all_pages();
+    {
+        auto ctx = TLBShootdownContext::create_userspace(*this);
+        ctx.invalidate_all();
+    }
+
+    for (auto &reg: this->paging_regions) {
+        auto result = reg.clone_to(new_table, reg.start_addr, reg.access_type);
+        if (result)
+            return nullptr;
+    }
+
+    guard.dismiss();
+
+    return new_table;
+}
+
 kresult_t AArch64_Page_Table::map(u64 page_addr, void *virt_addr, ::kernel::paging::Page_Table_Arguments arg)
 {
     return map_page(page_directory, page_addr, virt_addr, arg);
@@ -458,6 +505,12 @@ void AArch64_Page_Table::takeout_global_page_tables()
 {
     Auto_Lock_Scope l(page_tables_lock);
     page_tables.erase(id);
+}
+
+klib::shared_ptr<AArch64_Page_Table> AArch64_Page_Table::get_page_table(u64 id) noexcept
+{
+    auto it = page_tables.find(id);
+    return it == page_tables.end() ? nullptr : it->second;
 }
 
 void AArch64_Page_Table::free_all_pages()

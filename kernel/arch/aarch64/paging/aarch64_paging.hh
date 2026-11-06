@@ -10,7 +10,7 @@ class AArch64_Page_Table final: public ::kernel::paging::Page_Table
 {
 public:
     static klib::shared_ptr<AArch64_Page_Table> create_empty(int flags = 0);
-    klib::shared_ptr<AArch64_Page_Table> create_clone() const;
+    klib::shared_ptr<AArch64_Page_Table> create_clone();
 
     static klib::shared_ptr<AArch64_Page_Table> get_page_table(u64 id) noexcept;
 
