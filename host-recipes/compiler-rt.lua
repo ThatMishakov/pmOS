@@ -1,0 +1,57 @@
+return function(c)
+    return Tool {
+        name = "compiler-rt",
+        version = "23.1.2",
+        revision = 1,
+        source = c.source("clang"),
+        dependencies = c.deps {
+            "ninja-build",
+            "cmake",
+            "python3",
+            "build-essential",
+            c.pkg("mlibc-headers"),
+            c.tool("clang"),
+        },
+        configure = c.script([=[
+TARGET_TRIPLE="${PMOS_ARCH}-unknown-pmos"
+AR="$(command -v llvm-ar)"
+NM="$(command -v llvm-nm)"
+RANLIB="$(command -v llvm-ranlib)"
+cmake -S ${SOURCE_DIR}/compiler-rt \
+    -G Ninja \
+    -DCMAKE_AR=$AR \
+    -DCMAKE_NM=$NM \
+    -DCMAKE_RANLIB=$RANLIB \
+    -DCMAKE_SYSROOT="${SYSROOT_DIR}" \
+    -DCMAKE_ASM_COMPILER_TARGET="${TARGET_TRIPLE}" \
+    -DCMAKE_ASM_FLAGS="${COMPILE_FLAGS}" \
+    -DCMAKE_C_COMPILER_TARGET="${TARGET_TRIPLE}" \
+    -DCMAKE_C_COMPILER=clang \
+    -DCMAKE_C_FLAGS="${COMPILE_FLAGS}" \
+    -DCMAKE_CXX_COMPILER_TARGET="${TARGET_TRIPLE}" \
+    -DCMAKE_CXX_COMPILER=clang \
+    -DCMAKE_CXX_FLAGS="${COMPILE_FLAGS}" \
+    -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
+    -DCOMPILER_RT_BUILD_BUILTINS=ON \
+    -DCOMPILER_RT_BUILD_LIBFUZZER=OFF \
+    -DCOMPILER_RT_BUILD_MEMPROF=OFF \
+    -DCOMPILER_RT_BUILD_PROFILE=OFF \
+    -DCOMPILER_RT_BUILD_CTX_PROFILE=OFF \
+    -DCOMPILER_RT_BUILD_SANITIZERS=OFF \
+    -DCOMPILER_RT_BUILD_XRAY=OFF \
+    -DCOMPILER_RT_BUILD_ORC=OFF \
+    -DCOMPILER_RT_BUILD_CRT=ON \
+    -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON \
+    -DCOMPILER_RT_OS_DIR=pmos \
+    -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON \
+    -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+    -DCOMPILER_RT_INSTALL_LIBRARY_DIR=/usr/local/lib/clang/23/lib/
+        ]=]),
+        build = c.script([=[
+ninja -j ${PARALLELISM}
+        ]=]),
+        install = c.script([=[
+DESTDIR="${INSTALL_DIR}" ninja install
+        ]=]),
+    }
+end

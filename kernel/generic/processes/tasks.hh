@@ -238,7 +238,7 @@ namespace proc
         pmos::containers::DoubleListHead<TaskDescriptor> futex_list_node;
 
         // Creates and assigns an emty valid page table
-        kresult_t create_new_page_table();
+        kresult_t create_new_page_table(int flags = 0);
 
         // Registers a page table within a process, if it doesn't have any
         [[nodiscard]] kresult_t register_page_table(klib::shared_ptr<paging::Arch_Page_Table>);

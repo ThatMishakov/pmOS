@@ -1,52 +1,68 @@
+.DEFAULT_GOAL := build-x86_64/pmos.img
 ISO=build/pmOS.iso
 i686-IMG=build-i686/pmos-hyper.img
 x86_64-IMG=build-x86_64/pmos.img
 x86_64-HYPER-IMG=build-x86_64/pmos-hyper.img
+x86_64-i686-IMG=build-x86_64-i686/pmos.img
+x86_64-i686-HYPER-IMG=build-x86_64-i686/pmos-hyper.img
 x86_64-GRUB-ISO=build-x86_64/pmos-grub.iso
 x86_64-HYPER-ISO=build-x86_64/pmos-hyper.iso
 riscv64-IMG=build-riscv64/pmos.img
 loongarch64-IMG=build-loongarch64/pmos.img
 
-# jinx:
-# 	wget -O jinx https://codeberg.org/Mintsuki/jinx/raw/commit/e6f44d1bd8c6a504fc3fbfcc16ddb549e2e89a3c/jinx
-# 	chmod +x jinx
+# The Lua configuration owns dependencies and incremental rebuilds. Always ask
+# Chariot to evaluate them before running QEMU, even when an image already exists.
+CHARIOT ?= $(CURDIR)/.chariot-tools/bin/chariot
+TOOLCHAIN ?= clang
+CHARIOT_FLAGS ?=
 
-build-x86_64/.jinx-parameters:
-	@mkdir -p build-x86_64
-	@cd build-x86_64 && ../jinx/jinx init .. ARCH=x86_64
+define build_image
+	@mkdir -p build-$(1)
+	$(CHARIOT) install --force --arch $(1) -o toolchain=$(TOOLCHAIN) $(CHARIOT_FLAGS) $(2) build-$(1)/chariot-$(TOOLCHAIN)
+	cp build-$(1)/chariot-$(TOOLCHAIN)/images/$(3) build-$(1)/$(3)
+endef
 
-build-riscv64/.jinx-parameters:
-	@mkdir -p build-riscv64
-	@cd build-riscv64 && ../jinx/jinx init .. ARCH=riscv64
+# Chariot has one target architecture per graph. Export the normal amd64 kernel,
+# then let the ia32 image import that binary as a content-hashed boot asset.
+define build_compat_image
+	@mkdir -p build-x86_64-i686
+	$(CHARIOT) install --force --arch x86_64 -o toolchain=$(TOOLCHAIN) $(CHARIOT_FLAGS) kernel build-x86_64/kernel-$(TOOLCHAIN)
+	$(CHARIOT) install --force --arch i686 -o toolchain=$(TOOLCHAIN) -o kernel-arch=x86_64 $(CHARIOT_FLAGS) $(1) build-x86_64-i686/chariot-$(TOOLCHAIN)
+	cp build-x86_64-i686/chariot-$(TOOLCHAIN)/images/$(2) build-x86_64-i686/$(2)
+endef
 
-build-loongarch64/.jinx-parameters:
-	@mkdir -p build-loongarch64
-	@cd build-loongarch64 && ../jinx/jinx init .. ARCH=loongarch64
+$(x86_64-IMG): FORCE | $(CHARIOT)
+	$(call build_image,x86_64,limine-disk-image,pmos.img)
 
-build-i686/.jinx-parameters:
-	@mkdir -p build-i686
-	@cd build-i686 && ../jinx/jinx init .. ARCH=i686
+$(riscv64-IMG): FORCE | $(CHARIOT)
+	$(call build_image,riscv64,limine-disk-image,pmos.img)
 
-$(x86_64-IMG): build-x86_64/.jinx-parameters
-	@cd build-x86_64 && ../jinx/jinx build limine-disk-image
+$(loongarch64-IMG): FORCE | $(CHARIOT)
+	$(call build_image,loongarch64,limine-disk-image,pmos.img)
 
-$(riscv64-IMG): build-riscv64/.jinx-parameters
-	@cd build-riscv64 && ../jinx/jinx build limine-disk-image
+$(i686-IMG): FORCE | $(CHARIOT)
+	$(call build_image,i686,hyper-disk-image,pmos-hyper.img)
 
-$(loongarch64-IMG): build-loongarch64/.jinx-parameters
-	@cd build-loongarch64 && ../jinx/jinx build limine-disk-image
+$(x86_64-HYPER-IMG): FORCE | $(CHARIOT)
+	$(call build_image,x86_64,hyper-disk-image,pmos-hyper.img)
 
-$(i686-IMG): build-i686/.jinx-parameters
-	@cd build-i686 && ../jinx/jinx build hyper-disk-image
+$(x86_64-i686-HYPER-IMG): FORCE | $(CHARIOT)
+	$(call build_compat_image,hyper-disk-image,pmos-hyper.img)
 
-$(x86_64-HYPER-IMG): build-x86_64/.jinx-parameters
-	@cd build-x86_64 && ../jinx/jinx build hyper-disk-image
+$(x86_64-i686-IMG): FORCE | $(CHARIOT)
+	$(call build_compat_image,limine-disk-image,pmos.img)
 
-$(x86_64-GRUB-ISO): build-x86_64/.jinx-parameters
-	@cd build-x86_64 && ../jinx/jinx build grub-iso
+$(x86_64-GRUB-ISO): FORCE | $(CHARIOT)
+	$(call build_image,x86_64,grub-iso,pmos-grub.iso)
 
-$(x86_64-HYPER-ISO): build-x86_64/.jinx-parameters
-	@cd build-x86_64 && ../jinx/jinx build hyper-iso
+$(x86_64-HYPER-ISO): FORCE | $(CHARIOT)
+	$(call build_image,x86_64,hyper-iso,pmos-hyper.iso)
+
+.chariot-tools/bin/chariot $(CURDIR)/.chariot-tools/bin/chariot: scripts/install-chariot.sh
+	./scripts/install-chariot.sh
+
+.PHONY: FORCE
+FORCE:
 
 emul: $(x86_64-HYPER-IMG)
 	bochs-debugger -q -f .bochsrc
@@ -73,6 +89,9 @@ ovmf-x86/OVMF.fd:
 	cd ovmf-x86 && curl -o OVMF.fd https://retrage.github.io/edk2-nightly/bin/RELEASEX64_OVMF.fd
 
 qemu-x86-limine: $(x86_64-IMG) ovmf-x86
+qemu-x86-compat-limine: x86_64-IMG = $(x86_64-i686-IMG)
+qemu-x86-compat-limine: $(x86_64-i686-IMG) ovmf-x86
+qemu-x86-limine qemu-x86-compat-limine:
 	qemu-system-x86_64 \
 		-drive file=$(x86_64-IMG),if=none,id=hdd0\
     	-device ide-hd,drive=hdd0 \
@@ -85,6 +104,9 @@ qemu-x86-limine: $(x86_64-IMG) ovmf-x86
 # -trace ahci_* -trace handle_cmd_* \
 
 qemu-x86: $(x86_64-HYPER-IMG) ovmf-x86
+qemu-x86-compat: x86_64-HYPER-IMG = $(x86_64-i686-HYPER-IMG)
+qemu-x86-compat: $(x86_64-i686-HYPER-IMG) ovmf-x86
+qemu-x86 qemu-x86-compat:
 	qemu-system-x86_64 \
 		-drive file=$(x86_64-HYPER-IMG),if=none,id=hdd0\
 		-smbios type=0,uefi=on -bios ovmf-x86/OVMF.fd\

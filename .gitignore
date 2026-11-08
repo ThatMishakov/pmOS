@@ -10,3 +10,8 @@
 /build-*
 /.jinx-cache
 /sources
+
+/.chariot.toml
+/.chariot.json
+/.chariot-tools
+/jinx

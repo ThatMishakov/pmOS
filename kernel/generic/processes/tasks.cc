@@ -318,7 +318,7 @@ void TaskDescriptor::atomic_kill(i32 exit_code, bool kill_process)
     // (in particular, interrupt mappings) will be called on that CPU
 }
 
-kresult_t TaskDescriptor::create_new_page_table()
+kresult_t TaskDescriptor::create_new_page_table(int flags)
 {
     Auto_Lock_Scope scope_lock(sched_lock);
 
@@ -328,17 +328,11 @@ kresult_t TaskDescriptor::create_new_page_table()
     if (page_table)
         return -EEXIST;
 
-    auto table = paging::Arch_Page_Table::create_empty();
+    auto table = paging::Arch_Page_Table::create_empty(flags);
     if (!table)
         return -ENOMEM;
 
-    Auto_Lock_Scope page_table_lock(table->lock);
-    if (table->owner_tasks.insert_noexcept(this).first == table->owner_tasks.end())
-        return -ENOMEM;
-
-    page_table = table;
-
-    return 0;
+    return register_page_table(klib::move(table));
 }
 
 kresult_t TaskDescriptor::register_page_table(klib::shared_ptr<paging::Arch_Page_Table> table)
