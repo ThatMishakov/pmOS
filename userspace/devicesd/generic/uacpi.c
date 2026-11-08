@@ -14,6 +14,8 @@
 #include <uacpi/kernel_api.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <semaphore.h>
+#include <errno.h>
 
 void *uacpi_kernel_alloc(uacpi_size size) { return malloc(size); }
 
@@ -53,44 +55,6 @@ void uacpi_kernel_unmap(void *addr, uacpi_size len)
     size_t region_size_aligned  = (size_t)((uintptr_t)region_end_aligned - (uintptr_t)region_start_aligned);
 
     release_memory_range(TASK_ID_SELF, region_start_aligned, region_size_aligned);
-}
-
-uacpi_handle uacpi_kernel_create_mutex(void)
-{
-    pthread_mutex_t *mutex = malloc(sizeof(pthread_mutex_t));
-    pthread_mutex_init(mutex, NULL);
-    return (uacpi_handle)mutex;
-}
-
-void uacpi_kernel_free_mutex(uacpi_handle handle)
-{
-    pthread_mutex_destroy((pthread_mutex_t *)handle);
-    free(handle);
-}
-
-uacpi_status uacpi_kernel_acquire_mutex(uacpi_handle mutex, uacpi_u16 timeout)
-{
-    // if (timeout == 0xFFFF)
-    //     return pthread_mutex_lock((pthread_mutex_t *)mutex) == 0 ? UACPI_TRUE : UACPI_FALSE;
-
-    // struct timespec ts;
-    // ts.tv_sec = timeout / 1000;
-    // ts.tv_nsec = (timeout % 1000) * 1000000;
-
-    // return pthread_mutex_timedlock((pthread_mutex_t *)mutex, &ts) == 0 ? UACPI_TRUE :
-    // UACPI_FALSE;
-
-    // Timed mutex lock is not yet implemented
-    int result = pthread_mutex_lock((pthread_mutex_t *)mutex);
-    if (!result)
-        return UACPI_STATUS_OK;
-
-    return UACPI_STATUS_OUT_OF_MEMORY;
-}
-
-void uacpi_kernel_release_mutex(uacpi_handle mutex)
-{
-    pthread_mutex_unlock((pthread_mutex_t *)mutex);
 }
 
 uacpi_handle uacpi_kernel_create_spinlock(void)
@@ -147,36 +111,6 @@ __attribute__((constructor)) void uacpi_work_queue_init(void)
     pthread_spin_init(&work_queue_lock, PTHREAD_PROCESS_PRIVATE);
 }
 
-uacpi_status uacpi_kernel_schedule_work(uacpi_work_type type, uacpi_work_handler handler,
-                                        uacpi_handle ctx)
-{
-    struct uacpi_work *work = malloc(sizeof(struct uacpi_work));
-    if (work == NULL)
-        return UACPI_STATUS_OUT_OF_MEMORY;
-
-    work->type    = type;
-    work->handler = handler;
-    work->ctx     = ctx;
-    work->next    = NULL;
-
-    int t = pthread_create(&work->thread, NULL, uacpi_work, work);
-    if (t != 0) {
-        free(work);
-        return UACPI_STATUS_OUT_OF_MEMORY;
-    }
-
-    pthread_spin_lock(&work_queue_lock);
-    if (work_queue_start == NULL) {
-        work_queue_start = work_queue_end = work;
-    } else {
-        work_queue_end->next = work;
-        work_queue_end       = work;
-    }
-    pthread_spin_unlock(&work_queue_lock);
-
-    return UACPI_STATUS_OK;
-}
-
 uacpi_status uacpi_kernel_wait_for_work_completion(void)
 {
     while (true) {
@@ -197,83 +131,6 @@ uacpi_status uacpi_kernel_wait_for_work_completion(void)
     }
 
     return UACPI_STATUS_OK;
-}
-
-struct event_handle {
-    pthread_cond_t cond;
-    pthread_mutex_t mutex;
-    size_t counter;
-};
-
-uacpi_handle uacpi_kernel_create_event(void)
-{
-    struct event_handle *event = malloc(sizeof(struct event_handle));
-    if (event == NULL)
-        return NULL;
-
-    int r = pthread_cond_init(&event->cond, NULL);
-    if (r != 0) {
-        free(event);
-        return NULL;
-    }
-
-    r = pthread_mutex_init(&event->mutex, NULL);
-    if (r != 0) {
-        pthread_cond_destroy(&event->cond);
-        free(event);
-        return NULL;
-    }
-
-    event->counter = 0;
-    return event;
-}
-
-void uacpi_kernel_free_event(uacpi_handle handle)
-{
-    struct event_handle *event = handle;
-    pthread_cond_destroy(&event->cond);
-    pthread_mutex_destroy(&event->mutex);
-    free(event);
-}
-
-uacpi_bool uacpi_kernel_wait_for_event(uacpi_handle handle, uacpi_u16 timeout)
-{
-    // Timeout is not yet implemented
-    (void)timeout;
-    int r;
-
-    struct event_handle *event = handle;
-    r                          = pthread_mutex_lock(&event->mutex);
-    if (r != 0)
-        return UACPI_FALSE;
-    while (event->counter == 0) {
-        r = pthread_cond_wait(&event->cond, &event->mutex);
-        if (r != 0) {
-            pthread_mutex_unlock(&event->mutex);
-            return UACPI_FALSE;
-        }
-    }
-    event->counter--;
-    pthread_mutex_unlock(&event->mutex);
-
-    return UACPI_TRUE;
-}
-
-void uacpi_kernel_signal_event(uacpi_handle handle)
-{
-    struct event_handle *event = handle;
-    pthread_mutex_lock(&event->mutex);
-    event->counter++;
-    pthread_cond_signal(&event->cond);
-    pthread_mutex_unlock(&event->mutex);
-}
-
-void uacpi_kernel_reset_event(uacpi_handle handle)
-{
-    struct event_handle *event = handle;
-    pthread_mutex_lock(&event->mutex);
-    event->counter = 0;
-    pthread_mutex_unlock(&event->mutex);
 }
 
 uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address, uacpi_handle *out_handle)
@@ -797,3 +654,152 @@ void uacpi_kernel_restore_interrupts(uacpi_interrupt_state state)
     __pmos_syscall_set_attr(0, 9, state);
 }
 
+uacpi_handle uacpi_kernel_create_semaphore(uacpi_u32 initial_units)
+{
+    sem_t *sem = malloc(sizeof(sem_t));
+    if (!sem)
+        return sem;
+
+    int result = sem_init(sem, 0, initial_units);
+    if (result < 0) {
+        free(sem);
+        return nullptr;
+    }
+
+    return sem;
+}
+
+void uacpi_kernel_free_semaphore(uacpi_handle handle)
+{
+    int result = sem_destroy(handle);
+    (void)result;
+    assert(result == 0);
+
+    free(handle);
+}
+
+uacpi_status uacpi_kernel_wait_for_semaphore(uacpi_handle handle, uacpi_u16 timeout_ms)
+{
+    if (timeout_ms == 0xFFFF) {
+        int result = sem_wait(handle);
+        if (result < 0)
+            return UACPI_STATUS_INTERNAL_ERROR;
+        return UACPI_STATUS_OK;
+    } else if (timeout_ms == 0) {
+        int result = sem_trywait(handle);
+        if (result < 0) {
+            if (errno == EAGAIN)
+                return UACPI_STATUS_TIMEOUT;
+            else
+                return UACPI_STATUS_INTERNAL_ERROR;
+        }
+        return UACPI_STATUS_OK;
+    } else {
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_sec += timeout_ms / 1000;
+        ts.tv_nsec += (timeout_ms % 1000) * 1000000;
+
+        if (ts.tv_nsec >= 1000000000L) {
+            ts.tv_sec++;
+            ts.tv_nsec -= 1000000000L;
+        }
+
+        int result = sem_timedwait(handle, &ts);
+        if (result < 0) {
+            if (errno == ETIMEDOUT)
+                return UACPI_STATUS_TIMEOUT;
+            else
+                return UACPI_STATUS_INTERNAL_ERROR;
+        }
+        return UACPI_STATUS_OK;
+    }
+}
+
+void uacpi_kernel_signal_semaphore(uacpi_handle handle)
+{
+    int result = sem_post(handle);
+    (void)result;
+    assert(result == 0);
+}
+
+struct WorkItem {
+    uacpi_work_handler handler;
+    uacpi_handle ctx;
+    uacpi_work_type work_type;
+    pthread_t thread;
+    sem_t semaphore;
+    bool cancel_self;
+};
+
+void *work_thread(void *arg)
+{
+    struct WorkItem *item = arg;
+    bool currently_scheduled_any = true;
+
+    while (!item->cancel_self) {
+        sem_wait(&item->semaphore);
+        if (item->handler == NULL)
+            break;
+
+        bool schedule_any = item->work_type == UACPI_WORK_NOTIFICATION;
+        if (currently_scheduled_any != schedule_any)
+            set_affinity(TASK_ID_SELF, schedule_any ? 0 : 1, 0);
+        currently_scheduled_any = schedule_any;
+
+        item->handler(item->ctx);
+    }
+
+    if (item->cancel_self) {
+        sem_destroy(&item->semaphore);
+        free(item);
+    }
+
+    return nullptr;
+}
+
+uacpi_handle uacpi_kernel_create_work_item(void)
+{
+    struct WorkItem *item = malloc(sizeof(struct WorkItem));
+    if (!item)
+        return NULL;
+
+    sem_init(&item->semaphore, 0, 0);
+
+    int result = pthread_create(&item->thread, NULL, (void *(*)(void *))work_thread, item);
+    if (result != 0) {
+        sem_destroy(&item->semaphore);
+        free(item);
+        return NULL;
+    }
+
+    item->handler = NULL;
+    item->ctx     = NULL;
+    item->cancel_self = false;
+    return item;
+}
+
+void uacpi_kernel_free_event(uacpi_handle handle)
+{
+    struct WorkItem *item = handle;
+    item->handler = NULL;
+
+    if (pthread_equal(pthread_self(), item->thread)) {
+        pthread_detach(item->thread);
+        item->cancel_self = true;
+    } else {
+        sem_post(&item->semaphore);
+        pthread_join(item->thread, NULL);
+        sem_destroy(&item->semaphore);
+        free(item);
+    }
+}
+
+void uacpi_kernel_schedule_work(uacpi_work_type type, uacpi_handle work_item, uacpi_work_handler handler, uacpi_handle ctx)
+{
+    struct WorkItem *item = handle;
+    item->handler = handler;
+    item->ctx = ctx;
+    item->work_type = type;
+    sem_post(&item->semaphore);
+}
