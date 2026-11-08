@@ -2,12 +2,12 @@
 
 ## Build, run, and test commands
 
-This repository is built with **Jinx** (not CMake/Ninja at the repo root).
+This repository is built with **Chariot** (not CMake/Ninja at the repo root).
 
 ```bash
 # one-time bootstrap
 git submodule update --init --recursive
-make jinx
+./scripts/install-chariot.sh
 ```
 
 ```bash
@@ -23,27 +23,16 @@ make qemu-loongarch64
 ```
 
 ```bash
-# direct jinx flow (when iterating on one architecture/component)
-mkdir -p build-x86_64
-cd build-x86_64
-../jinx init .. ARCH=x86_64
-../jinx build limine-disk-image
+# direct Chariot flow (from the repository root)
+.chariot-tools/bin/chariot build --arch x86_64 limine-disk-image
 ```
 
 ```bash
-# build a single component/package (recipe name from recipes/<name>)
-cd build-x86_64
-../jinx build ahcid
-../jinx build bootstrapd
-../jinx build tests
-```
+# build a single component/package (recipes/<name>.lua)
+.chariot-tools/bin/chariot build --arch x86_64 ahcid bootstrapd tests
 
-```bash
-# after code changes, rebuild affected recipe(s), then use make qemu-x86
-# (qemu-x86 already builds the needed disk image target)
-cd build-x86_64
-../jinx build <changed-recipe> [<changed-recipe>...]
-cd ..
+# rebuild affected packages, then build the image and boot it
+.chariot-tools/bin/chariot build --arch x86_64 <changed-package>
 make qemu-x86
 ```
 
@@ -69,20 +58,22 @@ python3 run_tests.py --test-dir /path/to/one-case-dir
 
 ### Lint/format
 
-- No dedicated repo-wide lint target was found in root build entry points (`Makefile`, `Jinxfile`, `recipes/*`).
+- No dedicated repo-wide lint target was found in root build entry points (`Makefile`, `chariot.lua`, `recipes/*.lua`).
 - C/C++ formatting style is defined in `.clang-format`.
 
 ## High-level architecture (cross-file view)
 
 - pmOS is a **microkernel + userspace services** OS. Kernel provides low-level primitives (memory management, scheduling, interrupts, IPC, capabilities/rights), while most drivers/services run in userspace and communicate over IPC.
 - Build orchestration is split across:
-  - `Jinxfile` (global build settings, architecture mapping, boot service list),
-  - `recipes/*` (one package per component),
+  - `chariot.lua` (build graph, architecture selection and boot service list),
+  - `chariot_config.toml` (pinned build environment),
+  - `scripts/chariot-common.sh` (cross-compilation settings),
+  - `recipes/*.lua` and `host-recipes/*.lua` (target packages and host tools),
   - `scripts/make_*` (image/config generation).
 - Boot assembly flow:
-  1. `BOOT_SERVICES` in `Jinxfile` defines which userspace services are included at boot.
-  2. `recipes/limine-config` or `recipes/hyper-config` turns that list into bootloader module entries (`scripts/make_limine_cnf.sh`, `scripts/make_hyper_config.sh`).
-  3. `recipes/limine-disk-image` / `recipes/hyper-disk-image` copy `kernel`, `bootstrapd`, each `service.elf`, and `service.yaml` into boot media (`scripts/make_limine_disk_image.sh`, `scripts/make_hyper_disk_image.sh`).
+  1. The service list in `chariot.lua` defines which userspace services are included at boot.
+  2. `recipes/limine-config.lua` or `recipes/hyper-config.lua` turns that list into bootloader module entries (`scripts/make_limine_cnf.sh`, `scripts/make_hyper_config.sh`).
+  3. `recipes/limine-disk-image.lua` / `recipes/hyper-disk-image.lua` copy `kernel`, `bootstrapd`, each `service.elf`, and `service.yaml` into boot media (`scripts/make_limine_disk_image.sh`, `scripts/make_hyper_disk_image.sh`).
   4. `bootstrapd` parses loaded module metadata and `*.yaml` service configs, then starts or hooks services by `run_type`.
 - Service declaration model:
   - Executable + YAML are paired (`/boot/<service>` and `/boot/<service>.yaml`).
@@ -92,16 +83,17 @@ python3 run_tests.py --test-dir /path/to/one-case-dir
 ## Repository-specific conventions
 
 - **Cross-target toolchain naming is fixed**: CMake projects set compiler targets to `${TARGET_ARCH}-pmos` and compile with clang/clang++/llvm-ar.
-- **Architecture identifiers are canonical** across make/Jinx/CMake/scripts: `x86_64`, `i686`, `riscv64`, `loongarch64`.
+- **Architecture identifiers are canonical** across Make/Chariot/CMake/scripts: `x86_64`, `i686`, `riscv64`, `loongarch64`, `m68k` (the unfinished port is selectable through Chariot).
+- **Primary regression baseline**: Clang builds of x86_64, i686, riscv64 and loongarch64 reaching Bash. Keep M68k and GCC selectable; known upstream LLVM bugs, missing M68k kernel support and existing GCC/libgcc/linker issues are separate from migration regressions.
+- **Shared host tools**: keep Clang/LLVM, Hyper and Limine independent of target architecture and options. Compiler-rt and target runtimes remain per target. After building LLVM, `scripts/check-llvm-cache.sh` checks reuse across all profiles.
 - **Default to one architecture (`x86_64`) for routine development/testing** unless the task explicitly requires another architecture.
-- **Jinx target behavior matters**: after modifying a component, rebuild its recipe target(s), then run `make qemu-x86` (which rebuilds the x86_64 disk image target).
-- **When changing which boot recipes are included** (e.g. editing `BOOT_SERVICES`), explicitly regenerate boot config before rebuilding image:
-  - `cd build-x86_64 && ../jinx build limine-config` (or `../jinx build hyper-config` for i686/Hyper flow).
+- **Chariot target behavior matters**: after modifying a component, rebuild its recipe target(s), then run `make qemu-x86` (which rebuilds the x86_64 disk image target).
+- **When changing boot services**, update the list in `chariot.lua`; rebuilding an image automatically regenerates its configuration. To inspect a config on its own, build `limine-config` or `hyper-config` with the desired `--arch`.
 - **Component packaging pattern** for userspace daemons/drivers is consistent:
-  - recipe at `recipes/<name>`
+  - recipe at `recipes/<name>.lua`
   - source at `userspace/<name>`
   - YAML at `userspace/<name>/<name>.yaml`
-  - package step copies YAML to `${dest_dir}/boot/<name>.yaml`
+  - package step copies YAML to `${INSTALL_DIR}/boot/<name>.yaml`
 - **Boot-time service wiring lives in config**, not in ad-hoc code paths:
-  - update `BOOT_SERVICES` (Jinxfile) and/or service YAML run/match metadata when changing startup behavior.
+  - update the service list in `chariot.lua` and/or service YAML run/match metadata when changing startup behavior.
 - **Subtrees under `limine/Hyper` and both `uACPI` paths are upstream projects/submodules** with their own tests/workflows; prefer minimal, intentional edits there.

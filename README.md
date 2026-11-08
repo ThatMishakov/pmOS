@@ -24,24 +24,39 @@ The project is roughly structured as follows:
 - `lib/` - Different system libraries
 - `mlibc/` - The [mlibc](https://github.com/managarm/mlibc) C library
 - `userspace/` - Different userspace servers/programs
-- `host-recipes/`, `recipes/`, `patches/`, `Jinxfile` - [Jinx](https://codeberg.org/Mintsuki/jinx) build system stuff
+- `host-recipes/`, `recipes/`, `chariot.lua`, `chariot_config.toml` - [Chariot](https://chariot-build.dev/) tools, packages, patches and build configuration
 - `scripts/` - Build support scripts
 
 ## Compilation and execution
 
-The [Jinx meta-build-system](https://github.com/Mintsuki/Jinx) is used for building the system. A Makefile is provided in the root of this project, which downloads Jinx and uses it to build the system images for different architectures. The `qemu`, `qemu-x86`, `qemu-i686` and `qemu-loongarch64` makefile targets are provided to build and run RISC-V, amd64, ia32 and LoongArch64 images in qemu, respectively.
+The system is built with [Chariot](https://chariot-build.dev/). A Linux x86-64
+host with user namespaces, overlayfs, curl, sha256sum, Git, Make and QEMU is
+required.
 
-If you would like to use jinx directly, you can run
 ```sh
-export source_dir=<path to this repository>
-
-cd ${source_dir} && git submodule update --init --recursive # Prepare submodules
-make -C ${source_dir} jinx # Download jinx
-
-cd <your build directory>
-${source_dir}/jinx init ${source_dir} ARCH=<desired architecture, e.g. riscv64, x86_64, i686, loongarch64>
-${source_dir}/jinx build limine-disk-image
+git submodule update --init --recursive
+make qemu                 # RISC-V64, Limine
+make qemu-x86             # amd64, Hyper
+make qemu-i686            # ia32, Hyper
+make qemu-loongarch64     # LoongArch64, Limine
 ```
+
+To build without running QEMU, use an image target such as
+`make build-x86_64/pmos.img`. Clang is the default; pass `TOOLCHAIN=gcc` to use
+GCC.
+
+For individual packages, run Chariot from the repository root:
+
+```sh
+./scripts/install-chariot.sh
+.chariot-tools/bin/chariot build --arch riscv64 bash
+.chariot-tools/bin/chariot build --arch m68k -o toolchain=gcc mlibc
+```
+
+Pass extra options through `CHARIOT_FLAGS`, for example `'-j 8'` or
+`--allow-new-profiles` for unattended builds. Personal source overrides and
+build-directory caching belong in `.chariot.toml`; see the
+[Chariot configuration reference](https://chariot-build.dev/configuration/).
 
 ## Plans
 

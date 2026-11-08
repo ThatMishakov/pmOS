@@ -1,0 +1,9 @@
+target_prefix = "/usr"
+global_native_packages = ["build-essential", "cmake", "ninja-build", "python3", "gettext-base", "pkg-config", "ca-certificates"]
+
+[global_environment_variables]
+LC_ALL = "C"
+
+[rootfs]
+version = "debian/20260901T000000Z"
+hash = "e6775656286e7970dbc780a5d3c05da2e53ef22b72b2dfbeadc97674c1101cdb"
