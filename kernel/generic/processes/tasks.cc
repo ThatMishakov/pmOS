@@ -380,6 +380,8 @@ kresult_t
 #define ELF_INSTR_SET EM_LOONGARCH
 #elif defined(__m68k__)
 #define ELF_INSTR_SET EM_68K
+#elif defined(__aarch64__)
+#define ELF_INSTR_SET EM_AARCH64
 #else
 #error "Unsupported architecture"
 #endif

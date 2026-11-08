@@ -14,7 +14,7 @@ return function(c)
 cmake -S "${SOURCE_DIR}/llvm" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DLLVM_ENABLE_PROJECTS="clang;lld;lldb" \
-    -DLLVM_TARGETS_TO_BUILD="X86;RISCV;LoongArch" \
+    -DLLVM_TARGETS_TO_BUILD="X86;RISCV;LoongArch;AArch64" \
     -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=M68k \
     -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
     -DCLANG_DEFAULT_CXX_STDLIB=libc++ \
