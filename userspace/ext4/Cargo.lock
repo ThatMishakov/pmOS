@@ -208,7 +208,7 @@ dependencies = [
 [[package]]
 name = "libc"
 version = "0.2.178"
-source = "git+https://gitlab.com/mishakov/libc-pmos.git?branch=pmos-0.2.178#582e08bb622897e51b19082b427727ca8e000a41"
+source = "git+https://gitlab.com/mishakov/libc-pmos.git?branch=pmos-0.2.178#9dd74d0d90572c36cf484dd6bf912eec6a3abb1f"
 
 [[package]]
 name = "maybe-async"
