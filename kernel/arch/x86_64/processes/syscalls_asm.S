@@ -227,13 +227,13 @@ ret_from_sysenter:
 syscall_int_entry:
     # It will always be from other rings to ring 0
     swapgs
+    
+    pushq $0
 
     # Save registers
     call save_context
 
-    # Entry type
-    movq $0,   176(%r11)
-
+    xorq %rbp, %rbp
     call x86_syscall_handler
 
     # Jmp to the right return method (in case there was a task switch)

@@ -45,6 +45,10 @@ To build without running QEMU, use an image target such as
 `make build-x86_64/pmos.img`. Clang is the default; pass `TOOLCHAIN=gcc` to use
 GCC.
 
+For an amd64 kernel with ia32 userspace, use `make qemu-x86-compat`
+(Hyper) or `make qemu-x86-compat-limine`. Build-only images live in
+`build-x86_64-i686/`.
+
 For individual packages, run Chariot from the repository root:
 
 ```sh

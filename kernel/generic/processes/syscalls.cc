@@ -47,6 +47,7 @@
 #include <time.h>
 #include <clock.hh>
 #include <exceptions.hh>
+#include <elf.h>
 #include <kern_logger/kern_logger.hh>
 #include <lib/string.hh>
 #include <lib/utility.hh>
@@ -1596,7 +1597,17 @@ void syscall_assign_page_table(TaskDescriptor *current)
 
     switch (flags & 0xffff) {
     case 1: { // PAGE_TABLE_CREATE
-        auto result = dest->create_new_page_table();
+        int table_flags = 0;
+#ifdef __x86_64__
+        unsigned architecture = flags >> 16;
+        if (architecture == EM_386 || (!architecture && current->is_32bit())) {
+            table_flags |= Page_Table::FLAG_32BIT;
+        } else if (architecture && architecture != EM_X86_64) {
+            syscall_error(current) = -ENOTSUP;
+            return;
+        }
+#endif
+        auto result = dest->create_new_page_table(table_flags);
         if (result) {
             syscall_error(current) = result;
         } else {

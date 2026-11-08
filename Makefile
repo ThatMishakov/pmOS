@@ -3,6 +3,8 @@ ISO=build/pmOS.iso
 i686-IMG=build-i686/pmos-hyper.img
 x86_64-IMG=build-x86_64/pmos.img
 x86_64-HYPER-IMG=build-x86_64/pmos-hyper.img
+x86_64-i686-IMG=build-x86_64-i686/pmos.img
+x86_64-i686-HYPER-IMG=build-x86_64-i686/pmos-hyper.img
 x86_64-GRUB-ISO=build-x86_64/pmos-grub.iso
 x86_64-HYPER-ISO=build-x86_64/pmos-hyper.iso
 riscv64-IMG=build-riscv64/pmos.img
@@ -20,6 +22,15 @@ define build_image
 	cp build-$(1)/chariot-$(TOOLCHAIN)/images/$(3) build-$(1)/$(3)
 endef
 
+# Chariot has one target architecture per graph. Export the normal amd64 kernel,
+# then let the ia32 image import that binary as a content-hashed boot asset.
+define build_compat_image
+	@mkdir -p build-x86_64-i686
+	$(CHARIOT) install --force --arch x86_64 -o toolchain=$(TOOLCHAIN) $(CHARIOT_FLAGS) kernel build-x86_64/kernel-$(TOOLCHAIN)
+	$(CHARIOT) install --force --arch i686 -o toolchain=$(TOOLCHAIN) -o kernel-arch=x86_64 $(CHARIOT_FLAGS) $(1) build-x86_64-i686/chariot-$(TOOLCHAIN)
+	cp build-x86_64-i686/chariot-$(TOOLCHAIN)/images/$(2) build-x86_64-i686/$(2)
+endef
+
 $(x86_64-IMG): FORCE | $(CHARIOT)
 	$(call build_image,x86_64,limine-disk-image,pmos.img)
 
@@ -34,6 +45,12 @@ $(i686-IMG): FORCE | $(CHARIOT)
 
 $(x86_64-HYPER-IMG): FORCE | $(CHARIOT)
 	$(call build_image,x86_64,hyper-disk-image,pmos-hyper.img)
+
+$(x86_64-i686-HYPER-IMG): FORCE | $(CHARIOT)
+	$(call build_compat_image,hyper-disk-image,pmos-hyper.img)
+
+$(x86_64-i686-IMG): FORCE | $(CHARIOT)
+	$(call build_compat_image,limine-disk-image,pmos.img)
 
 $(x86_64-GRUB-ISO): FORCE | $(CHARIOT)
 	$(call build_image,x86_64,grub-iso,pmos-grub.iso)
@@ -72,6 +89,9 @@ ovmf-x86/OVMF.fd:
 	cd ovmf-x86 && curl -o OVMF.fd https://retrage.github.io/edk2-nightly/bin/RELEASEX64_OVMF.fd
 
 qemu-x86-limine: $(x86_64-IMG) ovmf-x86
+qemu-x86-compat-limine: x86_64-IMG = $(x86_64-i686-IMG)
+qemu-x86-compat-limine: $(x86_64-i686-IMG) ovmf-x86
+qemu-x86-limine qemu-x86-compat-limine:
 	qemu-system-x86_64 \
 		-drive file=$(x86_64-IMG),if=none,id=hdd0\
     	-device ide-hd,drive=hdd0 \
@@ -84,6 +104,9 @@ qemu-x86-limine: $(x86_64-IMG) ovmf-x86
 # -trace ahci_* -trace handle_cmd_* \
 
 qemu-x86: $(x86_64-HYPER-IMG) ovmf-x86
+qemu-x86-compat: x86_64-HYPER-IMG = $(x86_64-i686-HYPER-IMG)
+qemu-x86-compat: $(x86_64-i686-HYPER-IMG) ovmf-x86
+qemu-x86 qemu-x86-compat:
 	qemu-system-x86_64 \
 		-drive file=$(x86_64-HYPER-IMG),if=none,id=hdd0\
 		-smbios type=0,uefi=on -bios ovmf-x86/OVMF.fd\

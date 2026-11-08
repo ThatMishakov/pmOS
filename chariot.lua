@@ -3,12 +3,19 @@ local arch = chariot.target_arch
 assert(({x86_64=true, i686=true, riscv64=true, loongarch64=true, m68k=true})[arch],
     "unsupported architecture: " .. arch)
 for key in pairs(chariot.options) do
-    assert(key == "toolchain", "unknown option: " .. key)
+    assert(key == "toolchain" or key == "kernel-arch", "unknown option: " .. key)
 end
 local toolchain = chariot.options.toolchain or "clang"
 assert(toolchain == "clang" or toolchain == "gcc", "unsupported toolchain: " .. toolchain)
 
-local c = {}
+local kernel_arch = chariot.options["kernel-arch"] or arch
+assert(kernel_arch == arch or (arch == "i686" and kernel_arch == "x86_64"),
+    "unsupported kernel/userspace combination: " .. kernel_arch .. "/" .. arch)
+
+local c = {
+    kernel_arch = kernel_arch,
+    kernel_binary_dir = "build-" .. kernel_arch .. "/kernel-" .. toolchain .. "/boot",
+}
 local packages, tools, sources, loading = {}, {}, {}, {}
 local source_defs = require("scripts.chariot-sources")
 -- Embed cross-file templates so their contents are hashed with each script.

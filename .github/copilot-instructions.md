@@ -84,6 +84,7 @@ python3 run_tests.py --test-dir /path/to/one-case-dir
 
 - **Cross-target toolchain naming is fixed**: CMake projects set compiler targets to `${TARGET_ARCH}-pmos` and compile with clang/clang++/llvm-ar.
 - **Architecture identifiers are canonical** across Make/Chariot/CMake/scripts: `x86_64`, `i686`, `riscv64`, `loongarch64`, `m68k` (the unfinished port is selectable through Chariot).
+- **Compat images**: `make qemu-x86-compat` boots an amd64 kernel with entirely ia32 userspace; `qemu-x86-compat-limine` selects Limine. Make exports the normal amd64 kernel to `build-x86_64/kernel-<toolchain>/boot`, then builds the ia32 image with `-o kernel-arch=x86_64`, importing the binary as a hashed source. Bootloader settings follow the kernel architecture. Outputs live in `build-x86_64-i686/`.
 - **Primary regression baseline**: Clang builds of x86_64, i686, riscv64 and loongarch64 reaching Bash. Keep M68k and GCC selectable; known upstream LLVM bugs, missing M68k kernel support and existing GCC/libgcc/linker issues are separate from migration regressions.
 - **Shared host tools**: keep Clang/LLVM, Rust, Hyper and Limine independent of target architecture and options. Rust downloads its source-pinned binary bootstrap and links against rootfs LLVM; `rust-std`, compiler-rt and target runtimes remain per target. After building LLVM, `scripts/check-llvm-cache.sh` checks reuse across all profiles.
 - **Default to one architecture (`x86_64`) for routine development/testing** unless the task explicitly requires another architecture.

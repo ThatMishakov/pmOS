@@ -4,10 +4,11 @@ return function(c)
         version = "1",
         revision = 1,
         source = c.source("scripts"),
+        env = { PMOS_KERNEL_ARCH = c.kernel_arch },
         dependencies = c.deps {  },
         build = c.script([=[
 FILE_NAME=hyper.cfg
-LIBRARIES=$LIBRARIES ${SOURCE_DIR}/make_hyper_config.sh "$FILE_NAME" "$BOOT_SERVICES" "$PMOS_ARCH"
+LIBRARIES=$LIBRARIES ${SOURCE_DIR}/make_hyper_config.sh "$FILE_NAME" "$BOOT_SERVICES" "$PMOS_KERNEL_ARCH"
         ]=]),
         install = c.script([=[
 FILE_NAME=hyper.cfg
