@@ -10,8 +10,9 @@ return function(c)
             c.pkg("pmos-rust-lib"),
             c.cxx(),
             c.toolchain(),
-            c.tool("cargo"),
+            "cargo",
             c.tool("rust"),
+            c.tool("rust-std"),
         },
         runtime_dependencies = c.deps {
             c.pkg("mlibc"),

@@ -36,12 +36,6 @@ return {
             Local("userspace/bootstrapd"),
         }
     end,
-    ["cargo"] = function()
-        return Source {
-            name = "cargo",
-            Git("https://github.com/rust-lang/cargo.git", "85eff7c80277b57f78b11e28d14154ab12fcf643"),
-        }
-    end,
     ["clang"] = function()
         return Source {
             name = "clang",

@@ -1,58 +1,52 @@
 return function(c)
+    -- Target-independent: pmOS standard libraries are supplied by rust-std.
     return Tool {
         name = "rust",
-        version = "1.0.0",
+        version = "1.96.0",
         revision = 1,
         source = c.source("rust"),
-        dependencies = c.deps {
-            c.pkg("mlibc"),
-            c.cxx(),
-            c.toolchain(),
-            "python3",
-            "curl",
-            "git",
-            "cmake",
-            "ninja-build",
-            "pkg-config",
-            "libssl-dev",
-            "zlib1g-dev",
+        dependencies = {
+            "llvm-dev", "python3", "curl", "git", "cmake",
+            "ninja-build", "pkg-config", "libssl-dev", "zlib1g-dev",
         },
-        configure = c.script([=[
-# Refresh the writable checkout, retaining compiler outputs outside it.
-rm -rf rust-source
-cp -rp "${SOURCE_DIR}"/. rust-source
-rust_target_flags=
-if [ -n "$COMPILER_TARGET_FLAGS" ]; then
-    rust_target_flags=", \"-C\", \"link-arg=${COMPILER_TARGET_FLAGS}\""
-fi
+        configure = [[
+host="$(uname -m)-unknown-linux-gnu"
+case "$(uname -m)" in
+    i?86) host=i686-unknown-linux-gnu ;;
+    arm*) host=armv7-unknown-linux-gnueabihf ;;
+    riscv64) host=riscv64gc-unknown-linux-gnu ;;
+    ppc64le) host=powerpc64le-unknown-linux-gnu ;;
+esac
 cat <<EOF > bootstrap.toml
 change-id = 148671
 
 [llvm]
 download-ci-llvm = false
-targets = "X86;RISCV;LoongArch"
-experimental-targets = "M68k"
+link-shared = true
 
 [build]
-target = ["${RUST_TARGET}", "${RUST_HOST_TARGET}"]
+submodules = false
+host = ["${host}"]
+target = ["${host}"]
 build-dir = "${BUILD_DIR}"
 docs = false
 
-[target.${RUST_TARGET}]
-linker = "${CXX_COMPILER}"
-rustflags = ["-C", "link-arg=--sysroot=${SYSROOT_DIR}", "-C", "link-arg=-l${UNWIND_LIB}"${rust_target_flags}]
+[target.${host}]
+llvm-config = "/usr/bin/llvm-config"
 
 [install]
 prefix = "${PREFIX}"
 sysconfdir = "${PREFIX}/etc"
 EOF
-        ]=]),
-        build = c.script([=[
-CARGO_HOME="${BUILD_DIR}/.cargo" ${BUILD_DIR}/rust-source/x.py build --config "${BUILD_DIR}/bootstrap.toml" --stage 2 -j${PARALLELISM}
-        ]=]),
-        install = c.script([=[
-CARGO_HOME="${BUILD_DIR}/.cargo" DESTDIR="${INSTALL_DIR}" ${BUILD_DIR}/rust-source/x.py install --config "${BUILD_DIR}/bootstrap.toml" --stage 2 -j${PARALLELISM};
-    find "${INSTALL_DIR}" -name "*.old" -delete
-        ]=]),
+        ]],
+        build = [[
+cd "${SOURCE_DIR}"
+CARGO_HOME="${BUILD_DIR}/.cargo" ./x.py build --config "${BUILD_DIR}/bootstrap.toml" --stage 1 compiler/rustc library/std -j${PARALLELISM}
+        ]],
+        install = [[
+cd "${SOURCE_DIR}"
+CARGO_HOME="${BUILD_DIR}/.cargo" DESTDIR="${INSTALL_DIR}" ./x.py install --config "${BUILD_DIR}/bootstrap.toml" --stage 1 compiler/rustc library/std -j${PARALLELISM}
+find "${INSTALL_DIR}" -name "*.old" -delete
+        ]],
     }
 end
