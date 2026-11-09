@@ -24,6 +24,7 @@ struct ECDevice {
     bool initialized;
     bool requires_lock;
     pthread_spinlock_t lock;
+    uacpi_handle query_work;
 };
 
 #define EC_OBF     0x01
@@ -52,6 +53,8 @@ static void free_ec_devices()
     struct ECDevice *device = ec_devices;
     while (device) {
         struct ECDevice *next = device->next;
+        if (device->query_work)
+            uacpi_kernel_free_work_item(device->query_work);
         free(device);
         device = next;
     }
@@ -98,7 +101,14 @@ static int install_ec_handler(struct ECDevice *device)
     if (result != UACPI_STATUS_OK) {
         printf("Failed to read GPE: %i\n", result);
         uacpi_uninstall_address_space_handler(address_space_node,
-                                            UACPI_ADDRESS_SPACE_EMBEDDED_CONTROLLER);
+                                            UACPI_ADDRESS_SPACE_EMBEDDED_CONTROLLER, handle_ec_region);
+        return -1;
+    }
+
+    device->query_work = uacpi_kernel_create_work_item();
+    if (!device->query_work) {
+        uacpi_uninstall_address_space_handler(address_space_node,
+            UACPI_ADDRESS_SPACE_EMBEDDED_CONTROLLER, handle_ec_region);
         return -1;
     }
 
@@ -107,8 +117,10 @@ static int install_ec_handler(struct ECDevice *device)
                                                 handle_ec_event, device);
     if (result != UACPI_STATUS_OK) {
         printf("Failed to install GPE handler\n");
+        uacpi_kernel_free_work_item(device->query_work);
+        device->query_work = NULL;
         uacpi_uninstall_address_space_handler(address_space_node,
-                                            UACPI_ADDRESS_SPACE_EMBEDDED_CONTROLLER);
+                                            UACPI_ADDRESS_SPACE_EMBEDDED_CONTROLLER, handle_ec_region);
         return -1;
     }
     device->initialized = true;
@@ -133,7 +145,7 @@ static void init_from_ecdt()
             return;
         }
 
-        struct ECDevice *device = malloc(sizeof(struct ECDevice));
+        struct ECDevice *device = calloc(1, sizeof(struct ECDevice));
         if (!device) {
             printf("Failed to allocate memory for EC device\n");
             free_ec_devices();
@@ -399,13 +411,8 @@ static uacpi_interrupt_ret handle_ec_event(uacpi_handle ctx, uacpi_namespace_nod
     ec_event->device = device;
     ec_event->event  = event;
 
-    uacpi_status result =
-        uacpi_kernel_schedule_work(UACPI_WORK_GPE_EXECUTION, ec_handle_query, ec_event);
-    if (result != UACPI_STATUS_OK) {
-        printf("Failed to schedule work\n");
-        free(ec_event);
-        ret = UACPI_INTERRUPT_NOT_HANDLED;
-    }
+    uacpi_kernel_schedule_work(UACPI_WORK_GPE_EXECUTION, device->query_work,
+                               ec_handle_query, ec_event);
 
     ret = UACPI_INTERRUPT_HANDLED;
     return ret;
@@ -450,7 +457,7 @@ static int match_ec_pnp(uacpi_namespace_node *node,
             return UACPI_ITERATION_DECISION_CONTINUE;
         }
 
-        device = malloc(sizeof(struct ECDevice));
+        device = calloc(1, sizeof(struct ECDevice));
         if (!device) {
             printf("Failed to allocate memory for EC device\n");
             return UACPI_ITERATION_DECISION_CONTINUE;

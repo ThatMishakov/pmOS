@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <interrupts.h>
 #include <pci/pci.h>
 #include <pmos/helpers.h>
@@ -9,13 +10,12 @@
 #include <pmos/special.h>
 #include <pmos/system.h>
 #include <pthread.h>
+#include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/mman.h>
 #include <uacpi/kernel_api.h>
 #include <unistd.h>
-#include <sys/mman.h>
-#include <semaphore.h>
-#include <errno.h>
 
 void *uacpi_kernel_alloc(uacpi_size size) { return malloc(size); }
 
@@ -84,52 +84,21 @@ void uacpi_kernel_unlock_spinlock(uacpi_handle spinlock, uacpi_cpu_flags flags)
     pthread_spin_unlock((pthread_spinlock_t *)spinlock);
 }
 
-struct uacpi_work {
-    struct uacpi_work *next;
-    pthread_t thread;
+static pthread_mutex_t work_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t work_done  = PTHREAD_COND_INITIALIZER;
+static size_t outstanding_work;
 
-    uacpi_work_type type;
-    uacpi_work_handler handler;
-    uacpi_handle ctx;
-};
-
-static void *uacpi_work(void *arg)
-{
-    struct uacpi_work *work = arg;
-    if (work->type == UACPI_WORK_GPE_EXECUTION)
-        set_affinity(TASK_ID_SELF, 1, 0);
-
-    work->handler(work->ctx);
-
-    return NULL;
-}
-
-struct uacpi_work *work_queue_start = NULL, *work_queue_end = NULL;
-pthread_spinlock_t work_queue_lock;
-__attribute__((constructor)) void uacpi_work_queue_init(void)
-{
-    pthread_spin_init(&work_queue_lock, PTHREAD_PROCESS_PRIVATE);
-}
+static void synchronize_interrupts(void);
 
 uacpi_status uacpi_kernel_wait_for_work_completion(void)
 {
-    while (true) {
-        pthread_spin_lock(&work_queue_lock);
-        struct uacpi_work *work = work_queue_start;
-        if (work == NULL) {
-            pthread_spin_unlock(&work_queue_lock);
-            break;
-        }
+    /* An ISR may still be about to publish deferred work. Drain it first. */
+    synchronize_interrupts();
 
-        work_queue_start = work->next;
-        if (work_queue_start == NULL)
-            work_queue_end = NULL;
-        pthread_spin_unlock(&work_queue_lock);
-
-        pthread_join(work->thread, NULL);
-        free(work);
-    }
-
+    pthread_mutex_lock(&work_lock);
+    while (outstanding_work != 0)
+        pthread_cond_wait(&work_done, &work_lock);
+    pthread_mutex_unlock(&work_lock);
     return UACPI_STATUS_OK;
 }
 
@@ -477,162 +446,222 @@ uacpi_u64 uacpi_kernel_get_nanoseconds_since_boot(void)
 }
 
 struct isr_data {
-    pthread_t isr_thread;
-    pmos_port_t right;
+    pthread_t thread;
     uacpi_interrupt_handler handler;
     uacpi_handle ctx;
     uacpi_u32 irq;
+    struct isr_data *next;
     size_t refcount;
+
+    sem_t ready;
+    uacpi_status init_status;
+    pmos_right_t control_right;
 };
 
-#define IPC_ISR_Reply_NUM 0xff000001
-struct IPC_ISR_Reply {
-    uint32_t type;
-    uacpi_status status;
-};
+/* Never hold isr_lock while waiting for an ISR: callbacks may enter uACPI. */
+static pthread_mutex_t isr_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t isr_done  = PTHREAD_COND_INITIALIZER;
+static struct isr_data *installed_isrs;
+static size_t retiring_isrs;
+static size_t starting_isrs;
+static size_t pending_isr_syncs;
 
-#define IPC_ISR_Unregister_NUM 0xff000002
-struct IPC_ISR_Unregister {
-    uint32_t type;
-};
+#define IPC_ISR_Synchronize_NUM 0xff000003
+#define IPC_ISR_Unregister_NUM  0xff000002
 
-void send_isr_reply(pmos_right_t right, uacpi_status status)
+/* Serialize barrier batches so their acknowledgements cannot overlap. */
+static pthread_mutex_t isr_sync_lock = PTHREAD_MUTEX_INITIALIZER;
+
+/* uACPI teardown callers do not check the completion-wait status. Continuing
+ * after a failed barrier would let them free state still used by callbacks. */
+static void check_async_result(result_t result, const char *operation)
 {
-    struct IPC_ISR_Reply reply = {.type = IPC_ISR_Reply_NUM, .status = status};
-
-    send_message_right(right, INVALID_PORT, &reply, sizeof(reply), NULL, 0);
+    if (result != SUCCESS) {
+        fprintf(stderr, "[devicesd] uACPI %s failed: %lld\n", operation, (long long)result);
+        abort();
+    }
 }
 
-void *isr_func(void *arg)
+static void wait_semaphore(sem_t *sem)
 {
-    struct isr_data *data   = arg;
-    pmos_port_t reply_right = data->right;
+    int result;
+    do {
+        result = sem_wait(sem);
+    } while (result < 0 && errno == EINTR);
+    if (result < 0)
+        check_async_result(-errno, "semaphore wait");
+}
 
-    ports_request_t p = create_port(TASK_ID_SELF, 0);
-    if (p.result != SUCCESS) {
-        send_isr_reply(reply_right, UACPI_STATUS_OUT_OF_MEMORY);
-        return NULL;
+static void release_isr(struct isr_data *isr)
+{
+    if (__atomic_sub_fetch(&isr->refcount, 1, __ATOMIC_ACQ_REL) == 0) {
+        sem_destroy(&isr->ready);
+        free(isr);
+    }
+}
+
+static void synchronize_interrupts(void)
+{
+    pthread_mutex_lock(&isr_sync_lock);
+    pthread_mutex_lock(&isr_lock);
+    /* Installation enables the IRQ before publishing the handle. Include any
+     * installation already in progress without blocking callbacks that install. */
+    while (starting_isrs != 0)
+        pthread_cond_wait(&isr_done, &isr_lock);
+    IPC_Generic_Msg message = {.type = IPC_ISR_Synchronize_NUM};
+    for (struct isr_data *isr = installed_isrs; isr; isr = isr->next) {
+        ++pending_isr_syncs;
+        check_async_result(
+            send_message_right(isr->control_right, INVALID_PORT, &message, sizeof(message), NULL, 0)
+                .result,
+            "ISR barrier");
     }
 
-    uint64_t right_receiver;
-    auto rr = create_right(p.port, &right_receiver, 0);
-    if (rr.result != SUCCESS) {
-        send_isr_reply(reply_right, UACPI_STATUS_OUT_OF_MEMORY);
-        return NULL;
-    }
-    data->right = rr.right;
+    /* Include handlers removed from the registry but still finishing an IRQ. */
+    while (pending_isr_syncs != 0 || retiring_isrs != 0)
+        pthread_cond_wait(&isr_done, &isr_lock);
+    pthread_mutex_unlock(&isr_lock);
+    pthread_mutex_unlock(&isr_sync_lock);
+}
 
-    uint32_t int_vector = 0;
-    right_request_t interrupt = install_isa_interrupt(data->irq, p.port);
-    if (interrupt.result < 0) {
-        send_isr_reply(reply_right, UACPI_STATUS_OUT_OF_MEMORY);
-        return NULL;
-    }
+static void *isr_thread(void *arg)
+{
+    struct isr_data *isr = arg;
+    ports_request_t port = create_port(TASK_ID_SELF, 0);
+    if (port.result != SUCCESS)
+        goto init_failed;
 
-    send_isr_reply(reply_right, UACPI_STATUS_OK);
+    right_request_t control = create_right(port.port, NULL, 0);
+    if (control.result != SUCCESS)
+        goto init_failed;
+    isr->control_right = control.right;
 
-    while (true) {
-        Message_Descriptor msg;
-        unsigned char *message;
-        int r = get_message(&msg, &message, p.port, NULL, NULL);
-        if (r != SUCCESS) {
-            fprintf(stderr, "Failed to get message\n");
-            return NULL;
-        }
+    right_request_t interrupt = install_isa_interrupt(isr->irq, port.port);
+    if (interrupt.result != SUCCESS)
+        goto init_failed;
 
-        assert(msg.size >= sizeof(IPC_Generic_Msg));
-        IPC_Generic_Msg *ipc_msg = (IPC_Generic_Msg *)message;
-        if (ipc_msg->type == IPC_Kernel_Interrupt_NUM) {
-            data->handler(data->ctx);
-            complete_interrupt(p.port, interrupt.right);
-        } else if (ipc_msg->type == IPC_ISR_Unregister_NUM) {
+    isr->init_status = UACPI_STATUS_OK;
+    sem_post(&isr->ready);
+
+    for (;;) {
+        Message_Descriptor desc;
+        /* Receive IRQ and control messages without allocating a buffer. */
+        IPC_Generic_Msg message;
+        check_async_result(syscall_get_message_info(&desc, port.port, 0, 0), "ISR receive");
+        if (desc.size < sizeof(IPC_Generic_Msg) || desc.size > sizeof(message))
+            abort();
+        check_async_result(read_message((char *)&message, sizeof(message), MSG_ARG_REJECT_RIGHT,
+                                        port.port, desc.message_id)
+                               .result,
+                           "ISR message read");
+
+        if (message.type == IPC_Kernel_Interrupt_NUM) {
+            isr->handler(isr->ctx);
+            check_async_result(complete_interrupt(port.port, interrupt.right), "IRQ completion");
+        } else if (message.type == IPC_ISR_Synchronize_NUM) {
+            /* FIFO receive: earlier IRQ callbacks have published their work. */
+            pthread_mutex_lock(&isr_lock);
+            assert(pending_isr_syncs != 0);
+            --pending_isr_syncs;
+            pthread_cond_broadcast(&isr_done);
+            pthread_mutex_unlock(&isr_lock);
+        } else if (message.type == IPC_ISR_Unregister_NUM) {
             break;
         } else {
-            fprintf(stderr, "Unknown message type\n");
+            fprintf(stderr, "[devicesd] Unexpected uACPI ISR message %u\n", message.type);
         }
     }
 
-    if (__atomic_sub_fetch(&data->refcount, 1, __ATOMIC_SEQ_CST) == 0)
-        free(data);
-    // unregister_interrupt(rr.value);
+    /* No more callbacks can run. The kernel destroys this thread's port and
+     * interrupt receive right when the thread exits. */
+    pthread_mutex_lock(&isr_lock);
+    assert(retiring_isrs != 0);
+    --retiring_isrs;
+    pthread_cond_broadcast(&isr_done);
+    pthread_mutex_unlock(&isr_lock);
+    release_isr(isr);
     return NULL;
-}
 
-__thread pmos_port_t isr_register_reply_port = INVALID_PORT;
-pmos_port_t get_reply_port(void)
-{
-    if (isr_register_reply_port == INVALID_PORT) {
-        ports_request_t port_request = create_port(TASK_ID_SELF, 0);
-        if (port_request.result != SUCCESS) {
-            return INVALID_PORT;
-        }
-        isr_register_reply_port = port_request.port;
-    }
-    return isr_register_reply_port;
+init_failed:
+    isr->init_status = UACPI_STATUS_OUT_OF_MEMORY;
+    sem_post(&isr->ready);
+    release_isr(isr);
+    return NULL;
 }
 
 uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq, uacpi_interrupt_handler handler,
                                                     uacpi_handle ctx, uacpi_handle *out_irq_handle)
 {
-    pmos_port_t reply_port = get_reply_port();
-    if (reply_port == INVALID_PORT)
+    struct isr_data *isr = calloc(1, sizeof(*isr));
+    if (!isr)
         return UACPI_STATUS_OUT_OF_MEMORY;
-
-    struct isr_data *data = malloc(sizeof(struct isr_data));
-    if (data == NULL)
-        return UACPI_STATUS_OUT_OF_MEMORY;
-
-    uint64_t id = 0;
-    auto right  = create_right(reply_port, &id, CREATE_RIGHT_SEND_ONCE);
-    if (right.result != SUCCESS) {
-        free(data);
+    if (sem_init(&isr->ready, 0, 0) < 0) {
+        free(isr);
         return UACPI_STATUS_OUT_OF_MEMORY;
     }
 
-    data->handler  = handler;
-    data->ctx      = ctx;
-    data->irq      = irq;
-    data->right    = right.right;
-    data->refcount = 2;
-
-    int result = pthread_create(&data->isr_thread, NULL, isr_func, data);
-    if (result != 0) {
-        delete_right(right.result);
-        free(data);
+    isr->handler  = handler;
+    isr->ctx      = ctx;
+    isr->irq      = irq;
+    isr->refcount = 2; /* One reference each for the caller and ISR thread. */
+    pthread_mutex_lock(&isr_lock);
+    ++starting_isrs;
+    pthread_mutex_unlock(&isr_lock);
+    if (pthread_create(&isr->thread, NULL, isr_thread, isr) != 0) {
+        pthread_mutex_lock(&isr_lock);
+        --starting_isrs;
+        pthread_cond_broadcast(&isr_done);
+        pthread_mutex_unlock(&isr_lock);
+        sem_destroy(&isr->ready);
+        free(isr);
         return UACPI_STATUS_OUT_OF_MEMORY;
     }
 
-    Message_Descriptor msg;
-    unsigned char *message;
-    result_t r = get_message(&msg, &message, reply_port, NULL, NULL);
-    if (r != SUCCESS) {
-        assert(!"Failed to get message");
+    wait_semaphore(&isr->ready);
+    uacpi_status status = isr->init_status;
+    if (status != UACPI_STATUS_OK) {
+        check_async_result(pthread_join(isr->thread, NULL), "ISR join");
+        release_isr(isr);
+        pthread_mutex_lock(&isr_lock);
+        --starting_isrs;
+        pthread_cond_broadcast(&isr_done);
+        pthread_mutex_unlock(&isr_lock);
+        return status;
     }
 
-    // assert(msg.sender == data->port);
-    assert(msg.size == sizeof(struct IPC_ISR_Reply));
-    struct IPC_ISR_Reply *reply = (struct IPC_ISR_Reply *)message;
-    assert(reply->type == IPC_ISR_Reply_NUM);
-    if (reply->status != UACPI_STATUS_OK) {
-        pthread_detach(data->isr_thread);
-        free(data);
-        return reply->status;
-    }
-
-    *out_irq_handle = data;
+    pthread_mutex_lock(&isr_lock);
+    isr->next      = installed_isrs;
+    installed_isrs = isr;
+    --starting_isrs;
+    pthread_cond_broadcast(&isr_done);
+    pthread_mutex_unlock(&isr_lock);
+    *out_irq_handle = isr;
     return UACPI_STATUS_OK;
 }
 
-uacpi_status uacpi_kernel_uninstall_interrupt_handler(uacpi_interrupt_handler,
+uacpi_status uacpi_kernel_uninstall_interrupt_handler(uacpi_interrupt_handler handler,
                                                       uacpi_handle irq_handle)
 {
-    struct isr_data *data         = irq_handle;
-    struct IPC_ISR_Unregister msg = {.type = IPC_ISR_Unregister_NUM};
+    (void)handler;
+    struct isr_data *isr = irq_handle;
+    pthread_mutex_lock(&isr_lock);
+    IPC_Generic_Msg message = {.type = IPC_ISR_Unregister_NUM};
+    if (send_message_right(isr->control_right, INVALID_PORT, &message, sizeof(message), NULL, 0)
+            .result != SUCCESS) {
+        pthread_mutex_unlock(&isr_lock);
+        return UACPI_STATUS_INTERNAL_ERROR;
+    }
 
-    send_message_right(data->right, INVALID_PORT, &msg, sizeof(msg), NULL, 0);
-    pthread_detach(data->isr_thread);
-    if (__atomic_sub_fetch(&data->refcount, 1, __ATOMIC_SEQ_CST) == 0)
-        free(data);
+    struct isr_data **link = &installed_isrs;
+    while (*link && *link != isr)
+        link = &(*link)->next;
+    assert(*link == isr);
+    *link = isr->next;
+    ++retiring_isrs;
+    pthread_mutex_unlock(&isr_lock);
+
+    check_async_result(pthread_detach(isr->thread), "ISR detach");
+    release_isr(isr);
     return UACPI_STATUS_OK;
 }
 
@@ -681,7 +710,10 @@ void uacpi_kernel_free_semaphore(uacpi_handle handle)
 uacpi_status uacpi_kernel_wait_for_semaphore(uacpi_handle handle, uacpi_u16 timeout_ms)
 {
     if (timeout_ms == 0xFFFF) {
-        int result = sem_wait(handle);
+        int result;
+        do {
+            result = sem_wait(handle);
+        } while (result < 0 && errno == EINTR);
         if (result < 0)
             return UACPI_STATUS_INTERNAL_ERROR;
         return UACPI_STATUS_OK;
@@ -696,7 +728,8 @@ uacpi_status uacpi_kernel_wait_for_semaphore(uacpi_handle handle, uacpi_u16 time
         return UACPI_STATUS_OK;
     } else {
         struct timespec ts;
-        clock_gettime(CLOCK_REALTIME, &ts);
+        if (clock_gettime(CLOCK_REALTIME, &ts) < 0)
+            return UACPI_STATUS_INTERNAL_ERROR;
         ts.tv_sec += timeout_ms / 1000;
         ts.tv_nsec += (timeout_ms % 1000) * 1000000;
 
@@ -705,7 +738,10 @@ uacpi_status uacpi_kernel_wait_for_semaphore(uacpi_handle handle, uacpi_u16 time
             ts.tv_nsec -= 1000000000L;
         }
 
-        int result = sem_timedwait(handle, &ts);
+        int result;
+        do {
+            result = sem_timedwait(handle, &ts);
+        } while (result < 0 && errno == EINTR);
         if (result < 0) {
             if (errno == ETIMEDOUT)
                 return UACPI_STATUS_TIMEOUT;
@@ -723,83 +759,114 @@ void uacpi_kernel_signal_semaphore(uacpi_handle handle)
     assert(result == 0);
 }
 
-struct WorkItem {
+struct uacpi_work_item {
     uacpi_work_handler handler;
     uacpi_handle ctx;
     uacpi_work_type work_type;
     pthread_t thread;
+    pthread_mutex_t lock;
     sem_t semaphore;
-    bool cancel_self;
+    bool stop;
+    bool cleanup_on_exit;
 };
 
-void *work_thread(void *arg)
+static void destroy_work_item(struct uacpi_work_item *item)
 {
-    struct WorkItem *item = arg;
+    sem_destroy(&item->semaphore);
+    pthread_mutex_destroy(&item->lock);
+    free(item);
+}
+
+static void *work_thread(void *arg)
+{
+    struct uacpi_work_item *item = arg;
     bool currently_scheduled_any = true;
 
-    while (!item->cancel_self) {
-        sem_wait(&item->semaphore);
-        if (item->handler == NULL)
-            break;
+    for (;;) {
+        wait_semaphore(&item->semaphore);
+        pthread_mutex_lock(&item->lock);
+        if (item->stop) {
+            bool cleanup = item->cleanup_on_exit;
+            pthread_mutex_unlock(&item->lock);
+            if (cleanup)
+                destroy_work_item(item);
+            return NULL;
+        }
+        /* A callback may reschedule itself with different arguments. */
+        uacpi_work_handler handler = item->handler;
+        uacpi_handle ctx           = item->ctx;
+        uacpi_work_type type       = item->work_type;
+        pthread_mutex_unlock(&item->lock);
 
-        bool schedule_any = item->work_type == UACPI_WORK_NOTIFICATION;
+        bool schedule_any = type == UACPI_WORK_NOTIFICATION;
         if (currently_scheduled_any != schedule_any)
             set_affinity(TASK_ID_SELF, schedule_any ? 0 : 1, 0);
         currently_scheduled_any = schedule_any;
+        handler(ctx);
 
-        item->handler(item->ctx);
+        /* The allocation stays alive until this thread exits, even on self-free.
+         * Completion is global so it also includes callbacks that reschedule. */
+        pthread_mutex_lock(&work_lock);
+        assert(outstanding_work != 0);
+        if (--outstanding_work == 0)
+            pthread_cond_broadcast(&work_done);
+        pthread_mutex_unlock(&work_lock);
     }
-
-    if (item->cancel_self) {
-        sem_destroy(&item->semaphore);
-        free(item);
-    }
-
-    return nullptr;
 }
 
 uacpi_handle uacpi_kernel_create_work_item(void)
 {
-    struct WorkItem *item = malloc(sizeof(struct WorkItem));
+    struct uacpi_work_item *item = calloc(1, sizeof(*item));
     if (!item)
         return NULL;
-
-    sem_init(&item->semaphore, 0, 0);
-
-    int result = pthread_create(&item->thread, NULL, (void *(*)(void *))work_thread, item);
-    if (result != 0) {
-        sem_destroy(&item->semaphore);
+    if (pthread_mutex_init(&item->lock, NULL) != 0) {
         free(item);
         return NULL;
     }
-
-    item->handler = NULL;
-    item->ctx     = NULL;
-    item->cancel_self = false;
+    if (sem_init(&item->semaphore, 0, 0) < 0) {
+        pthread_mutex_destroy(&item->lock);
+        free(item);
+        return NULL;
+    }
+    if (pthread_create(&item->thread, NULL, work_thread, item) != 0) {
+        destroy_work_item(item);
+        return NULL;
+    }
     return item;
 }
 
-void uacpi_kernel_free_event(uacpi_handle handle)
+void uacpi_kernel_free_work_item(uacpi_handle handle)
 {
-    struct WorkItem *item = handle;
-    item->handler = NULL;
+    struct uacpi_work_item *item = handle;
+    pthread_t thread             = item->thread;
+    bool self                    = pthread_equal(pthread_self(), thread);
+    if (self)
+        check_async_result(pthread_detach(thread), "worker detach");
 
-    if (pthread_equal(pthread_self(), item->thread)) {
-        pthread_detach(item->thread);
-        item->cancel_self = true;
-    } else {
-        sem_post(&item->semaphore);
-        pthread_join(item->thread, NULL);
-        sem_destroy(&item->semaphore);
-        free(item);
+    pthread_mutex_lock(&item->lock);
+    item->stop            = true;
+    item->cleanup_on_exit = self;
+    sem_post(&item->semaphore);
+    pthread_mutex_unlock(&item->lock);
+
+    if (!self) {
+        check_async_result(pthread_join(thread, NULL), "worker join");
+        destroy_work_item(item);
     }
 }
 
-void uacpi_kernel_schedule_work(uacpi_work_type type, uacpi_handle work_item, uacpi_work_handler handler, uacpi_handle ctx)
+void uacpi_kernel_schedule_work(uacpi_work_type type, uacpi_handle work_item,
+                                uacpi_work_handler handler, uacpi_handle ctx)
 {
-    struct WorkItem *item = handle;
-    item->handler = handler;
-    item->ctx = ctx;
+    struct uacpi_work_item *item = work_item;
+    /* ISR callbacks run in ordinary userspace threads, so mutexes are safe. */
+    pthread_mutex_lock(&item->lock);
+    item->handler   = handler;
+    item->ctx       = ctx;
     item->work_type = type;
+    pthread_mutex_lock(&work_lock);
+    ++outstanding_work;
+    pthread_mutex_unlock(&work_lock);
     sem_post(&item->semaphore);
+    pthread_mutex_unlock(&item->lock);
 }
