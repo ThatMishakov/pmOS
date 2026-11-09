@@ -26,6 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <uacpi/acpi.h>
 #include <alloca.h>
 #include <assert.h>
 #include <errno.h>
