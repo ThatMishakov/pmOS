@@ -103,8 +103,13 @@ __attribute__((used)) limine_paging_mode_request paging_request = {
     .response = nullptr,
     #ifdef __riscv
     .mode = LIMINE_PAGING_MODE_RISCV_SV57,
+    .max_mode = LIMINE_PAGING_MODE_RISCV_SV57,
     #elif defined(__x86_64__)
     .mode = LIMINE_PAGING_MODE_X86_64_5LVL,
+    .max_mode = LIMINE_PAGING_MODE_X86_64_5LVL,
+    #elif defined(__aarch64__)
+    .mode = LIMINE_PAGING_MODE_AARCH64_5LVL,
+    .max_mode = LIMINE_PAGING_MODE_AARCH64_5LVL,
     #else
     .mode = 0,
     #endif
@@ -190,6 +195,10 @@ static void init_fb()
     }
 }
 
+#ifdef __aarch64__
+void init_paging(unsigned va_bits);
+#endif
+
 void construct_paging()
 {
     serial_logger.printf("Finding the largest memory region...\n");
@@ -234,6 +243,14 @@ void construct_paging()
         kernel::x86_64::paging::use_5lvl_paging = true;
         serial_logger.printf("Using 5-level paging\n");
     }
+    #elif defined(__aarch64__)
+    unsigned va_bits = 48;
+    auto rr = paging_request.response;
+    if (rr->mode == LIMINE_PAGING_MODE_AARCH64_5LVL) {
+        va_bits = 52;
+    }
+
+    init_paging(va_bits);
     #endif
 
     // While we're here, initialize virtmem
@@ -241,6 +258,8 @@ void construct_paging()
     const u64 heap_space_shift = 12 + (kernel::riscv64::paging::riscv64_paging_levels - 1) * 9;
     #elif defined(__x86_64__)
     const u64 heap_space_shift = 12 + (kernel::x86_64::paging::use_5lvl_paging ? 4 : 3) * 9;
+    #elif defined(__aarch64__)
+    const u64 heap_space_shift = va_bits - 9;
     #else
     const u64 heap_space_shift = 12 + 27;
     #endif

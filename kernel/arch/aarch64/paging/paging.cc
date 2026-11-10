@@ -379,6 +379,27 @@ void invalidate_pages(::kernel::paging::TLBShootdownContext& ctx, u64 page_table
 
 } // namespace
 
+void init_paging(unsigned va_bits)
+{
+    assert(page_order == 12 || page_order == 14 || page_order == 16);
+    assert(va_bits >= 32 && va_bits <= 52);
+
+    const unsigned index_bits = page_order - 3;
+
+    ::va_bits = va_bits;
+
+    paging_levels = (va_bits - page_order + index_bits - 1) / index_bits;
+    top_level = paging_levels - 1;
+
+    page_table_mask = (1 << index_bits) - 1;
+    
+    const unsigned top_level_shift =
+        page_order + top_level * index_bits;
+    const unsigned top_level_bits = va_bits - top_level_shift;
+
+    top_level_mask = (1U << top_level_bits) - 1;
+}
+
 kresult_t kernel::paging::map_page(u64 page_table, u64 phys_addr, void *virt_addr, ::kernel::paging::Page_Table_Arguments arg)
 {
     return map_page_recursive(page_table, phys_addr, virt_addr, arg, top_level);

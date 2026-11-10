@@ -688,8 +688,6 @@ void TLBShootdownContext::finalize()
     bool skip_ipis = !sched::other_cpus_online;
 
     if (for_kernel()) {
-        auto my_cpu = sched::get_cpu_struct();
-
         Auto_Lock_Scope l(shootdown_barrier);
 
         kernel_shootdown_desc = this;
@@ -714,8 +712,6 @@ void TLBShootdownContext::finalize()
         while (__atomic_load_n(&kernel_pt_active_cpus_count[old_generation], __ATOMIC_ACQUIRE))
             spin_pause();
     } else {
-        auto my_cpu = sched::get_cpu_struct();
-
         int old_generation;
 
         Auto_Lock_Scope l(shootdown_barrier);
