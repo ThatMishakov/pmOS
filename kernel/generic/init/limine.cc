@@ -155,7 +155,41 @@ namespace kernel::riscv64::paging
 extern ulong idle_pt;
 }
     #endif
+
+extern phys_addr_t temp_alloc_base;
+extern phys_addr_t temp_alloc_size;
+extern phys_addr_t temp_alloc_reserved;
+extern long temp_alloc_entry_id;
     
+
+
+__attribute__((used)) struct limine_framebuffer_request fb_req = {
+    .id       = LIMINE_FRAMEBUFFER_REQUEST_ID,
+    .revision = 0,
+    .response = nullptr,
+};
+
+static void init_fb()
+{
+    struct limine_framebuffer_response r;
+    copy_from_phys((u64)fb_req.response - hhdm_offset, &r, sizeof(r));
+
+    limine_framebuffer *framebuffers[r.framebuffer_count];
+    copy_from_phys((u64)r.framebuffers - hhdm_offset, framebuffers,
+                   r.framebuffer_count * sizeof(limine_framebuffer *));
+
+    if (r.framebuffer_count != 0) {
+        limine_framebuffer fb;
+        copy_from_phys((u64)framebuffers[0] - hhdm_offset, &fb, sizeof(fb));
+
+        phys_addr_t phys_addr = (char *)fb.address - (char *)hhdm_offset;
+
+        init_kernel_fb(phys_addr, fb.width, fb.height, fb.pitch, fb.bpp, fb.red_mask_size,
+                       fb.red_mask_shift, fb.green_mask_size, fb.green_mask_shift,
+                       fb.blue_mask_size, fb.blue_mask_shift, fb.memory_model);
+    }
+}
+
 void construct_paging()
 {
     serial_logger.printf("Finding the largest memory region...\n");
@@ -295,6 +329,7 @@ void construct_paging()
 
     serial_logger.printf("Paging initialized!\n");
 
+    init_fb();
     pmos::containers::vector<limine_memmap_entry *> regions;
     if (!regions.resize(resp.entry_count))
         panic("Failed to reserve memory for regions");
@@ -405,12 +440,6 @@ void init_modules()
         ::modules.push_back(m);
     }
 }
-
-__attribute__((used)) struct limine_framebuffer_request fb_req = {
-    .id       = LIMINE_FRAMEBUFFER_REQUEST_ID,
-    .revision = 0,
-    .response = nullptr,
-};
 
 pmos::containers::vector<klib::unique_ptr<load_tag_generic>> construct_load_tag_framebuffer()
 {
@@ -627,9 +656,9 @@ void limine_main()
         hcf();
     }
 
-    #ifdef __x86_64__
+#ifdef __x86_64__
     boot_tsc = rdtsc();
-    #endif
+#endif
 
     early_detect_cpu_features();
 

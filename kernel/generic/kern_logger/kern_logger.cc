@@ -28,6 +28,7 @@
 
 #include "kern_logger.hh"
 
+#include <flanterm.h>
 #include <messaging/messaging.hh>
 #include <stdarg.h>
 #include <types.hh>
@@ -36,6 +37,8 @@ void printc(int c);
 extern "C" void dbg_uart_putc(int c) { printc(c); }
 
 void t_write_bochs(const char *str, u64 length);
+extern flanterm_context *ft_ctx;
+
 
 namespace kernel::log
 {
@@ -279,6 +282,14 @@ void Buffered_Logger::set_port(ipc::Port *port, uint32_t /* flags */)
 
 void Serial_Logger::log_nolock(const char *c, size_t size)
 {
+    // if (ft_ctx)
+    //     flanterm_write(ft_ctx, c, size);
+    if (ft_ctx)
+        for (size_t i = 0; i < size; ++i) {
+            if (c[i] == '\n')
+                flanterm_write(ft_ctx, "\r", 1);
+            flanterm_write(ft_ctx, c + i, 1);
+        }
     for (size_t i = 0; i < size; ++i) {
         const char cc = c[i];
         if (cc == '\n')

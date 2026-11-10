@@ -769,6 +769,21 @@ multiboot_info *copy_multiboot_to_temp(multiboot_info *info)
     return (multiboot_info *)ptr;
 }
 
+void init_fb(multiboot_info *info)
+{
+    auto fb_tag = (multiboot_tag_framebuffer *)find_tag(info, MULTIBOOT_TAG_TYPE_FRAMEBUFFER);
+    if (!fb_tag)
+        return;
+
+    if (fb_tag->common.framebuffer_type != MULTIBOOT_FRAMEBUFFER_TYPE_RGB)
+        return;
+
+    init_kernel_fb(fb_tag->common.framebuffer_addr, fb_tag->common.framebuffer_width, fb_tag->common.framebuffer_height, fb_tag->common.framebuffer_pitch, fb_tag->common.framebuffer_bpp,
+                     fb_tag->framebuffer_red_mask_size, fb_tag->framebuffer_red_field_position,
+                     fb_tag->framebuffer_green_mask_size, fb_tag->framebuffer_green_field_position,
+                     fb_tag->framebuffer_blue_mask_size, fb_tag->framebuffer_blue_field_position, 1);
+}
+
 extern "C" void multiboot_main(multiboot_info* info) {
     serial_logger.printf("Multiboot info: %x\n", info);
 
@@ -787,6 +802,8 @@ extern "C" void multiboot_main(multiboot_info* info) {
     auto temp_info = copy_multiboot_to_temp(info);
 
     init_memory(temp_info);
+
+    init_fb(temp_info);
 
     init();
 

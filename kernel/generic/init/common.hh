@@ -44,3 +44,5 @@ klib::string module_cmdline(char *name, size_t max_len);
 klib::string module_path(char *name, size_t max_len);
 
 klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp();
+
+void init_kernel_fb(phys_addr_t fb_phys, unsigned width, unsigned height, unsigned pitch, unsigned bpp, unsigned red_mask, unsigned red_shift, unsigned green_mask, unsigned green_shift, unsigned blue_mask, unsigned blue_shift, unsigned memory_model);
