@@ -2,6 +2,7 @@
 #include <types.hh>
 #include <arm_asm.hh>
 #include <pmos/utility/scope_guard.hh>
+#include <kern_logger/kern_logger.hh>
 
 using namespace kernel::aarch64::paging;
 using namespace kernel::paging;
@@ -382,7 +383,21 @@ kresult_t kernel::paging::map_page(u64 page_table, u64 phys_addr, void *virt_add
 {
     return map_page_recursive(page_table, phys_addr, virt_addr, arg, top_level);
 }
-kresult_t kernel::paging::map_pages(ptable_top_ptr_t page_table, phys_addr_t phys_addr, void *virt_addr, size_t size_bytes, kernel::paging::Page_Table_Arguments arg);
+kresult_t kernel::paging::map_pages(ptable_top_ptr_t page_table, phys_addr_t phys_addr, void *virt_addr, size_t size_bytes, kernel::paging::Page_Table_Arguments arg)
+{
+    kresult_t result = 0;
+
+    size_t i = 0;
+    for (i = 0; i < size_bytes && (result == 0); i += PAGE_SIZE) {
+        result = map_page_recursive(page_table, phys_addr + i, (void *)((char *)virt_addr + i), arg, top_level);
+    }
+
+    // Leak memory on error
+    if (result)
+        log::serial_logger.printf("Warning: leaking memory in map_pages because of an error...\n");
+
+    return result;
+}
 
 kresult_t kernel::paging::map_kernel_page(phys_addr_t phys_addr, void *virt_addr, kernel::paging::Page_Table_Arguments arg)
 {
