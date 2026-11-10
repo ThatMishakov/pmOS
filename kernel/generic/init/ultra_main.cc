@@ -548,6 +548,59 @@ void init_task1(ultra_boot_context *ctx)
 
 void init();
 
+void init_fb(struct ultra_boot_context *ctx)
+{
+    auto attrh =
+        (ultra_framebuffer_attribute *)find_attribute(ctx, ULTRA_ATTRIBUTE_FRAMEBUFFER_INFO);
+    if (!attrh) {
+        serial_logger.printf("No framebuffer found\n");
+        return;
+    }
+    auto attr = &attrh->fb;
+
+    unsigned red_mask, red_shift, green_mask, green_shift, blue_mask, blue_shift;
+    switch (attr->format) {
+    case ULTRA_FB_FORMAT_RGB888:
+        red_mask   = 8;
+        red_shift  = 16;
+        green_mask = 8;
+        green_shift = 8;
+        blue_mask  = 8;
+        blue_shift = 0;
+        break;
+    case ULTRA_FB_FORMAT_BGR888:
+        red_mask   = 8;
+        red_shift  = 0;
+        green_mask = 8;
+        green_shift = 8;
+        blue_mask  = 8;
+        blue_shift = 16;
+        break;
+    case ULTRA_FB_FORMAT_RGBX8888:
+        red_mask   = 8;
+        red_shift  = 24;
+        green_mask = 8;
+        green_shift = 16;
+        blue_mask  = 8;
+        blue_shift = 8;
+        break;
+    case ULTRA_FB_FORMAT_XRGB8888:
+        red_mask   = 8;
+        red_shift  = 16;
+        green_mask = 8;
+        green_shift = 8;
+        blue_mask  = 8;
+        blue_shift = 0;
+        break;
+    default:
+        serial_logger.printf("Unknown framebuffer format: %d\n", attr->format);
+        red_mask = red_shift = green_mask = green_shift = blue_mask = blue_shift = 0;
+        break;
+    }
+
+    init_kernel_fb(attr->physical_address, attr->width, attr->height, attr->pitch, attr->bpp, red_mask, red_shift, green_mask, green_shift, blue_mask, blue_shift, 1);
+}
+
 void ultra_main(struct ultra_boot_context *ctx, uint32_t magic)
 {
     if (magic != 0x554c5442) {
@@ -587,6 +640,16 @@ void ultra_main(struct ultra_boot_context *ctx, uint32_t magic)
 
     init_memory(ctx);
 
+    // Copy context to kernel...
+    klib::unique_ptr<char> cctx = klib::unique_ptr<char>(new char[size]);
+    if (!cctx)
+        panic("Couldn't allocate memory for Ultra modules...");
+
+    copy_from_phys((ulong)ctx - (ulong)direct_map_location, (void *)cctx.get(), size);
+    auto new_ctx = (ultra_boot_context *)cctx.get();
+
+    init_fb(new_ctx);
+
     // Call global (C++) constructors
     init();
 
@@ -597,14 +660,6 @@ void ultra_main(struct ultra_boot_context *ctx, uint32_t magic)
     init_scheduling_on_bsp();
 
     global_temp_mapper = nullptr;
-
-    // Copy context to kernel...
-    klib::unique_ptr<char> cctx = klib::unique_ptr<char>(new char[size]);
-    if (!cctx)
-        panic("Couldn't allocate memory for Ultra modules...");
-
-    copy_from_phys((ulong)ctx - (ulong)direct_map_location, (void *)cctx.get(), size);
-    auto new_ctx = (ultra_boot_context *)cctx.get();
 
     init_smp();
 
