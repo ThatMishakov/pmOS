@@ -2,8 +2,14 @@
 #include <kern_logger/kern_logger.hh>
 #include <messaging/rights.hh>
 #include "common.hh"
+#include <flanterm.h>
+#include <flanterm_backends/fb.h>
+#include <memory/vmm.hh>
+#include <memory/paging.hh>
 
+using namespace kernel;
 using namespace kernel::log;
+using namespace kernel::paging;
 
 #if defined(ENABLE_ACPI)
 #include <uacpi/uacpi.h>
@@ -163,4 +169,56 @@ klib::string module_cmdline(char *name, size_t max_len)
         return "";
 
     return klib::string(separator + 1, max_len - (separator - name) - 1);
+}
+
+extern "C" {
+void *malloc(size_t size);
+void free(void *ptr);
+}
+
+flanterm_context *ft_ctx = nullptr;
+uint32_t *fb_virt        = nullptr;
+
+void init_kernel_fb(phys_addr_t fb_phys, unsigned width, unsigned height, unsigned pitch, unsigned bpp, unsigned red_mask, unsigned red_shift, unsigned green_mask, unsigned green_shift, unsigned blue_mask, unsigned blue_shift, unsigned memory_model)
+{
+    if (memory_model != 1) {
+        serial_logger.printf("Unsupported framebuffer memory model: %u\n", memory_model);
+        return;
+    }
+
+    const phys_addr_t page_mask = PAGE_SIZE - 1;
+
+    size_t fb_size   = pitch * height;
+    size_t fb_offset = size_t(fb_phys) & page_mask;
+    fb_size          = (fb_size + fb_offset + page_mask) & ~page_mask;
+    fb_virt          = (uint32_t *)vmm::kernel_space_allocator.virtmem_alloc(fb_size / PAGE_SIZE);
+    if (!fb_virt)
+        return;
+
+    paging::Page_Table_Arguments args = {
+        .readable           = true,
+        .writeable          = true,
+        .user_access        = false,
+        .global             = true,
+        .execution_disabled = true,
+        .extra              = 0,
+        .cache_policy       = paging::Memory_Type::Framebuffer,
+    };
+
+    uint64_t phys_addr_all = (uint64_t)fb_phys - fb_offset;
+    auto result =
+        map_kernel_pages(phys_addr_all, fb_virt, fb_size, args);
+    if (result != 0) {
+        serial_logger.printf("Failed to map framebuffer\n");
+        vmm::kernel_space_allocator.virtmem_free((void *)fb_virt, fb_size / PAGE_SIZE);
+        return;
+    }
+
+    fb_virt = (uint32_t *)((char *)fb_virt + fb_offset);
+
+    ft_ctx = flanterm_fb_init(
+        malloc, [](void *ptr, size_t) { free(ptr); }, fb_virt, width, height,
+        pitch, red_mask, red_shift, green_mask, green_shift,
+        blue_mask, blue_shift, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+        0, 0, 1, 0, 0, 0, 0, true);
 }
