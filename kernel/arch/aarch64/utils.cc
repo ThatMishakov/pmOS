@@ -28,3 +28,8 @@ void arch_specific_park_stop()
 {
     halt();
 }
+
+void printc(int)
+{
+    // TODO (also, this should be arch-independent...)
+}
