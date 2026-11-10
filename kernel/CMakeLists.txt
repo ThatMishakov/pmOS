@@ -11,7 +11,7 @@ get_filename_component(ABSPATH "${CMAKE_CURRENT_LIST_FILE}" PATH)
 include(arch/arch.cmake)
 LOAD_PLATFORM(${TARGET_ARCH})
 
-set(CMAKE_C_FLAGS "${PLATFORM_C_FLAGS} -static -ffreestanding -fstack-protector-all -O3 -Wall -Wextra -ggdb3 -fno-omit-frame-pointer -fasynchronous-unwind-tables -fexceptions")
+set(CMAKE_C_FLAGS "${PLATFORM_C_FLAGS} -static -ffreestanding -fstack-protector-all -O3 -Wall -Wextra -ggdb3 -fno-omit-frame-pointer -fasynchronous-unwind-tables -fexceptions -Wno-invalid-offsetof")
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} ${PLATFORM_CXX_FLAGS} -fno-exceptions -fno-rtti")
 set(CMAKE_ASM_FLAGS "${CMAKE_C_FLAGS} ${PLATFORM_ASM_FLAGS}")
 add_compile_options("-fcheck-new")
