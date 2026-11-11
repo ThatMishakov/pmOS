@@ -9,7 +9,7 @@
     .type _limine_entry, %function
 _limine_entry:
     adr x0, stack + STACK_SIZE
-    msr sp_el1, x0
+    mov sp, x0
 
     bl limine_main
 

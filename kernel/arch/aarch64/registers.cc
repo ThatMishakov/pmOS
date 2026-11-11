@@ -125,3 +125,18 @@ kresult_t TaskDescriptor::set_32bit()
     // TODO
     return -ENOSYS;
 }
+
+kresult_t TaskDescriptor::inherit_registers_from_current()
+{
+    auto current = sched::get_current_task();
+    assert(current);
+
+    current->before_task_switch();
+
+    regs = current->regs;
+    // TODO...
+
+    current->after_task_switch();
+
+    return 0;
+}

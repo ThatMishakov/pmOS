@@ -16,3 +16,7 @@ void CPU_Info::ipi_get_attention()
 {
     panic("IPI CPU get attention not implemented");
 }
+
+void early_detect_cpu_features()
+{
+}
