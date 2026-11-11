@@ -154,6 +154,8 @@ bool dtb_init_plic()
     system_plic.external_interrupt_sources = ndev;
     system_plic.plic_id                    = 0;
     system_plic.max_priority               = -1; // TODO: Have to take a look at it again
+    if (!system_plic.handlers.resize(ndev, nullptr))
+        panic("failed to allocate memory for PLIC\n");
 
     return true;
 }
