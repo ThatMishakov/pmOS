@@ -733,3 +733,7 @@ void early_detect_cpu_features()
 {
     // Nothing for RISC-V...+
 }
+
+void paging::arch_tlb_finalize(bool)
+{
+}
