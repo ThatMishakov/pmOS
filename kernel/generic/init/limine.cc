@@ -27,7 +27,7 @@
  */
 
 // Nice code!
-#if defined(__x86_64__) || defined(__riscv) || defined(__loongarch64) || defined(__m68k__)
+#if defined(__x86_64__) || defined(__riscv) || defined(__loongarch64) || defined(__m68k__) || defined(__aarch64__)
 
 
 #include "limine.h"
@@ -701,7 +701,7 @@ void limine_main()
     init_dtb();
 
     // Init idle task page table
-    #if !defined(__loongarch__) && !defined(__m68k__)
+    #if !defined(__loongarch__) && !defined(__m68k__) && !defined(__aarch64__)
     idle_page_table = Arch_Page_Table::capture_initial(kernel_ptable_top);
     #else
     idle_page_table = Arch_Page_Table::create_empty();
