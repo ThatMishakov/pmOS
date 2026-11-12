@@ -666,7 +666,7 @@ __attribute__((noreturn)) void __stack_chk_fail(void)
 }
 
 extern "C" ReturnStr<bool> user_access_page_fault(unsigned access, const char *faulting_addr,
-                                                  char **dst, char **src, size_t &size)
+                                                  char **dst, char **src, size_t *size)
 {
     TaskDescriptor *current_task = get_current_task();
 
@@ -731,6 +731,10 @@ ReturnStr<bool> atomic_read_from_user(u32 *to, const u32 *from)
     uintptr_t addr    = (uintptr_t)from;
     constexpr size_t size = sizeof(*from);
     if (addr + size > max_addr or addr > (UINTPTR_MAX - size))
+        return Error(-EFAULT);
+
+    assert(!(uintptr_t(to) & 0x3));
+    if ((uintptr_t(from) & 0x3))
         return Error(-EFAULT);
 
     return fast_atomic_read_from_user(to, from);

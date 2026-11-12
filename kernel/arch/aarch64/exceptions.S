@@ -3,13 +3,13 @@
 .global exception_vectors
 exception_vectors:
     // Current EL, SP_EL0
-    b unexpected_exception
+    b user_sync
     .balign 128
-    b unexpected_exception
+    b user_irq
     .balign 128
-    b unexpected_exception
+    b user_fiq
     .balign 128
-    b unexpected_exception
+    b user_serror
 
     // Current EL, SP_EL1
     .balign 128
@@ -23,20 +23,25 @@ exception_vectors:
 
     // Lower EL, AArch64
     .balign 128
-//    b user_sync
+    b user_sync
     .balign 128
-//    b user_irq
+    b user_irq
     .balign 128
-//    b user_fiq
+    b user_fiq
     .balign 128
-//    b user_serror
+    b user_serror
  
     // Lower EL, AArch32
-    .rept 4
     .balign 128
     b unexpected_exception
-    .endr
-
+    b user_sync
+    .balign 128
+    b user_irq
+    .balign 128
+    b user_fiq
+    .balign 128
+    b user_serror
+    
     .macro save_user_state
     str x0, [sp, #-8]!
     mrs x0, TPIDR_EL1
