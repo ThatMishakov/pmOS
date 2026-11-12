@@ -603,7 +603,7 @@ void flush_range(void *start, size_t size)
 
 void kernel::paging::arch_tlb_finalize(bool)
 {
-    dsb<Barrier::ISHST>();
+    dsb<Barrier::ISH>();
     isb();
 }
 
@@ -647,7 +647,7 @@ void AArch64_Page_Table::apply()
     assert(page_directory != PAGE_DIRECTORY_INITIALIZER);
     asm volatile("msr ttbr0_el1, %0" :: "r"(page_directory) : "memory");
     flush_tlb();
-    dsb<Barrier::ISHST>();
+    dsb<Barrier::ISH>();
     isb();
 }
 
@@ -668,6 +668,6 @@ void paging::apply_page_table(phys_addr_t kernel_page_table)
 
     asm volatile("msr ttbr1_el1, %0" :: "r"(kernel_page_table) : "memory");
     flush_tlb();
-    dsb<Barrier::ISHST>();
+    dsb<Barrier::ISH>();
     isb();
 }
