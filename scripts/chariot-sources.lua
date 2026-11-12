@@ -205,7 +205,7 @@ meson subprojects download freestnd-c-hdrs freestnd-cxx-hdrs
     ["rust"] = function()
         return Source {
             name = "rust",
-            Git("https://gitlab.com/mishakov/rust-pmos.git", "47e3153daf7cb3947fb019ade3b3562acc6adce0"),
+            Git("https://gitlab.com/mishakov/rust-pmos.git", "39943d9c17c16e3eff17e7efd340abc899c087a9"),
             dependencies = { "git", "ca-certificates" },
             prepare = [[git submodule update --init --recursive --depth=1]],
         }
