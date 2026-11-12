@@ -650,3 +650,17 @@ void AArch64_Page_Table::apply()
     dsb<Barrier::ISHST>();
     isb();
 }
+
+extern bool use_ttcnp;
+constexpr u64 TTBRx_EL1_CnP = 1 << 0;
+
+void paging::apply_page_table(phys_addr_t kernel_page_table)
+{
+    if (use_ttcnp)
+        kernel_page_table |= TTBRx_EL1_CnP;
+
+    asm volatile("msr ttbr1_el1, %0" :: "r"(kernel_page_table) : "memory");
+    flush_tlb();
+    dsb<Barrier::ISHST>();
+    isb();
+}

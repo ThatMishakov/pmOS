@@ -8,8 +8,9 @@
     .globl _limine_entry
     .type _limine_entry, %function
 _limine_entry:
-    adr x0, stack + STACK_SIZE
-    mov sp, x0
+    adrp x0, stack + STACK_SIZE
+    add  x0, x0, :lo12:stack + STACK_SIZE
+    mov  sp, x0
 
     bl limine_main
 

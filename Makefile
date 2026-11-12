@@ -58,6 +58,9 @@ $(x86_64-GRUB-ISO): FORCE | $(CHARIOT)
 $(x86_64-HYPER-ISO): FORCE | $(CHARIOT)
 	$(call build_image,x86_64,hyper-iso,pmos-hyper.iso)
 
+$(aarch64-IMG): FORCE | $(CHARIOT)
+	$(call build_image,aarch64,limine-disk-image,pmos.img)
+
 .chariot-tools/bin/chariot $(CURDIR)/.chariot-tools/bin/chariot: scripts/install-chariot.sh
 	./scripts/install-chariot.sh
 
