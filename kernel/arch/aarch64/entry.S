@@ -2,7 +2,7 @@
 
 .bss
 .align 4
-.comm stack, STACK_SIZE
+.comm stack, STACK_SIZE, 16
 
     .text
     .globl _limine_entry
