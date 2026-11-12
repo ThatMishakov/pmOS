@@ -348,7 +348,7 @@ void invalidate_level(::kernel::paging::TLBShootdownContext& ctx, u64 page_table
             ulong level_end = level_start + level_size;
 
             ulong sub_start = std::max(level_start, reinterpret_cast<ulong>(virt_addr_start));
-            ulong sub_end = end == 0 || level_end < end ? level_end : end;
+            ulong sub_end = (level_end != 0 && (end == 0 || level_end < end)) ? level_end : end;
 
             invalidate_level(ctx, phys_addr, (void *)sub_start, sub_end - sub_start, free, level - 1);
         } else {
