@@ -175,6 +175,10 @@ struct CPU_Info {
     EIOPIC *parent_eiopic = nullptr;
 #endif
 
+#ifdef __aarch64__
+    u64 mpidr_el1 = 0;
+#endif
+
     static constexpr int IPI_RESCHEDULE    = 0x1;
     static constexpr int IPI_TLB_SHOOTDOWN = 0x2;
     static constexpr int IPI_CPU_PARK      = 0x4;
@@ -284,5 +288,7 @@ void get_attention();
 
 // Handles continuations and such before returning to userspace
 void handle_scheduling();
+
+extern bool cpu_struct_works;
 
 }; // namespace kernel::sched

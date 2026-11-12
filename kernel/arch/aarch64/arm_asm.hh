@@ -25,3 +25,12 @@ inline void isb()
 {
     __builtin_arm_isb(0xF);
 }
+
+#ifdef __aarch64__
+inline u64 mpidr_el1()
+{
+    u64 val;
+    asm volatile("mrs %0, mpidr_el1" : "=r"(val));
+    return val;
+}
+#endif
