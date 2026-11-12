@@ -180,7 +180,7 @@ flanterm_context *ft_ctx = nullptr;
 uint32_t *fb_virt        = nullptr;
 
 // TODO: Enable this with cmdline
-bool use_kernel_fb = false;
+bool use_kernel_fb = true;
 
 void init_kernel_fb(phys_addr_t fb_phys, unsigned width, unsigned height, unsigned pitch, unsigned bpp, unsigned red_mask, unsigned red_shift, unsigned green_mask, unsigned green_shift, unsigned blue_mask, unsigned blue_shift, unsigned memory_model)
 {

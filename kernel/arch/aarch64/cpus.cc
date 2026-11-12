@@ -37,7 +37,7 @@ void early_detect_cpu_features()
 
 void init_scheduling(u64 cpu_id)
 {
-    panic("Init scheduling todo!");
+    panic("Init scheduling on aarch64 todo!");
 }
 
 void init_smp()

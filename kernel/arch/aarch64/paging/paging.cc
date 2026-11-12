@@ -656,6 +656,13 @@ constexpr u64 TTBRx_EL1_CnP = 1 << 0;
 
 void paging::apply_page_table(phys_addr_t kernel_page_table)
 {
+    constexpr u64 mair = mair_attridx(MAIR_NORMAL, MT_NORMAL) 
+                        | mair_attridx(MAIR_NORMAL_NC, MT_NORMAL_NC) 
+                        | mair_attridx(MAIR_DEVICE_nGnRnE, MT_DEVICE_nGnRnE) 
+                        | mair_attridx(MAIR_DEVICE_nGnRE, MT_DEVICE_nGnRE);
+
+    asm volatile("msr mair_el1, %0" :: "r"(mair) : "memory");
+
     if (use_ttcnp)
         kernel_page_table |= TTBRx_EL1_CnP;
 

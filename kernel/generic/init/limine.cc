@@ -159,6 +159,8 @@ namespace kernel::riscv64::paging
 {
 extern ulong idle_pt;
 }
+    #elif defined(__aarch64__)
+extern u64 kernel_page_table;
     #endif
 
 extern phys_addr_t temp_alloc_base;
@@ -292,10 +294,14 @@ void construct_paging()
 
     kernel_ptable_top = pmm::get_memory_for_kernel(1);
     clear_page(kernel_ptable_top);
+
+    // TODO: This is a mess
     #ifdef __x86_64__
     idle_cr3 = kernel_ptable_top;
     #elif defined(__riscv)
     riscv64::paging::idle_pt = kernel_ptable_top;
+    #elif defined(__aarch64__)
+    kernel_page_table = kernel_ptable_top;
     #endif
 
     #ifdef USE_SOFTWARE_DIRECT_MAP
