@@ -6,11 +6,19 @@
 #include <kern_logger/kern_logger.hh>
 #include <pmos/utility/scope_guard.hh>
 
+enum class InterruptControllerType {
+    GICv3,
+    GICv4,
+    AIC,
+    Unknown
+};
 
 using namespace kernel::arm::interrupts;
 using namespace kernel;
 
 namespace {
+
+InterruptControllerType controller = InterruptControllerType::Unknown;
 
 acpi_entry_hdr *get_madt_entry(acpi_madt *madt, u8 type, int idx)
 {
@@ -55,6 +63,7 @@ bool init_interrupts_acpi()
         break;
     case 0x03 ... 0x04:
         init_gicv3();
+        controller = InterruptControllerType::GICv3;
         break;
     default:
         panic("Unsupported GIC version %u\n", e->gic_version);
@@ -63,7 +72,6 @@ bool init_interrupts_acpi()
 
     return true;
 }
-
 
 }
 
@@ -76,4 +84,26 @@ void kernel::arm::interrupts::init_interrupt_controllers()
     // TODO: DTs
 
     panic("Could not initialize interrupt controllers with ACPI, DTs not implemented\n");
+}
+
+void kernel::arm::interrupts::ppi_clear(u32 ppi)
+{
+    switch (controller) {
+    case InterruptControllerType::GICv3:
+        gicv3_ppi_clear(ppi);
+        break;
+    default:
+        panic("Unknown interrupt controller type %u\n", (u32)controller);
+    }
+}
+
+void kernel::arm::interrupts::ppi_enable(u32 ppi)
+{
+    switch (controller) {
+    case InterruptControllerType::GICv3:
+        gicv3_ppi_enable(ppi);
+        break;
+    default:
+        panic("Unknown interrupt controller type %u\n", (u32)controller);
+    }
 }

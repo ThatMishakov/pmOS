@@ -10,6 +10,7 @@
 #include <pmos/containers/vector.hh>
 #include <arm_acle.h>
 #include <algorithm>
+#include <sched/sched.hh>
 
 using namespace kernel;
 using namespace kernel::arm::interrupts;
@@ -44,7 +45,7 @@ struct GICR {
     u64 phys_base = 0;
     u32 *virt_base = nullptr;
 
-    u32 cpu_pidr = 0;
+    u32 affinity = 0;
 };
 pmos::containers::vector<GICR> gic_redistributors;
 
@@ -56,7 +57,10 @@ constexpr u32 GICR_TYPER_LAST = 1 << 4;
 constexpr size_t GICR_CTLR_IDX = 0x0000 / sizeof(u32);
 constexpr size_t GICR_TYPER_IDX = 0x0008 / sizeof(u32);
 
+constexpr size_t GICR_ISENABLER0_IDX = 0x10100 / sizeof(u32);
 constexpr size_t GICR_ICENABLER0_IDX = 0x10180 / sizeof(u32);
+constexpr size_t GICR_ISPENDR0_IDX = 0x10200 / sizeof(u32);
+constexpr size_t GICR_ICPENDR0_IDX = 0x10280 / sizeof(u32);
 
 unsigned itlines_number_normal()
 {
@@ -69,7 +73,7 @@ u32 *gic_map(u64 phys_addr, size_t size)
 
     auto addr = vmm::kernel_space_allocator.virtmem_alloc(size / PAGE_SIZE);
     if (!addr)
-        panic("Failed to allocate virtual memory window for GICD");
+        panic("Failed to allocate virtual memory window for GICD, phys_addr %lx size %x", phys_addr, size);
 
     const paging::Page_Table_Arguments arg = {
         .readable           = true,
@@ -115,11 +119,11 @@ void enumerate_redistributors(u64 phys_base, size_t size)
         r.virt_base = gic_map(r.phys_base, GICR_MEMORY_SIZE);
      
         u32 typer_low = mmio_readl(r.virt_base + GICR_TYPER_IDX);
-        r.cpu_pidr = mmio_readl(r.virt_base + GICR_TYPER_IDX + 1);
+        r.affinity = mmio_readl(r.virt_base + GICR_TYPER_IDX + 1);
 
         gic_redistributors.push_back(r);
 
-        log::serial_logger.printf("[Kernel] Info: GICR found at physical address 0x%lx with CPU PIDR 0x%x typer 0x%x\n", r.phys_base, r.cpu_pidr, typer_low);
+        log::serial_logger.printf("[Kernel] Info: GICR found at physical address 0x%lx with CPU PIDR 0x%x typer 0x%x\n", r.phys_base, r.affinity, typer_low);
 
         size_t rsize = typer_low & GICR_TYPER_VLPIS ? 0x40000 : 0x20000;
         if (size > rsize) {
@@ -231,10 +235,28 @@ bool init_acpi()
     }
 
     std::sort(gic_redistributors.begin(), gic_redistributors.end(), [](const GICR &a, const GICR &b) {
-        return a.cpu_pidr < b.cpu_pidr;
+        return a.affinity < b.affinity;
     });
 
     do_setup();
+
+    return true;
+}
+
+GICR &get_gicr_for_cpu(u32 affinity)
+{
+    auto it = std::lower_bound(gic_redistributors.begin(), gic_redistributors.end(), affinity, [](const GICR &a, u32 pidr) {
+        return a.affinity < pidr;
+    });
+    if (it != gic_redistributors.end() && it->affinity == affinity)
+        return *it;
+
+    panic("No GICR found for CPU PIDR 0x%x", affinity);
+}
+
+u32 affinity_from_mpidr(u64 mpidr)
+{
+    return (mpidr & 0xffffff) | (mpidr >> 8) & 0xff000000;
 }
 
 } // namespace
@@ -245,4 +267,18 @@ void kernel::arm::interrupts::init_gicv3()
         return;
 
     panic("Failed to initialize GICv3 interrupt controller with ACPI, DTs not implemented");
+}
+
+void kernel::arm::interrupts::gicv3_ppi_clear(u32 ppi)
+{
+    auto &r = get_gicr_for_cpu(affinity_from_mpidr(sched::get_cpu_struct()->mpidr_el1));
+    mmio_writel(r.virt_base + GICR_ICPENDR0_IDX, 1u << ppi);
+    gicr_wait_uwp(r.virt_base);
+}
+
+void kernel::arm::interrupts::gicv3_ppi_enable(u32 ppi)
+{
+    assert(ppi >= 16 && ppi <= 31);
+    auto &r = get_gicr_for_cpu(affinity_from_mpidr(sched::get_cpu_struct()->mpidr_el1));
+    mmio_writel(r.virt_base + GICR_ISENABLER0_IDX, 1u << ppi);
 }
