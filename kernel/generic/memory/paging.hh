@@ -67,7 +67,7 @@ namespace kernel::paging {
 
 
 /// @brief Memory mapping type
-enum class Memory_Type { Normal, MemoryNoCache, IONoCache, Framebuffer };
+enum class Memory_Type { Normal, MemoryNoCache, IONoCache, Framebuffer, IORelaxed, IOPosted };
 
 /// @brief Arguments for mapping of pages
 struct Page_Table_Arguments {

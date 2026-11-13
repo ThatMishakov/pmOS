@@ -3,9 +3,11 @@
 #include <kern_logger/kern_logger.hh>
 #include <processes/tasks.hh>
 #include <arm_asm.hh>
+#include <interrupts/interrupts.hh>
 
 using namespace kernel::sched;
 using namespace kernel;
+using namespace kernel::arm;
 
 void CPU_Info::ipi_cpu_park()
 {
@@ -73,8 +75,6 @@ void init_scheduling(u64 cpu_id)
     if (!cpus.push_back(i))
         panic("Could not add sched::CPU_Info struct to cpus vector\n");
 
-    // TODO: Interrupts
-
     log::serial_logger.printf("Initializing idle task\n");
 
     auto idle = proc::init_idle(i);
@@ -91,6 +91,8 @@ void init_scheduling(u64 cpu_id)
 
     i->kernel_pt_generation = kernel::paging::kernel_pt_generation;
     __atomic_add_fetch(&kernel_pt_active_cpus_count[i->kernel_pt_generation], 1, __ATOMIC_RELAXED);
+
+    arm::interrupts::init_interrupt_controllers();
 
     log::serial_logger.printf("Scheduling initialized\n");
 }

@@ -34,3 +34,26 @@ inline u64 mpidr_el1()
     return val;
 }
 #endif
+
+template<typename Reg>
+unsigned long mrs();
+
+template<typename Reg>
+void msr(unsigned long value);
+
+#define DEFINE_SYSREG(name)                             \
+    struct name {};                                     \
+                                                        \
+    template<>                                          \
+    inline unsigned long mrs<name>()                    \
+    {                                                   \
+        unsigned long value;                            \
+        asm volatile("mrs %0, " #name : "=r"(value));   \
+        return value;                                   \
+    }                                                   \
+                                                        \
+    template<>                                          \
+    inline void msr<name>(unsigned long value)          \
+    {                                                   \
+        asm volatile("msr " #name ", %0" :: "r"(value));\
+    }

@@ -4,6 +4,10 @@
 #include <pmos/utility/scope_guard.hh>
 #include <kern_logger/kern_logger.hh>
 
+DEFINE_SYSREG(mair_el1)
+DEFINE_SYSREG(ttbr0_el1)
+DEFINE_SYSREG(ttbr1_el1)
+
 using namespace kernel::aarch64::paging;
 using namespace kernel::paging;
 using namespace kernel;
@@ -12,11 +16,13 @@ static constexpr unsigned MT_NORMAL = 0;
 static constexpr unsigned MT_NORMAL_NC = 1;
 static constexpr unsigned MT_DEVICE_nGnRnE = 2;
 static constexpr unsigned MT_DEVICE_nGnRE = 3;
+static constexpr unsigned MT_DEVICE_nGRE = 4;
 
 static constexpr u64 MAIR_NORMAL = 0xff;
 static constexpr u64 MAIR_NORMAL_NC = 0x44;
 static constexpr u64 MAIR_DEVICE_nGnRnE = 0x00;
 static constexpr u64 MAIR_DEVICE_nGnRE = 0x04;
+static constexpr u64 MAIR_DEVICE_nGRE = 0x08;
 
 
 static constexpr u64 DESCR_PRESENT = 1 << 0;
@@ -83,14 +89,18 @@ constexpr u64 type_to_attridx(Memory_Type type)
     case Memory_Type::Normal:
         attr = MT_NORMAL;
         break;
+    case Memory_Type::Framebuffer:
     case Memory_Type::MemoryNoCache:
         attr = MT_NORMAL_NC;
         break;
     case Memory_Type::IONoCache:
         attr = MT_DEVICE_nGnRnE;
         break;
-    case Memory_Type::Framebuffer:
+    case Memory_Type::IOPosted:
         attr = MT_DEVICE_nGnRE;
+        break;
+    case Memory_Type::IORelaxed:
+        attr = MT_DEVICE_nGRE;
         break;
     default:
         assert(false && "Invalid memory type");
@@ -112,7 +122,9 @@ Memory_Type pte_to_type(u64 attridx)
     case MT_DEVICE_nGnRnE:
         return Memory_Type::IONoCache;
     case MT_DEVICE_nGnRE:
-        return Memory_Type::Framebuffer;
+        return Memory_Type::IOPosted;
+    case MT_DEVICE_nGRE:
+        return Memory_Type::IORelaxed;
     default:
         assert(false && "Invalid memory type");
         return Memory_Type::Normal;
@@ -645,7 +657,7 @@ void AArch64_Page_Table::tlb_flush_all()
 void AArch64_Page_Table::apply()
 {
     assert(page_directory != PAGE_DIRECTORY_INITIALIZER);
-    asm volatile("msr ttbr0_el1, %0" :: "r"(page_directory) : "memory");
+    msr<ttbr0_el1>(page_directory);
     flush_tlb();
     dsb<Barrier::ISH>();
     isb();
@@ -659,14 +671,15 @@ void paging::apply_page_table(phys_addr_t kernel_page_table)
     constexpr u64 mair = mair_attridx(MAIR_NORMAL, MT_NORMAL) 
                         | mair_attridx(MAIR_NORMAL_NC, MT_NORMAL_NC) 
                         | mair_attridx(MAIR_DEVICE_nGnRnE, MT_DEVICE_nGnRnE) 
-                        | mair_attridx(MAIR_DEVICE_nGnRE, MT_DEVICE_nGnRE);
+                        | mair_attridx(MAIR_DEVICE_nGnRE, MT_DEVICE_nGnRE)
+                        | mair_attridx(MAIR_DEVICE_nGRE, MT_DEVICE_nGRE);
 
-    asm volatile("msr mair_el1, %0" :: "r"(mair) : "memory");
+    msr<mair_el1>(mair);
 
     if (use_ttcnp)
         kernel_page_table |= TTBRx_EL1_CnP;
 
-    asm volatile("msr ttbr1_el1, %0" :: "r"(kernel_page_table) : "memory");
+    msr<ttbr1_el1>(kernel_page_table);
     flush_tlb();
     dsb<Barrier::ISH>();
     isb();
