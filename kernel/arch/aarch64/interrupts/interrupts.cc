@@ -5,6 +5,7 @@
 #include "gicv3.hh"
 #include <kern_logger/kern_logger.hh>
 #include <pmos/utility/scope_guard.hh>
+#include <interrupts/interrupt_handler.hh>
 
 enum class InterruptControllerType {
     GICv3,
@@ -103,6 +104,43 @@ void kernel::arm::interrupts::ppi_enable(u32 ppi)
     case InterruptControllerType::GICv3:
         gicv3_ppi_enable(ppi);
         break;
+    default:
+        panic("Unknown interrupt controller type %u\n", (u32)controller);
+    }
+}
+
+void interrupts::interrupt_complete(interrupts::InterruptHandler*)
+{
+    panic("interrupt_complete() not implemented");
+}
+
+void interrupts::interrupt_disable(interrupts::InterruptHandler *handler)
+{
+    switch (controller) {
+    case InterruptControllerType::GICv3:
+        gicv3_disable(handler);
+        break;
+    default:
+        panic("Unknown interrupt controller type %u\n", (u32)controller);
+    }
+}
+
+void interrupts::interrupt_enable(interrupts::InterruptHandler *handler)
+{
+    switch (controller) {
+    case InterruptControllerType::GICv3:
+        gicv3_enable(handler);
+        break;
+    default:
+        panic("Unknown interrupt controller type %u\n", (u32)controller);
+    }
+}
+
+ReturnStr<interrupts::InterruptHandler *> interrupts::allocate_or_get_handler(u32 gsi, bool edge_triggered, bool active_low)
+{
+    switch (controller) {
+    case InterruptControllerType::GICv3:
+        return gicv3_get_handler(gsi, edge_triggered, active_low);
     default:
         panic("Unknown interrupt controller type %u\n", (u32)controller);
     }

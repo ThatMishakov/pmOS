@@ -17,7 +17,6 @@ using namespace kernel::arm::interrupts;
 
 namespace {
 
-
 constexpr size_t GICD_MEMORY_SIZE = 0x10000; 
 u64 gicd_phys_base = 0;
 u32 gicd_id = 0;
@@ -38,6 +37,10 @@ constexpr size_t GICD_TYPER_IDX = 0x0004 / sizeof(u32);
 
 constexpr size_t GICD_ISENABLER0_IDX = 0x0100 / sizeof(u32);
 constexpr size_t GICD_ICENABLER0_IDX = 0x0180 / sizeof(u32);
+
+constexpr size_t GICD_ICFGR0_IDX = 0x0C00 / sizeof(u32);
+
+constexpr size_t GICD_IROUTER0_IDX = 0x6000 / sizeof(u32);
 
 
 constexpr size_t GICR_MEMORY_SIZE = 0x20000;
@@ -61,6 +64,22 @@ constexpr size_t GICR_ISENABLER0_IDX = 0x10100 / sizeof(u32);
 constexpr size_t GICR_ICENABLER0_IDX = 0x10180 / sizeof(u32);
 constexpr size_t GICR_ISPENDR0_IDX = 0x10200 / sizeof(u32);
 constexpr size_t GICR_ICPENDR0_IDX = 0x10280 / sizeof(u32);
+
+u64 gicd_irouter_from(u64 pidr)
+{
+    return pidr & 0xff00ffffff;
+}
+
+struct GICHandler: kernel::interrupts::InterruptHandler {
+    bool is_allocated() const
+    {
+        return parent_cpu != nullptr;
+    }
+
+    bool edge_triggered = false;
+};
+
+pmos::containers::vector<GICHandler> spi_handlers;
 
 unsigned itlines_number_normal()
 {
@@ -182,6 +201,12 @@ void do_setup()
         }
     }
 
+    auto itlines = itlines_number_normal();
+    for (unsigned i = 1; i < itlines; ++i) {
+        mmio_writel(gicd_virt_base + GICD_ICENABLER0_IDX + i, 0xffffffff);
+    }
+    gicd_wait_rwp();
+
     for (auto &r: gic_redistributors) {
         // Clear interrupts...
 
@@ -194,6 +219,15 @@ void do_setup()
 
         gicr_wait_uwp(r.virt_base);
     }
+
+    if (!(gicd_ctrl & GICD_CTLR_EnableGrp1)) {
+        gicd_ctrl |= GICD_CTLR_EnableGrp1;
+        mmio_writel(gicd_virt_base + GICD_CTLR_IDX, gicd_ctrl);
+        gicd_wait_rwp();
+    }
+
+    auto spi_lines = itlines_number_normal() - 1;
+    spi_handlers.resize(spi_lines * 32);
 }
 
 bool init_acpi()
@@ -283,4 +317,90 @@ void kernel::arm::interrupts::gicv3_ppi_enable(u32 ppi)
     assert(ppi >= 16 && ppi <= 31);
     auto r = get_gicr_for_cpu(affinity_from_mpidr(sched::get_cpu_struct()->mpidr_el1));
     mmio_writel(r.virt_base + GICR_ISENABLER0_IDX, 1u << ppi);
+}
+
+static Spinlock lock;
+
+ReturnStr<kernel::interrupts::InterruptHandler *> kernel::arm::interrupts::gicv3_get_handler(u32 gsi, bool edge_triggered, bool)
+{
+    if (gsi < 32)
+        return Error(-ENOTSUP);
+
+    auto interrupt = gsi - 32;
+    if (interrupt >= spi_handlers.size())
+        return Error(-ENODEV);
+
+    Auto_Lock_Scope l(lock);
+
+    auto &handler = spi_handlers[interrupt];
+    if (handler.is_allocated())
+        return &handler;
+
+    auto current_cpu = sched::cpus[0];
+    assert(current_cpu);
+    for (size_t i = 1; i < sched::cpus.size(); ++i) {
+        auto h1      = sched::cpus[i]->allocated_int_count;
+        auto current = current_cpu->allocated_int_count;
+        if (h1 < current)
+            current_cpu = sched::cpus[i];
+    }
+
+    current_cpu->allocated_int_count++;
+    handler.parent_cpu = current_cpu;
+    handler.edge_triggered = edge_triggered;
+
+    u64 irouter = gicd_irouter_from(current_cpu->mpidr_el1);
+    // Route the interrupt
+    u32 idx = gsi*2;
+    mmio_writel(gicd_virt_base + GICD_IROUTER0_IDX + idx, irouter & 0xffffffff);
+    mmio_writel(gicd_virt_base + GICD_IROUTER0_IDX + idx + 1, (irouter >> 32) & 0xffffffff);
+
+    u32 type_idx = gsi / 16;
+    u32 type_shift = (gsi % 16) * 2;
+
+    auto type_reg = mmio_readl(gicd_virt_base + GICD_ICFGR0_IDX + type_idx);
+    type_reg &= ~(0x3u << type_shift);
+    if (edge_triggered)
+        type_reg |= (0x2u << type_shift);
+    mmio_writel(gicd_virt_base + GICD_ICFGR0_IDX + type_idx, type_reg);
+
+    // TODO: Priority
+
+    gicd_wait_rwp();
+
+    return Success(&handler);
+}
+
+void kernel::arm::interrupts::gicv3_enable(kernel::interrupts::InterruptHandler *handler)
+{
+    assert(handler);
+    auto gic_handler = static_cast<GICHandler *>(handler);
+    assert(gic_handler->parent_cpu == sched::get_cpu_struct());
+
+    u32 gsi = (gic_handler - spi_handlers.data()) + 32;
+    assert(gsi >= 32 && gsi < 32 + spi_handlers.size());
+
+    u32 idx = gsi / 32;
+    u32 shift = gsi % 32;
+    u32 mask = 1u << shift;
+
+    mmio_writel(gicd_virt_base + GICD_ISENABLER0_IDX + idx, mask);
+    gicd_wait_rwp();
+}
+
+void kernel::arm::interrupts::gicv3_disable(kernel::interrupts::InterruptHandler *handler)
+{
+    assert(handler);
+    auto gic_handler = static_cast<GICHandler *>(handler);
+    assert(gic_handler->parent_cpu == sched::get_cpu_struct());
+
+    u32 gsi = (gic_handler - spi_handlers.data()) + 32;
+    assert(gsi >= 32 && gsi < 32 + spi_handlers.size());
+
+    u32 idx = gsi / 32;
+    u32 shift = gsi % 32;
+    u32 mask = 1u << shift;
+
+    mmio_writel(gicd_virt_base + GICD_ICENABLER0_IDX + idx, mask);
+    gicd_wait_rwp();
 }
