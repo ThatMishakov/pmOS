@@ -8,6 +8,7 @@
     .globl _limine_entry
     .type _limine_entry, %function
 _limine_entry:
+    msr SPSel, #1
     adrp x0, stack + STACK_SIZE
     add  x0, x0, :lo12:stack + STACK_SIZE
     mov  sp, x0

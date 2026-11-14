@@ -13,13 +13,13 @@ exception_vectors:
 
     // Current EL, SP_EL1
     .balign 128
-//    b kernel_sync
+    b kernel_sync
     .balign 128
-//    b kernel_irq
+    b kernel_irq
     .balign 128
-//    b kernel_fiq
+    b kernel_fiq
     .balign 128
-//    b kernel_serror
+    b kernel_serror
 
     // Lower EL, AArch64
     .balign 128
@@ -33,7 +33,6 @@ exception_vectors:
  
     // Lower EL, AArch32
     .balign 128
-    b unexpected_exception
     b user_sync
     .balign 128
     b user_irq
@@ -139,3 +138,10 @@ return_to_user:
     ldr x30, [x0, #240]
     ldp x0, x1, [x0]
     eret
+
+
+kernel_sync:
+kernel_irq:
+kernel_fiq:
+kernel_serror:
+    b unexpected_exception

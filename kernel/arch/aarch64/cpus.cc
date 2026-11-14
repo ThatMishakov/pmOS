@@ -73,6 +73,28 @@ struct ARMTimeSource final: kernel::time::TimeSource {
     virtual void init_as_main() override {}
 } arm_time_source;
 
+struct ARMGenericTimer final: kernel::time::LocalTimer {
+    virtual void set_deadline(u64 deadline_nanoseconds) override
+    {
+        u64 wanted_ticks = timer_freq * deadline_nanoseconds;
+        msr<cntv_cval_el0>(wanted_ticks);
+        msr<cntv_ctl_el0>(1);
+    }
+
+    virtual void cancel_deadline() override
+    {
+        msr<cntv_ctl_el0>(2);
+    }
+
+    virtual void init_as_main() override {}
+
+    virtual const char *name() const override
+    {
+        return "ARM Generic Timer";
+    }
+};
+ARMGenericTimer arm_generic_timer;
+
 constexpr u64 EL2_VHE_MASK = 1ull << 34;
 
 unsigned timer_interrupt = 0;
@@ -119,6 +141,7 @@ void init_timer()
     log::serial_logger.printf("Timer frequency: %llu Hz\n", counter_freq);
 
     kernel::time::kernel_timesource = &arm_time_source;
+    kernel::time::kernel_local_timer = &arm_generic_timer;
 
     bool success = init_timer_acpi();
     if (!success)
@@ -192,5 +215,10 @@ void init_scheduling(u64 cpu_id)
 
 void init_smp()
 {
-    panic("aarch64 init_smp stub\n");
+    // init_smp_acpi();
+
+    memory::init_rcu();
+    other_cpus_online = true;
+
+    // start_aps();
 }
