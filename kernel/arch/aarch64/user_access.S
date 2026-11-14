@@ -91,3 +91,96 @@ done:
     mov sp, x29
     ldp x29, x30, [sp], #16
     ret
+
+    .type fast_copy_from_user, @function
+    .globl fast_copy_from_user
+fast_copy_from_user:
+    mov x10, #1
+    b generic
+
+    .type fast_copy_to_user, @function
+    .globl fast_copy_to_user
+fast_copy_to_user:
+    mov x10, #2
+    b generic
+
+generic:
+    stp x29, x30, [sp, #-16]!
+    mov x29, sp
+
+    stp x27, x28, [sp, #-16]!
+    stp x25, x26, [sp, #-16]!
+    stp x23, x24, [sp, #-16]!
+    stp x21, x22, [sp, #-16]!
+    stp x19, x20, [sp, #-16]!
+
+    // Args
+    stp x2, x10, [sp, #-16]! // size_t size, int direction
+    stp x0, x1, [sp, #-16]! // void *dst, const void *src
+
+    adr x10, on_failure
+    mrs x27, TPIDR_EL1
+    mov x11, sp
+    stp x10, x11, [x27, #48] // CPU_Info::jumpto_func, CPU_Info::jumpto_arg
+
+    adrp x3, use_pan
+    ldrb w28, [x3, :lo12:use_pan]
+    cbz w28, 1f
+    msr pan, #0
+1:
+
+    bl memcpy
+
+    cbz w28, 2f
+    msr pan, #1
+2:
+
+    // Success
+    mov x0, xzr
+    mov x1, #1
+
+    stp xzr, xzr, [x27, #48] // CPU_Info::jumpto_func, CPU_Info::jumpto_arg
+    
+    ldp x27, x28, [x29, #-16]
+    mov sp, x29
+    ldp x29, x30, [sp], #16
+    ret
+
+on_failure:
+    mov sp, x0
+    add x29, sp, #112
+
+    // Pass arguments
+    add x4, sp, #16 // size_t *size
+    add x3, sp, #8  // const void *src
+    add x2, sp, #0  // void *&dst
+    // Faulting address is in x1
+    ldr x0, [sp, #24] // unsigned access
+
+    bl user_access_page_fault
+
+    cbnz x0, done
+    tbz w1, #0, done
+
+    ldp x0, x1, [sp] // void *dst, const void *src
+    ldr x2, [sp, #16] // size_t size
+
+    adrp x3, use_pan
+    ldrb w3, [x3, :lo12:use_pan]
+    cbz w3, 1f
+    msr pan, #0
+1:
+
+    bl memcpy
+
+    adrp x3, use_pan
+    ldrb w3, [x3, :lo12:use_pan]
+    cbz w3, 2f
+    msr pan, #1
+2:
+
+    // Success
+    mov x0, xzr
+    mov x1, #1
+
+    b done
