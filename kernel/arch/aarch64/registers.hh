@@ -24,12 +24,12 @@ struct AArch64Regs {
     inline ulong &arg2() { return x[1]; }
     inline ulong &arg3() { return x[2]; }
 
-    inline ulong &syscall_arg1() { return x[0]; }
-    inline ulong &syscall_arg2() { return x[1]; }
-    inline ulong &syscall_arg3() { return x[2]; }
-    inline ulong &syscall_arg4() { return x[3]; }
-    inline ulong &syscall_arg5() { return x[4]; }
-    inline ulong &syscall_arg6() { return x[5]; }
+    inline ulong &syscall_arg1() { return x[1]; }
+    inline ulong &syscall_arg2() { return x[2]; }
+    inline ulong &syscall_arg3() { return x[3]; }
+    inline ulong &syscall_arg4() { return x[4]; }
+    inline ulong &syscall_arg5() { return x[5]; }
+    inline ulong &syscall_arg6() { return x[6]; }
     
     inline u64 &syscall_retval_low() { return x[0]; }
     inline u64 &syscall_retval_high() { return x[1]; }

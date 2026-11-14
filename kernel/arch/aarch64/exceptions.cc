@@ -7,6 +7,8 @@
 #include <memory/paging.hh>
 #include <sched/sched.hh>
 #include <processes/tasks.hh>
+#include <processes/syscalls.hh>
+
 
 using namespace kernel;
 
@@ -23,17 +25,21 @@ namespace {
 void print_registers(Task_Regs *regs, log::Logger &logger)
 {
     logger.printf("Registers:\n");
-    for (int i = 0; i < 31; ++i) {
-        logger.printf("x%02d: %016lx\n", i, regs->x[i]);
+    for (int i = 0; i < 28/4; ++i) {
+        logger.printf("x%d: 0x%lx x%d: 0x%lx x%d: 0x%lx x%d: 0x%lx\n", i * 4 + 0, regs->x[i * 4 + 0],
+                      i * 4 + 1, regs->x[i * 4 + 1], i * 4 + 2, regs->x[i * 4 + 2], i * 4 + 3,
+                      regs->x[i * 4 + 3]);
     }
-    logger.printf("pc: %016lx\n", regs->pc);
-    logger.printf("sp: %016lx\n", regs->sp);
-    logger.printf("spsr_el1: %016lx\n", regs->spsr_el1);
-    logger.printf("tpidr_el0: %016lx\n", regs->tpidr_el0);
-    logger.printf("tpidrro_el0: %016lx\n", regs->tpidrro_el0);
+    logger.printf("x28: 0x%lx x29: 0x%lx x30: 0x%lx ", regs->x[28], regs->x[29], regs->x[30]);
+
+    logger.printf("pc: 0x%lx\n", regs->pc);
+    logger.printf("sp: 0x%lx ", regs->sp);
+    logger.printf("spsr_el1: 0x%lx ", regs->spsr_el1);
+    logger.printf("tpidr_el0: 0x%lx ", regs->tpidr_el0);
+    logger.printf("tpidrro_el0: 0x%lx\n", regs->tpidrro_el0);
 }
 
-
+constexpr u32 SVC_EC = 0x15;
 constexpr u32 USER_INSTRUCTION_ABORT_EC = 0x20;
 constexpr u32 USER_DATA_ABORT_EC = 0x24;
 
@@ -110,7 +116,7 @@ extern "C" void handle_user_sync()
 {
     u64 esr = mrs<esr_el1>();
 
-    log::serial_logger.printf("Synchronous user int esr_el1 %lx...\n", esr);
+    // log::serial_logger.printf("Synchronous user int esr_el1 %lx...\n", esr);
 
     u32 ec = ec_from_esr(esr);
     switch (ec) {
@@ -118,11 +124,16 @@ extern "C" void handle_user_sync()
     case USER_INSTRUCTION_ABORT_EC:
         handle_user_abort(esr);
         break;
+    case SVC_EC:
+        proc::syscalls::syscall_handler();
+        break;
 
     default:
         panic("Unhandled synchronous user exception class 0x%x, ESR_EL1 0x%lx", ec, esr);
         break;
     }
+
+    sched::handle_scheduling();
 }
 
 extern "C" void handle_user_irq()

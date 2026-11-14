@@ -18,6 +18,7 @@ DEFINE_SYSREG(cntv_cval_el0)
 DEFINE_SYSREG(cntv_ctl_el0)
 DEFINE_SYSREG(currentel)
 DEFINE_SYSREG(hcr_el2)
+DEFINE_SYSREG(pan)
 
 using namespace kernel::sched;
 using namespace kernel;
