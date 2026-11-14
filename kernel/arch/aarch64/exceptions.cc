@@ -34,8 +34,8 @@ void print_registers(Task_Regs *regs, log::Logger &logger)
 }
 
 
-constexpr u32 USER_DATA_ABORT_EC = 0x24;
 constexpr u32 USER_INSTRUCTION_ABORT_EC = 0x20;
+constexpr u32 USER_DATA_ABORT_EC = 0x24;
 
 u32 ec_from_esr(u64 esr)
 {
@@ -114,6 +114,7 @@ extern "C" void handle_user_sync()
 
     u32 ec = ec_from_esr(esr);
     switch (ec) {
+    case USER_DATA_ABORT_EC:
     case USER_INSTRUCTION_ABORT_EC:
         handle_user_abort(esr);
         break;
