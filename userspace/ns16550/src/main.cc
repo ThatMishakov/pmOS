@@ -1,5 +1,3 @@
-#include "ns16550.hh"
-
 #include <cstdint>
 #include <cstring>
 #include <inttypes.h>
@@ -20,6 +18,8 @@
 #include <sys/user.h>
 #include <pty.h>
 #include <stdlib.h>
+#include "common.hh"
+#include "ns16550/ns16550.hh"
 
 // Either physcial memory base or I/O port base
 uint64_t terminal_base = 0x0;
@@ -57,106 +57,9 @@ auto pmbus_helper = pmos::PMBUSHelper(dispatcher);
 constexpr auto devicesd_port_name = "/pmos/devicesd";
 auto devicesd_right               = pmos::get_right_by_name(devicesd_port_name).value();
 
-class IORW
-{
-public:
-    virtual void write_register(int index, uint8_t value) = 0;
-    virtual uint8_t read_register(int index)              = 0;
-    virtual ~IORW()                                       = default;
-};
-
-class MMIO final: public IORW
-{
-public:
-    MMIO(uint64_t base)
-    {
-        auto offset       = base & (PAGE_SIZE - 1);
-        auto base_aligned = base & ~(uint64_t)(PAGE_SIZE - 1);
-
-        auto result = create_phys_map_region(TASK_ID_SELF, nullptr, 0x1000, PROT_READ | PROT_WRITE,
-                                             base_aligned);
-        if (result.result != SUCCESS)
-            throw std::runtime_error("Failed to map serial port");
-
-        serial_mapped = reinterpret_cast<volatile uint8_t *>(result.virt_addr) + offset;
-    }
-
-    void write_register(int index, uint8_t value) override
-    {
-        *(reinterpret_cast<volatile uint8_t *>(serial_mapped) + index) = value;
-    }
-
-    uint8_t read_register(int index) override
-    {
-        return *(reinterpret_cast<volatile uint8_t *>(serial_mapped) + index);
-    }
-
-private:
-    volatile uint8_t *serial_mapped = nullptr;
-};
-
-class PORTIO final: public IORW
-{
-public:
-    PORTIO(uint64_t base): base(base)
-    {
-#if defined(__i386__) || defined(__x86_64__)
-        auto result = pmos_request_io_permission();
-        if (result < 0)
-            throw std::runtime_error("Couldn't request io permission");
-#endif
-    }
-
-#if defined(__i386__) || defined(__x86_64__)
-    void write_register(int index, uint8_t value) override
-    {
-        int port = base + index;
-        __asm__ volatile("outb %b0, %w1" : : "a"(value), "Nd"(port));
-    }
-
-    uint8_t read_register(int index) override
-    {
-        uint8_t value;
-        int port = base + index;
-        __asm__ volatile("inb %w1, %b0" : "=a"(value) : "d"(port));
-        return value;
-    }
-#else
-    void write_register(int index, uint8_t value) override
-    {
-        throw std::runtime_error("IO not supported on the platform");
-    }
-
-    uint8_t read_register(int index) override
-    {
-        throw std::runtime_error("IO not supported on the platform");
-    }
-#endif
-private:
-    int base;
-};
-
-std::unique_ptr<IORW> io_rw = nullptr;
-
-void poll();
-
-void set_register(int index, uint8_t mask)
-{
-    uint8_t val = io_rw->read_register(index);
-    val |= mask;
-    io_rw->write_register(index, val);
-}
-
-void clear_register(int index, uint8_t mask)
-{
-    uint8_t val = io_rw->read_register(index);
-    val &= ~mask;
-    io_rw->write_register(index, val);
-}
-
 pmos::ReceiveRight interrupt_right;
 
-void set_up_interrupt()
+void request_interrupt()
 {
     printf("Initializing interrupts... Mask: %x\n", interrupt_type_mask);
 
@@ -235,11 +138,24 @@ void set_up_interrupt()
     have_interrupts = true;
 }
 
-void set_interrupts();
-
 pmos::ReceiveRight timer_right;
 
-void ns16550_init()
+void set_up_interrupt()
+{
+    request_interrupt();
+
+    if (have_interrupts) {
+        // Enable interrupts
+        uart->set_interrupts();
+    } else {
+        timer_right = create_timer_right(serial_port);
+        poll();
+    }
+}
+
+UART *uart = nullptr;
+
+void init()
 {
     // Request a high priority, since we are a driver
     // TODO: There is a bug where setting a priority makes the task disappear after some time :)
@@ -292,135 +208,29 @@ void ns16550_init()
     gsi_num             = reply->gsi_number;
     pc_irq              = reply->pc_int_number;
 
-    printf("Initialized ns16550 with base address 0x%" PRIx64 ", access type %i, interface type %i, baud "
-           "rate %u, parity %i, stop bits %i, flow control %i, terminal type %i, interrupt type "
-           "mask %i, gsi num %i, pc irq %i\n",
-           terminal_base, access_type, interface_type, baud_rate, parity, stop_bits, flow_control,
-           terminal_type, interrupt_type_mask, gsi_num, pc_irq);
-
-    if (access_type == 0x0) { // System memory
-        io_rw = std::make_unique<MMIO>(terminal_base);
-    } else if (access_type == 0x01) {
-        io_rw = std::make_unique<PORTIO>(terminal_base);
-    } else { // Not system memory and serial port
-        throw std::runtime_error("Invalid access type");
-    }
-
-    // Initialize the serial port
-
-    // Disable interrupts
-    io_rw->write_register(IER, 0x00);
-
-    if (baud_rate != 0) { // Baud rate not set up by firmware
-        // Set baud rate
-        // set DLAB = 1
-        set_register(LCR, DLAB_MASK);
-
-        u32 right_freq = clock_frequency / 16;
-
-        uint8_t prescaler_division = 0;
-        uint16_t divisor_constant  = 0;
-        if (baud_rate > right_freq) {
-            prescaler_division = baud_rate / right_freq;
-            divisor_constant   = 1;
-
-            if (prescaler_division >= (1 << 4))
-                throw std::runtime_error("Clock too high");
-        } else {
-            divisor_constant = right_freq / baud_rate;
-        }
-
-        io_rw->write_register(DLL, divisor_constant);
-        io_rw->write_register(DLM, divisor_constant >> 8);
-        io_rw->write_register(PSD, prescaler_division);
-    }
-
-    // Set DLAB = 0
-    clear_register(LCR, DLAB_MASK);
-
-    uint8_t lcr = 0;
-
-    // Word length = 8 bits
-    lcr |= 0b11 << 0;
-
-    // Stop bits
-    switch (stop_bits) {
-    case 1:
+    switch (interface_type) {
+    case 0x0:
+        ns16550_init();
         break;
     default:
-        throw std::runtime_error("Unknown stop bits setting");
+        throw std::runtime_error("Unsupported interface type " + std::to_string(interface_type));
     }
-
-    switch (parity) {
-    case 0:
-        break;
-    default:
-        throw std::runtime_error("Unknown parity setting");
-    }
-
-    // Set LCR
-    io_rw->write_register(LCR, lcr);
-
-    // Set up interrupt
-    set_up_interrupt();
-
-    if (have_interrupts) {
-        // Enable interrupts
-        set_interrupts();
-    } else {
-        timer_right = create_timer_right(serial_port);
-        poll();
-    }
-
-    // Enable FIFO
-    // TODO: Be compatible with 16450
-    io_rw->write_register(FCR, FIFO_ENABLE | RX_FIFO_RESET | TX_FIFO_RESET | TRIGGER_8CHAR);
 }
-
-int buff_length             = 0;
-constexpr int buff_capacity = 16;
 
 bool writing = false;
 bool reading = false;
 
-void set_interrupts()
-{
-    u8 mask = IER_RLS;
-    if (reading)
-        mask |= IER_RX_DATA;
-    if (writing)
-        mask |= IER_TX_EMPTY;
-
-    io_rw->write_register(IER, mask);
-}
-
 struct buffer {
     std::vector<std::byte> data;
     size_t pos;
-    size_t length;
+    inline size_t length() { return data.size(); }
 };
 
 std::queue<buffer> write_queue;
 
 buffer active_buffer;
 
-void write_str(const char *str)
-{
-    while (*str != '\0') {
-        while ((io_rw->read_register(LSR) & LSR_TX_EMPTY) == 0)
-            ;
-        io_rw->write_register(THR, *str);
-        str++;
-    }
-}
-
-void write_str(const std::string &str) { write_str(str.c_str()); }
-
-void write_blind(const char *str, size_t size)
-{
-    for (size_t i = 0; i < size; ++i)
-        io_rw->write_register(THR, str[i]);
-}
+void write_str(const std::string &str) { uart->write_string_blocking(str.c_str()); }
 
 void check_tx()
 {
@@ -433,22 +243,12 @@ void check_tx()
 
     move_data();
 
-    if ((io_rw->read_register(LSR) & LSR_TX_EMPTY) == 0) {
-        if (have_interrupts && !writing && !active_buffer.data.empty()) {
-            writing = true;
-            set_interrupts();
-        }
-        return;
-    }
-
     if (not active_buffer.data.empty()) {
-        size_t i = active_buffer.length - active_buffer.pos;
-        if (i > 16)
-            i = 16;
+        auto span = std::span<std::byte>(active_buffer.data).subspan(active_buffer.pos);
+        auto i = uart->write(span);
 
-        write_blind(reinterpret_cast<const char *>(active_buffer.data.data()) + active_buffer.pos, i);
         active_buffer.pos += i;
-        if (active_buffer.pos == active_buffer.length)
+        if (active_buffer.pos == active_buffer.length())
             active_buffer = {};
 
         move_data();
@@ -456,11 +256,11 @@ void check_tx()
         if (!active_buffer.data.empty() && !writing) {
             writing = true;
             if (have_interrupts)
-                set_interrupts();
+                uart->set_interrupts();
         } else if (active_buffer.data.empty() && writing) {
             writing = false;
             if (have_interrupts)
-                set_interrupts();
+                uart->set_interrupts();
         }
     }
 }
@@ -473,18 +273,13 @@ void write_interrupt()
     }
 
     if (!active_buffer.data.empty()) {
-        size_t i = active_buffer.length - active_buffer.pos;
-        if (i > 16)
-            i = 16;
-
-        write_blind(reinterpret_cast<const char *>(active_buffer.data.data()) + active_buffer.pos, i);
+        size_t i = uart->write(std::span<std::byte>(active_buffer.data).subspan(active_buffer.pos));
         active_buffer.pos += i;
-        if (active_buffer.pos == active_buffer.length)
+        if (active_buffer.pos == active_buffer.length())
             active_buffer = {};
     } else {
         writing = false;
-        set_interrupts();
-        io_rw->read_register(ISR);
+        uart->set_interrupts();
     }
 }
 
@@ -495,14 +290,7 @@ void check_rx()
     if (!reading)
         return;
 
-    std::vector<std::byte> data;
-
-    while ((io_rw->read_register(LSR) & LSR_DATA_READY) != 0) {
-        auto t = io_rw->read_register(THR);
-
-        data.push_back(static_cast<std::byte>(t));
-    }
-
+    std::vector<std::byte> data = uart->read();
     if (data.empty())
         return;
 
@@ -574,24 +362,7 @@ void react_named_port_notification(const char *msg_buff, size_t size, pmos::Righ
 
 void react_interrupt()
 {
-    u8 interrupt_status = io_rw->read_register(ISR);
-    if ((interrupt_status & ISR_INT_PENDING) == 0) {
-        switch (interrupt_status & ISR_MASK) {
-        case 0b0110: // Receiver Line Status
-            // Acknowledge by reading LSR
-            io_rw->read_register(LSR);
-            break;
-        case 0b0100: // Received Data Available
-            check_rx();
-            break;
-        case 0b1100: // Reception Timeout
-            check_rx();
-            break;
-        case 0b0010: // Transmitter Holding Register Empty
-            write_interrupt();
-            break;
-        }
-    } // else: Spurious interrupt
+    uart->react_interrupt();
 
     pmos::complete_interrupt(interrupt_right);
 }
@@ -662,7 +433,7 @@ pmos::async::detached_task start_shell()
     tty_right = io_right;
     reading = true;
     if (have_interrupts)
-        set_interrupts();
+        uart->set_interrupts();
 
     while (true) {
         auto data = co_await read_from_right(io_right, 0x1000);
@@ -679,7 +450,6 @@ pmos::async::detached_task start_shell()
         write_queue.push({
             std::vector<std::byte>(data->begin(), data->end()),
             0,
-            data->size(),
         });
         check_tx();
     }
@@ -710,7 +480,6 @@ pmos::async::detached_task get_messages()
             write_queue.push({
                 std::move(msg_buff),
                 sizeof(IPC_Write_Plain),
-                (size_t)msg.size,
             });
             if (!writing)
                 check_tx();
@@ -737,7 +506,7 @@ int main()
 {
     printf("Hello from ns16550! My task id: %li\n", get_task_id());
 
-    ns16550_init();
+    init();
 
     write_str("!! ns16550 task id: " + std::to_string(get_task_id()) + " !!\n");
 
