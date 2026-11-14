@@ -210,6 +210,7 @@ void init()
 
     switch (interface_type) {
     case 0x0:
+    case 0x12:
         ns16550_init();
         break;
     default:
