@@ -155,9 +155,13 @@ void set_cpu_struct(CPU_Info *i)
 
 extern "C" void exception_vectors();
 
-void program_cpu_stuff()
+void program_cpu_stuff(sched::CPU_Info *)
 {
     msr<vbar_el1>((ulong)exception_vectors);
+
+    // The right stack gets loaded when returning to userspace
+    // assert(mrs<spsel>() == 0);
+    // msr<sp_el1>((ulong)i->kernel_stack_top);
 }
 
 // TODO: This is bad and should be abstracted away
@@ -183,7 +187,7 @@ void init_scheduling(u64 cpu_id)
 
     cpu_struct_works = true;
 
-    program_cpu_stuff();
+    program_cpu_stuff(i);
 
     if (!cpus.push_back(i))
         panic("Could not add sched::CPU_Info struct to cpus vector\n");

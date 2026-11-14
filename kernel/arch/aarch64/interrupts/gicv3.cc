@@ -243,7 +243,7 @@ bool init_acpi()
     return true;
 }
 
-GICR &get_gicr_for_cpu(u32 affinity)
+GICR get_gicr_for_cpu(u32 affinity)
 {
     auto it = std::lower_bound(gic_redistributors.begin(), gic_redistributors.end(), affinity, [](const GICR &a, u32 pidr) {
         return a.affinity < pidr;
@@ -252,11 +252,13 @@ GICR &get_gicr_for_cpu(u32 affinity)
         return *it;
 
     panic("No GICR found for CPU PIDR 0x%x", affinity);
+
+    return {};
 }
 
 u32 affinity_from_mpidr(u64 mpidr)
 {
-    return (mpidr & 0xffffff) | (mpidr >> 8) & 0xff000000;
+    return (mpidr & 0xffffff) | ((mpidr >> 8) & 0xff000000);
 }
 
 } // namespace
@@ -271,7 +273,7 @@ void kernel::arm::interrupts::init_gicv3()
 
 void kernel::arm::interrupts::gicv3_ppi_clear(u32 ppi)
 {
-    auto &r = get_gicr_for_cpu(affinity_from_mpidr(sched::get_cpu_struct()->mpidr_el1));
+    auto r = get_gicr_for_cpu(affinity_from_mpidr(sched::get_cpu_struct()->mpidr_el1));
     mmio_writel(r.virt_base + GICR_ICPENDR0_IDX, 1u << ppi);
     gicr_wait_uwp(r.virt_base);
 }
@@ -279,6 +281,6 @@ void kernel::arm::interrupts::gicv3_ppi_clear(u32 ppi)
 void kernel::arm::interrupts::gicv3_ppi_enable(u32 ppi)
 {
     assert(ppi >= 16 && ppi <= 31);
-    auto &r = get_gicr_for_cpu(affinity_from_mpidr(sched::get_cpu_struct()->mpidr_el1));
+    auto r = get_gicr_for_cpu(affinity_from_mpidr(sched::get_cpu_struct()->mpidr_el1));
     mmio_writel(r.virt_base + GICR_ISENABLER0_IDX, 1u << ppi);
 }
