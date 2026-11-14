@@ -682,7 +682,7 @@ void TLBShootdownContext::finalize()
            !"CPU struct is not working (kernel uninitialized) and invalidating userspace pages");
 
     sched::CPU_Info *my_cpu{};
-    if (sched::cpu_struct_works)
+    if (sched::cpu_struct_works && sched::other_cpus_online)
         my_cpu = sched::get_cpu_struct(); 
 
     bool skip_ipis = !sched::other_cpus_online;
