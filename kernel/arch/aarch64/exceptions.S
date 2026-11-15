@@ -1,6 +1,6 @@
     .macro save_kernel_state
-    stp x30, xzr, [sp, #-16]!
-    mov x30, sp
+    str x30, [sp, #-16]!
+    add x30, sp, #16
     str x30, [sp, #8]
     stp x28, x29, [sp, #-16]!
     stp x26, x27, [sp, #-16]!
@@ -21,12 +21,12 @@
     .endm
 
     .macro save_user_state
-    str x0, [sp, #-8]!
+    str x0, [sp, #-16]!
     mrs x0, TPIDR_EL1
     ldr x0, [x0, #32]
 
     str x1, [x0, #8]
-    ldr x1, [sp], #8
+    ldr x1, [sp], #16
     str x1, [x0]
     stp x2, x3, [x0, #16]
     stp x4, x5, [x0, #32]
@@ -82,7 +82,7 @@ exception_vectors:
     save_kernel_state
     bl kernel_sync
     b return_to_kernel
-    
+
     .balign 128
     save_kernel_state
     bl kernel_irq
