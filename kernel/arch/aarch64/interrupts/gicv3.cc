@@ -20,6 +20,7 @@ using namespace kernel::arm::interrupts;
 DEFINE_SYSREG(icc_sre_el1)
 DEFINE_SYSREG(icc_pmr_el1)
 DEFINE_SYSREG(icc_bpr0_el1)
+DEFINE_SYSREG(icc_bpr1_el1)
 DEFINE_SYSREG(icc_ctlr_el1)
 DEFINE_SYSREG(icc_igrpen1_el1)
 DEFINE_SYSREG(icc_iar0_el1)
@@ -28,6 +29,8 @@ DEFINE_SYSREG(icc_eoir0_el1)
 DEFINE_SYSREG(icc_eoir1_el1)
 
 namespace {
+
+bool have_bpr0 = false;
 
 constexpr size_t GICD_MEMORY_SIZE = 0x10000; 
 u64 gicd_phys_base = 0;
@@ -222,6 +225,9 @@ void do_setup()
             panic("GICD ARE not set!");
         }
     }
+    if (gicd_ctrl & GICD_CTLR_DS) {
+        have_bpr0 = true;
+    }
 
     auto itlines = itlines_number_normal();
     for (unsigned i = 1; i < itlines; ++i) {
@@ -395,11 +401,16 @@ void kernel::arm::interrupts::gicv3_do_cpu_interrupts_init()
     isb();
 
     auto ctlr = mrs<icc_ctlr_el1>();
-    ctlr |= 1 << 0; // CBPR
+    if (have_bpr0)
+        ctlr |= 1 << 0; // CBPR
     ctlr &= ~((ulong)1 << 1); // EOImode
     msr<icc_ctlr_el1>(ctlr);
 
-    msr<icc_bpr0_el1>(7);
+    if (have_bpr0)
+        msr<icc_bpr0_el1>(7);
+    else
+        msr<icc_bpr1_el1>(7);
+        
     msr<icc_pmr_el1>(0xff);
     isb();
 
