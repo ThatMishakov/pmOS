@@ -39,6 +39,7 @@ void print_registers(Task_Regs *regs, log::Logger &logger)
 constexpr u32 SVC_EC = 0x15;
 constexpr u32 USER_INSTRUCTION_ABORT_EC = 0x20;
 constexpr u32 USER_DATA_ABORT_EC = 0x24;
+constexpr u32 SP_ALIGNMENT_FAULT_EC = 0x26;
 
 u32 ec_from_esr(u64 esr)
 {
@@ -103,7 +104,7 @@ void handle_user_abort(u64 esr)
                              result.result);
         print_registers(&task->regs, log::global_logger);
         print_registers(&task->regs, log::serial_logger);
-        task->atomic_kill(SIGSEGV + 128);
+        task->exception(SIGSEGV);
     }
 }
 
@@ -120,6 +121,11 @@ extern "C" void handle_user_sync()
     case USER_DATA_ABORT_EC:
     case USER_INSTRUCTION_ABORT_EC:
         handle_user_abort(esr);
+        break;
+    case SP_ALIGNMENT_FAULT_EC:
+        log::serial_logger.printf("Warning: SP alignment fault...\n");
+        print_registers(&sched::get_cpu_struct()->current_task->regs, log::serial_logger);
+        sched::get_cpu_struct()->current_task->exception(SIGBUS);    
         break;
     case SVC_EC:
         proc::syscalls::syscall_handler();

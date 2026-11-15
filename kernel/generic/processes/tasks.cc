@@ -1235,4 +1235,9 @@ ReturnStr<ipc::Port *> TaskDescriptor::get_port(u64 port_id)
     return port_hint;
 }
 
+void TaskDescriptor::exception(unsigned signal)
+{
+    return atomic_kill(128 + signal);
+}
+
 } // namespace kernel::proc

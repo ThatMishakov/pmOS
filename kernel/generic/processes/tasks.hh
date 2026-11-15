@@ -438,6 +438,8 @@ namespace proc
 
         ReturnStr<ipc::Port *> get_port(u64 port_id);
 
+        void exception(unsigned signal);
+
     protected:
         TaskDescriptor() = default;
 
