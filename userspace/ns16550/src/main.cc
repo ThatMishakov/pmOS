@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include "common.hh"
 #include "ns16550/ns16550.hh"
+#include "pl011/pl011.hh"
 
 // Either physcial memory base or I/O port base
 uint64_t terminal_base = 0x0;
@@ -212,6 +213,9 @@ void init()
     case 0x0:
     case 0x12:
         ns16550_init();
+        break;
+    case 0x3:
+        init_pl011();
         break;
     default:
         throw std::runtime_error("Unsupported interface type " + std::to_string(interface_type));
