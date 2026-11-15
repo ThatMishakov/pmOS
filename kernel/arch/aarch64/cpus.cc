@@ -85,6 +85,7 @@ struct ARMGenericTimer final: kernel::time::LocalTimer {
     virtual void cancel_deadline() override
     {
         msr<cntv_ctl_el0>(2);
+        isb();
     }
 
     virtual void init_as_main() override {}
@@ -150,7 +151,11 @@ void init_timer()
 
     assert(timer_interrupt >= 16 && timer_interrupt < 32);
     auto timer_ppi = timer_interrupt - 16;
-    arm::interrupts::ppi_handlers[timer_ppi] = sched::cpu_timer_interrupt;
+    arm::interrupts::ppi_handlers[timer_ppi] = []() {
+        msr<cntv_ctl_el0>(2);
+        isb();
+        sched::cpu_timer_interrupt();
+    };
 }
 
 void set_cpu_struct(CPU_Info *i)
