@@ -1,46 +1,25 @@
-.section .text
-.balign 2048
-.global exception_vectors
-exception_vectors:
-    // Current EL, SP_EL0
-    b user_sync
-    .balign 128
-    b user_irq
-    .balign 128
-    b user_fiq
-    .balign 128
-    b user_serror
+    .macro save_kernel_state
+    stp x30, xzr, [sp, #-16]!
+    mov x30, sp
+    str x30, [sp, #8]
+    stp x28, x29, [sp, #-16]!
+    stp x26, x27, [sp, #-16]!
+    stp x24, x25, [sp, #-16]!
+    stp x22, x23, [sp, #-16]!
+    stp x20, x21, [sp, #-16]!
+    stp x18, x19, [sp, #-16]!
+    stp x16, x17, [sp, #-16]!
+    stp x14, x15, [sp, #-16]!
+    stp x12, x13, [sp, #-16]!
+    stp x10, x11, [sp, #-16]!
+    stp x8, x9, [sp, #-16]!
+    stp x6, x7, [sp, #-16]!
+    stp x4, x5, [sp, #-16]!
+    stp x2, x3, [sp, #-16]!
+    stp x0, x1, [sp, #-16]!
+    mov x0, sp
+    .endm
 
-    // Current EL, SP_EL1
-    .balign 128
-    b kernel_sync
-    .balign 128
-    b kernel_irq
-    .balign 128
-    b kernel_fiq
-    .balign 128
-    b kernel_serror
-
-    // Lower EL, AArch64
-    .balign 128
-    b user_sync
-    .balign 128
-    b user_irq
-    .balign 128
-    b user_fiq
-    .balign 128
-    b user_serror
- 
-    // Lower EL, AArch32
-    .balign 128
-    b user_sync
-    .balign 128
-    b user_irq
-    .balign 128
-    b user_fiq
-    .balign 128
-    b user_serror
-    
     .macro save_user_state
     str x0, [sp, #-8]!
     mrs x0, TPIDR_EL1
@@ -76,35 +55,90 @@ exception_vectors:
     str x5, [x0, #280]
     .endm
 
-
-    .type user_sync, @function
-user_sync:
+.section .text
+.balign 2048
+.global exception_vectors
+exception_vectors:
+    // Current EL, SP_EL0
     save_user_state
-
     bl handle_user_sync
-
     b return_to_user
 
-    .type user_irq, @function
-user_irq:
+    .balign 128
     save_user_state
-
     bl handle_user_irq
-
     b return_to_user
-
-    .type user_fiq, @function
-user_fiq:
+    .balign 128
     save_user_state
     bl handle_user_fiq
     b return_to_user
-
-    .type user_serror, @function
-user_serror:
+    .balign 128
     save_user_state
     bl handle_user_serror
     b return_to_user
 
+    // Current EL, SP_EL1
+    .balign 128
+    save_kernel_state
+    bl kernel_sync
+    b return_to_kernel
+    
+    .balign 128
+    save_kernel_state
+    bl kernel_irq
+    b return_to_kernel
+
+    .balign 128
+    save_kernel_state
+    bl kernel_fiq
+    b return_to_kernel
+
+    .balign 128
+    save_kernel_state
+    bl kernel_serror
+    b return_to_kernel
+
+    // Lower EL, AArch64
+    .balign 128
+    save_user_state
+    bl handle_user_sync
+    b return_to_user
+
+    .balign 128
+    save_user_state
+    bl handle_user_irq
+    b return_to_user
+
+    .balign 128
+    save_user_state
+    bl handle_user_fiq
+    b return_to_user
+
+    .balign 128
+    save_user_state
+    bl handle_user_serror
+    b return_to_user
+ 
+    // Lower EL, AArch32
+    .balign 128
+    save_user_state
+    bl handle_user_sync
+    b return_to_user
+
+    .balign 128
+    save_user_state
+    bl handle_user_irq
+    b return_to_user
+
+    .balign 128
+    save_user_state
+    bl handle_user_fiq
+    b return_to_user
+
+    .balign 128
+    save_user_state
+    bl handle_user_serror
+    b return_to_user
 
     .globl return_to_user
     .type return_to_user, @function
@@ -145,3 +179,24 @@ kernel_irq:
 kernel_fiq:
 kernel_serror:
     b unexpected_exception
+
+
+return_to_kernel:
+    ldp x0, x1, [sp], #16
+    ldp x2, x3, [sp], #16
+    ldp x4, x5, [sp], #16
+    ldp x6, x7, [sp], #16
+    ldp x8, x9, [sp], #16
+    ldp x10, x11, [sp], #16
+    ldp x12, x13, [sp], #16
+    ldp x14, x15, [sp], #16
+    ldp x16, x17, [sp], #16
+    ldp x18, x19, [sp], #16
+    ldp x20, x21, [sp], #16
+    ldp x22, x23, [sp], #16
+    ldp x24, x25, [sp], #16
+    ldp x26, x27, [sp], #16
+    ldp x28, x29, [sp], #16
+    ldp x30, xzr, [sp], #16
+    eret
+    

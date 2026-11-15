@@ -14,11 +14,8 @@ using namespace kernel;
 
 DEFINE_SYSREG(esr_el1)
 DEFINE_SYSREG(far_el1)
-
-extern "C" void unexpected_exception()
-{
-    panic("Unexpected exception!\n");
-}
+DEFINE_SYSREG(elr_el1)
+DEFINE_SYSREG(spsr_el1)
 
 namespace {
 
@@ -139,4 +136,26 @@ extern "C" void handle_user_sync()
 extern "C" void handle_user_serror()
 {
     panic("Unhandled handle_user_serror");
+}
+
+struct KernelRegisters {
+    u64 x[31];
+    u64 sp; // discarded on return
+};
+
+extern "C" void unexpected_exception(KernelRegisters *regs)
+{
+    log::serial_logger.printf("Unexpected kernel exception!\n");
+    for (int i = 0; i < 28/4; ++i) {
+        log::serial_logger.printf("x%d: 0x%lx x%d: 0x%lx x%d: 0x%lx x%d: 0x%lx\n", i * 4 + 0, regs->x[i * 4 + 0],
+                      i * 4 + 1, regs->x[i * 4 + 1], i * 4 + 2, regs->x[i * 4 + 2], i * 4 + 3,
+                      regs->x[i * 4 + 3]);
+    }
+    log::serial_logger.printf("x28: 0x%lx x29: 0x%lx x30: 0x%lx ", regs->x[28], regs->x[29], regs->x[30]);
+    u64 elr = mrs<elr_el1>();
+    u64 spsr = mrs<spsr_el1>();
+    u64 esr = mrs<esr_el1>();
+    log::serial_logger.printf("sp: 0x%lx elr_el1: 0x%lx spsr_el1: 0x%lx esr_el1: 0x%lx\n", regs->sp, elr, spsr, esr);
+    log::serial_logger.printf("far_el1: 0x%lx\n", mrs<far_el1>());
+    panic("Unexpected exception!\n");
 }
