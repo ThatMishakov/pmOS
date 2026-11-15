@@ -6,6 +6,7 @@
 #include <kern_logger/kern_logger.hh>
 #include <pmos/utility/scope_guard.hh>
 #include <interrupts/interrupt_handler.hh>
+#include <sched/sched.hh>
 
 enum class InterruptControllerType {
     GICv3,
@@ -109,6 +110,17 @@ void kernel::arm::interrupts::ppi_enable(u32 ppi)
     }
 }
 
+void kernel::arm::interrupts::ppi_disable(u32 ppi)
+{
+    switch (controller) {
+    case InterruptControllerType::GICv3:
+        gicv3_ppi_disable(ppi);
+        break;
+    default:
+        panic("Unknown interrupt controller type %u\n", (u32)controller);
+    }
+}
+
 void interrupts::interrupt_complete(interrupts::InterruptHandler*)
 {
     panic("interrupt_complete() not implemented");
@@ -155,4 +167,51 @@ void arm::interrupts::do_cpu_interrupts_init()
     default:
         panic("Unknown interrupt controller type %u\n", (u32)controller);
     }
+}
+
+extern "C" void handle_user_irq()
+{
+    switch (controller) {
+    case InterruptControllerType::GICv3:
+        gicv3_handle_irq();
+        break;
+    default:
+        panic("Unknown interrupt controller type %u\n", (u32)controller);
+    }
+
+    sched::handle_scheduling();
+}
+
+extern "C" void handle_user_fiq()
+{
+    switch (controller) {
+    case InterruptControllerType::GICv3:
+        gicv3_handle_fiq();
+        break;
+    default:
+        panic("Unknown interrupt controller type %u\n", (u32)controller);
+    }
+
+    sched::handle_scheduling();
+}
+
+std::array<void (*)(), 16> arm::interrupts::ppi_handlers = {};
+
+void arm::interrupts::handle_ppi_spi(unsigned interrupt)
+{
+    assert(interrupt < 32);
+
+    if (interrupt < 16) {
+        panic("PPI %u unhandled!", interrupt);
+    }
+
+    interrupt -= 16;
+    auto handler = ppi_handlers[interrupt];
+    if (!handler) {
+        log::serial_logger.printf("[Kernel] Warning: PPI %u received but no handler allocated\n", interrupt + 16);
+        ppi_disable(interrupt + 16);
+        return;
+    }
+
+    handler();
 }

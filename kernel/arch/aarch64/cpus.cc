@@ -147,6 +147,10 @@ void init_timer()
     bool success = init_timer_acpi();
     if (!success)
         panic("Failed to initialize timer with ACPI, DTs not implemented");
+
+    assert(timer_interrupt >= 16 && timer_interrupt < 32);
+    auto timer_ppi = timer_interrupt - 16;
+    arm::interrupts::ppi_handlers[timer_ppi] = sched::cpu_timer_interrupt;
 }
 
 void set_cpu_struct(CPU_Info *i)

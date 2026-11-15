@@ -136,16 +136,6 @@ extern "C" void handle_user_sync()
     sched::handle_scheduling();
 }
 
-extern "C" void handle_user_irq()
-{
-    panic("Unhandled handle_user_irq");
-}
-
-extern "C" void handle_user_fiq()
-{
-    panic("Unhandled handle_user_fiq");
-}
-
 extern "C" void handle_user_serror()
 {
     panic("Unhandled handle_user_serror");

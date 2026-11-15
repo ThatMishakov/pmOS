@@ -1,4 +1,5 @@
 #include "gicv3.hh"
+#include "interrupts.hh"
 #include <utils.hh>
 #include <uacpi/tables.h>
 #include <uacpi/acpi.h>
@@ -21,6 +22,10 @@ DEFINE_SYSREG(icc_pmr_el1)
 DEFINE_SYSREG(icc_bpr0_el1)
 DEFINE_SYSREG(icc_ctlr_el1)
 DEFINE_SYSREG(icc_igrpen1_el1)
+DEFINE_SYSREG(icc_iar0_el1)
+DEFINE_SYSREG(icc_iar1_el1)
+DEFINE_SYSREG(icc_eoir0_el1)
+DEFINE_SYSREG(icc_eoir1_el1)
 
 namespace {
 
@@ -312,6 +317,18 @@ u32 affinity_from_mpidr(u64 mpidr)
     return (mpidr & 0xffffff) | ((mpidr >> 8) & 0xff000000);
 }
 
+void disable_spi(u32 spi)
+{
+    assert(spi >= 32 && spi < 32 + spi_handlers.size());
+
+    u32 idx = spi / 32;
+    u32 shift = spi % 32;
+    u32 mask = 1u << shift;
+
+    mmio_writel(gicd_virt_base + GICD_ICENABLER0_IDX + idx, mask);
+    gicd_wait_rwp();
+}
+
 } // namespace
 
 void kernel::arm::interrupts::init_gicv3()
@@ -343,6 +360,15 @@ void kernel::arm::interrupts::gicv3_ppi_enable(u32 ppi)
     
 
     mmio_writel(r.virt_base + GICR_ISENABLER0_IDX, 1u << ppi);
+}
+
+void kernel::arm::interrupts::gicv3_ppi_disable(u32 ppi)
+{
+    assert(ppi >= 16 && ppi <= 31);
+    auto r = get_gicr_for_cpu(affinity_from_mpidr(sched::get_cpu_struct()->mpidr_el1));
+
+    mmio_writel(r.virt_base + GICR_ICENABLER0_IDX, 1u << ppi);
+    gicr_wait_uwp(r.virt_base);
 }
 
 void kernel::arm::interrupts::gicv3_do_cpu_interrupts_init()
@@ -461,12 +487,45 @@ void kernel::arm::interrupts::gicv3_disable(kernel::interrupts::InterruptHandler
     assert(gic_handler->parent_cpu == sched::get_cpu_struct());
 
     u32 gsi = (gic_handler - spi_handlers.data()) + 32;
-    assert(gsi >= 32 && gsi < 32 + spi_handlers.size());
+    disable_spi(gsi);
+}
 
-    u32 idx = gsi / 32;
-    u32 shift = gsi % 32;
-    u32 mask = 1u << shift;
+void kernel::arm::interrupts::gicv3_handle_fiq()
+{
+    panic("GICv3 FIQ not implemented");
+}
 
-    mmio_writel(gicd_virt_base + GICD_ICENABLER0_IDX + idx, mask);
-    gicd_wait_rwp();
+constexpr unsigned SPURIOUS_IRQ = 1023;
+
+void kernel::arm::interrupts::gicv3_handle_irq()
+{
+    auto iar = mrs<icc_iar1_el1>();
+    u32 gsi = iar & 0x3ff;
+    
+    if (gsi == SPURIOUS_IRQ) {
+        // log::serial_logger.printf("[Kernel] Info: Spurious IRQ received\n");
+        return;
+    }
+
+    if (gsi < 32) {
+        arm::interrupts::handle_ppi_spi(gsi);
+        msr<icc_eoir1_el1>(iar);
+    } else {
+        auto interrupt = gsi - 32;
+        if (interrupt >= spi_handlers.size())
+            panic("GICv3 IRQ %u out of range", gsi);
+
+        auto &handler = spi_handlers[interrupt];
+        if (!handler.is_allocated()) {
+            // log::serial_logger.printf("[Kernel] Warning: IRQ %u received but no handler allocated\n", gsi);
+            disable_spi(gsi);
+            msr<icc_eoir1_el1>(iar);
+            return;
+        }
+
+        if (handler.send_interrupt_notification() != kernel::interrupts::NotificationResult::Success) {
+            disable_spi(gsi);
+            msr<icc_eoir1_el1>(iar);
+        }
+    }
 }
