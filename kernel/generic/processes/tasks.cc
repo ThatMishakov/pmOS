@@ -84,10 +84,6 @@ TaskDescriptor *TaskDescriptor::create(Process *parent, TaskDescriptor::Privileg
         n->regs.ss = R3_DATA_SEGMENT;
         break;
     }
-
-    auto result = n->sse_data.init_on_thread_start();
-    if (result != 0)
-        return nullptr;
 #elif defined(__i386__)
     // Assign cs and ss
     switch (level) {
@@ -99,26 +95,18 @@ TaskDescriptor *TaskDescriptor::create(Process *parent, TaskDescriptor::Privileg
         n->regs.cs = R3_CODE_SEGMENT;
         break;
     }
-
-    auto result = n->sse_data.init_on_thread_start();
-    if (result != 0)
-        return nullptr;
-
 #elif defined(__riscv) || defined(__loongarch__)
     n->is_system = level == PrivilegeLevel::Kernel;
-    auto result  = n->init_fp_state();
-    if (result)
-        return nullptr;
 #elif defined(__aarch64__)
     if (level == PrivilegeLevel::Kernel) {
         n->regs.spsr_el1 = 0x344; // EL1t, interrupts enabled
     } else {
         n->regs.spsr_el1 = 0x340; // EL0t, interrupts enabled
     }
-    // auto result = n->init_fp_state();
-    // if (result)
-    //     return nullptr;
 #endif
+    auto result = n->init_fp_state();
+    if (result)
+        return nullptr;
 
     // Assign a pid
     n->task_id = get_new_task_id();

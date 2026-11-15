@@ -19,6 +19,17 @@ DEFINE_SYSREG(cntv_ctl_el0)
 DEFINE_SYSREG(currentel)
 DEFINE_SYSREG(hcr_el2)
 DEFINE_SYSREG(pan)
+DEFINE_SYSREG(id_aa64mmfr0_el1)
+DEFINE_SYSREG(id_aa64mmfr1_el1)
+DEFINE_SYSREG(id_aa64mmfr2_el1)
+DEFINE_SYSREG(id_aa64pfr0_el1)
+DEFINE_SYSREG(id_aa64pfr1_el1)
+DEFINE_SYSREG(id_aa64pfr2_el1)
+DEFINE_SYSREG(cpacr_el1)
+DEFINE_SYSREG(S3_0_C1_C2_0) // ZCR_EL1
+DEFINE_SYSREG(S3_3_C4_C4_0)
+DEFINE_SYSREG(S3_3_C4_C4_1)
+DEFINE_SYSREG(S3_3_C4_C4_2)
 
 using namespace kernel::sched;
 using namespace kernel;
@@ -39,6 +50,221 @@ void CPU_Info::ipi_get_attention()
     panic("IPI CPU get attention not implemented");
 }
 
+enum FPClass {
+    None,
+    FP,
+    NEON,
+    SVE,
+};
+FPClass system_fp_class = FPClass::None;
+size_t sve_vector_length = 0;
+
+size_t vector_data_length()
+{
+    switch (system_fp_class) {
+    case FPClass::None:
+        return 0;
+    case FPClass::FP:
+        return 32*8;
+    case FPClass::NEON:
+        return 32*16;
+    case FPClass::SVE:
+        return sve_vector_length*32 + 17*sve_vector_length/8;
+    }
+    return 0;
+}
+
+bool use_fpmr = false;
+
+
+namespace {
+
+void save_fp_registers(u64 *state)
+{
+    asm volatile(
+        ".arch_extension fp\n\t"
+        "stp d0, d1, [%0, #8*0]\n\t"
+        "stp d2, d3, [%0, #8*2]\n\t"
+        "stp d4, d5, [%0, #8*4]\n\t"
+        "stp d6, d7, [%0, #8*6]\n\t"
+        "stp d8, d9, [%0, #8*8]\n\t"
+        "stp d10, d11, [%0, #8*10]\n\t"
+        "stp d12, d13, [%0, #8*12]\n\t"
+        "stp d14, d15, [%0, #8*14]\n\t"
+        "stp d16, d17, [%0, #8*16]\n\t"
+        "stp d18, d19, [%0, #8*18]\n\t"
+        "stp d20, d21, [%0, #8*20]\n\t"
+        "stp d22, d23, [%0, #8*22]\n\t"
+        "stp d24, d25, [%0, #8*24]\n\t"
+        "stp d26, d27, [%0, #8*26]\n\t"
+        "stp d28, d29, [%0, #8*28]\n\t"
+        "stp d30, d31, [%0, #8*30]\n\t"
+        ".arch_extension nofp"   
+    : : "r" (state) : "memory" );
+}
+
+void restore_fp_registers(u64 *state)
+{
+    asm volatile(
+        ".arch_extension fp\n\t"
+        "ldp d0, d1, [%0, #8*0]\n\t"
+        "ldp d2, d3, [%0, #8*2]\n\t"
+        "ldp d4, d5, [%0, #8*4]\n\t"
+        "ldp d6, d7, [%0, #8*6]\n\t"
+        "ldp d8, d9, [%0, #8*8]\n\t"
+        "ldp d10, d11, [%0, #8*10]\n\t"
+        "ldp d12, d13, [%0, #8*12]\n\t"
+        "ldp d14, d15, [%0, #8*14]\n\t"
+        "ldp d16, d17, [%0, #8*16]\n\t"
+        "ldp d18, d19, [%0, #8*18]\n\t"
+        "ldp d20, d21, [%0, #8*20]\n\t"
+        "ldp d22, d23, [%0, #8*22]\n\t"
+        "ldp d24, d25, [%0, #8*24]\n\t"
+        "ldp d26, d27, [%0, #8*26]\n\t"
+        "ldp d28, d29, [%0, #8*28]\n\t"
+        "ldp d30, d31, [%0, #8*30]\n\t"
+        ".arch_extension nofp"   
+    : : "r" (state) : "memory" );
+}
+
+void save_neon_registers(u64 *state)
+{
+    asm volatile(
+        ".arch_extension simd\n\t"
+        "stp q0, q1, [%0, #16*0]\n\t"
+        "stp q2, q3, [%0, #16*2]\n\t"
+        "stp q4, q5, [%0, #16*4]\n\t"
+        "stp q6, q7, [%0, #16*6]\n\t"
+        "stp q8, q9, [%0, #16*8]\n\t"
+        "stp q10, q11, [%0, #16*10]\n\t"
+        "stp q12, q13, [%0, #16*12]\n\t"
+        "stp q14, q15, [%0, #16*14]\n\t"
+        "stp q16, q17, [%0, #16*16]\n\t"
+        "stp q18, q19, [%0, #16*18]\n\t"
+        "stp q20, q21, [%0, #16*20]\n\t"
+        "stp q22, q23, [%0, #16*22]\n\t"
+        "stp q24, q25, [%0, #16*24]\n\t"
+        "stp q26, q27, [%0, #16*26]\n\t"
+        "stp q28, q29, [%0, #16*28]\n\t"
+        "stp q30, q31, [%0, #16*30]\n\t"
+        ".arch_extension nosimd"   
+    : : "r" (state) : "memory" );
+}
+void restore_neon_registers(u64 *state)
+{
+    asm volatile(
+        ".arch_extension simd\n\t"
+        "ldp q0, q1, [%0, #16*0]\n\t"
+        "ldp q2, q3, [%0, #16*2]\n\t"
+        "ldp q4, q5, [%0, #16*4]\n\t"
+        "ldp q6, q7, [%0, #16*6]\n\t"
+        "ldp q8, q9, [%0, #16*8]\n\t"
+        "ldp q10, q11, [%0, #16*10]\n\t"
+        "ldp q12, q13, [%0, #16*12]\n\t"
+        "ldp q14, q15, [%0, #16*14]\n\t"
+        "ldp q16, q17, [%0, #16*16]\n\t"
+        "ldp q18, q19, [%0, #16*18]\n\t"
+        "ldp q20, q21, [%0, #16*20]\n\t"
+        "ldp q22, q23, [%0, #16*22]\n\t"
+        "ldp q24, q25, [%0, #16*24]\n\t"
+        "ldp q26, q27, [%0, #16*26]\n\t"
+        "ldp q28, q29, [%0, #16*28]\n\t"
+        "ldp q30, q31, [%0, #16*30]\n\t"
+        ".arch_extension nosimd"   
+    : : "r" (state) : "memory" );
+}
+
+void save_sve_registers(u64 *state)
+{
+    panic("SVE not handled correctly");
+}
+void restore_sve_registers(u64 *state)
+{
+    panic("SVE not handled correctly");
+}
+
+} // namespace
+
+void proc::TaskDescriptor::after_task_switch()
+{
+    u64 cpacr = 0;
+    if (fp_class >= FPClass::FP)
+        cpacr |= 0b11 << 20; // Enable FP/NEON
+    if (fp_class >= FPClass::SVE)
+        cpacr |= 0b11 << 16; // Enable SVE
+    msr<cpacr_el1>(cpacr);
+    isb();
+
+    switch(fp_class) {
+    case FPClass::None:
+        return;
+    case FPClass::FP:
+        restore_fp_registers(fp_state.get());
+        break;
+    case FPClass::NEON:
+        restore_neon_registers(fp_state.get());
+        break;
+    case FPClass::SVE:
+        restore_sve_registers(fp_state.get());
+        break;
+    }
+
+    msr<S3_3_C4_C4_0>(fpcr);
+    msr<S3_3_C4_C4_1>(fpsr);
+    if (use_fpmr)
+        msr<S3_3_C4_C4_2>(fpmr);
+}
+
+void proc::TaskDescriptor::before_task_switch()
+{
+    switch(fp_class) {
+    case FPClass::None:
+        return;
+    case FPClass::FP:
+        save_fp_registers(fp_state.get());
+        break;
+    case FPClass::NEON:
+        save_neon_registers(fp_state.get());
+        break;
+    case FPClass::SVE:
+        save_sve_registers(fp_state.get());
+        break;
+    }
+
+    fpcr = mrs<S3_3_C4_C4_0>();
+    fpsr = mrs<S3_3_C4_C4_1>();
+    if (use_fpmr)
+        fpmr = mrs<S3_3_C4_C4_2>();
+}
+
+kresult_t proc::TaskDescriptor::init_fp_state()
+{
+    if (system_fp_class == FPClass::None)
+        return 0;
+
+    auto data_length = vector_data_length();
+    if (data_length == 0)
+        return 0;
+
+    size_t u64_count = data_length / sizeof(u64);
+    if (data_length % sizeof(u64))
+        u64_count++;
+
+    fp_state = klib::unique_ptr<u64[]>(new u64[u64_count]);
+    if (!fp_state)
+        return -ENOMEM;
+
+    memset(fp_state.get(), 0, data_length);
+
+    // Enable FP/NEON, let SVE be enabled lazily on first use
+    if (system_fp_class < FPClass::SVE)
+        fp_class = system_fp_class;
+    else
+        fp_class = FPClass::NEON;
+
+    return 0;
+}
+
 bool use_pan = false;
 bool use_ttcnp = false;
 
@@ -48,13 +274,42 @@ constexpr u64 CnP_MASK = 0xf << 0;
 
 void early_detect_cpu_features()
 {
-    uint64_t id_aa64mmfr1_el1;
-    asm volatile("mrs %0, id_aa64mmfr1_el1" : "=r"(id_aa64mmfr1_el1));
-    use_pan = id_aa64mmfr1_el1 & PAN_MASK;
+    // uint64_t id_aa64mmfr0_el1 = mrs<id_aa64mmfr0_el1>();
 
-    uint64_t id_aa64mmfr2_el1;
-    asm volatile("mrs %0, id_aa64mmfr2_el1" : "=r"(id_aa64mmfr2_el1));
-    use_ttcnp = id_aa64mmfr2_el1 & CnP_MASK;
+    auto id_aa64mmfr1 = mrs<id_aa64mmfr1_el1>();
+    use_pan = id_aa64mmfr1 & PAN_MASK;
+
+    auto id_aa64mmfr2 = mrs<id_aa64mmfr2_el1>();
+    use_ttcnp = id_aa64mmfr2 & CnP_MASK;
+
+    auto id_aa64pfr0 = mrs<id_aa64pfr0_el1>();
+    if (((id_aa64pfr0 >> 16) & 0xf) != 0xf)
+        system_fp_class = FPClass::FP;
+
+    if (((id_aa64pfr0 >> 20) & 0xf) != 0xf)
+        system_fp_class = FPClass::NEON;
+
+    if (((id_aa64pfr0 >> 32) & 0xf) == 0b0001) {
+        system_fp_class = FPClass::SVE;
+
+        // Enable SVE
+        msr<cpacr_el1>(mrs<cpacr_el1>() | (0b11 << 16));
+        isb();
+
+        // ZCR_EL1
+        msr<S3_0_C1_C2_0>(0xf);
+        ulong vl;
+        asm volatile(
+            ".arch_extension sve\n\t"
+            "rdvl %0, 1\n\t"
+            ".arch_extension nosve"
+            : "=r"(vl));
+        sve_vector_length = vl;
+    }
+
+    auto id_aa64pfr2 = mrs<id_aa64pfr2_el1>();
+    if (((id_aa64pfr2 >> 32) & 0xf) == 0b0001)
+        use_fpmr = true;
 }
 
 static FreqFraction timer_freq;

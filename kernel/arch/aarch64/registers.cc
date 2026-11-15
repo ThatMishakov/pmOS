@@ -100,16 +100,6 @@ i64 kernel::proc::syscalls::syscall_ret_low(TaskDescriptor *d)
     return d->regs.syscall_retval_low();
 }
 
-void TaskDescriptor::after_task_switch()
-{
-    // TODO
-}
-
-void TaskDescriptor::before_task_switch()
-{
-    // TODO
-}
-
 bool TaskDescriptor::is_32bit() const
 {
     return regs.spsr_el1 & (1 << 4);
@@ -126,6 +116,8 @@ kresult_t TaskDescriptor::set_32bit()
     return -ENOSYS;
 }
 
+size_t vector_data_length();
+
 kresult_t TaskDescriptor::inherit_registers_from_current()
 {
     auto current = sched::get_current_task();
@@ -134,7 +126,12 @@ kresult_t TaskDescriptor::inherit_registers_from_current()
     current->before_task_switch();
 
     regs = current->regs;
-    // TODO...
+    if (fp_state)
+        memcpy(fp_state.get(), current->fp_state.get(), vector_data_length());
+    fpcr = current->fpcr;
+    fpsr = current->fpsr;
+    fpmr = current->fpmr;
+    fp_class = current->fp_class;
 
     current->after_task_switch();
 
