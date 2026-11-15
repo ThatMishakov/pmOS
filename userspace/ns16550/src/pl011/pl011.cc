@@ -17,6 +17,9 @@ constexpr unsigned UARTCR = 0x30/sizeof(uint32_t);
 constexpr unsigned UARTIFLS = 0x34/sizeof(uint32_t);
 constexpr unsigned UARTIMSC = 0x38/sizeof(uint32_t);
 
+constexpr unsigned UARTMIS = 0x40/sizeof(uint32_t);
+constexpr unsigned UARTICR = 0x44/sizeof(uint32_t);
+
 constexpr u16 UARTFR_BUSY = 1 << 3;
 constexpr u16 UARTFR_RXFE = 1 << 4;
 constexpr u16 UARTFR_TXFF = 1 << 5;
@@ -24,6 +27,10 @@ constexpr u16 UARTFR_TXFF = 1 << 5;
 constexpr u16 UARTCR_TXE = 1 << 8;
 constexpr u16 UARTCR_RXE = 1 << 9;
 constexpr u16 UARTCR_UARTEN = 1 << 0;
+
+constexpr u16 RXIM = 1 << 4;
+constexpr u16 TXIM = 1 << 5;
+constexpr u16 RTIM = 1 << 6;
 
 namespace {
 
@@ -89,16 +96,31 @@ void PL011::set_interrupts()
     u32 val = mmio_readl(virt_pl011_base + UARTIMSC);
 
     if (reading)
-        val |= (1 << 4) | (1 << 6); // RXIM
+        val |= RXIM | RTIM; // RXIM
     else
-        val &= ~(1 << 4) & ~(1 << 6);
+        val &= ~RXIM & ~RTIM;
 
     if (writing)
-        val |= (1 << 5); // TXIM
+        val |= TXIM; // TXIM
     else
-        val &= ~(1 << 5);
+        val &= ~TXIM;
 
     mmio_writel(virt_pl011_base + UARTIMSC, val);
+}
+
+void PL011::react_interrupt()
+{
+    u32 mis = mmio_readl(virt_pl011_base + UARTMIS);
+
+    if (mis & RXIM || mis & RTIM) { // RXIM
+        check_rx();
+    }
+
+    if (mis & TXIM) { // TXIM
+        write_interrupt();
+    }
+
+    mmio_writel(virt_pl011_base + UARTICR, mis);
 }
 
 } // namespace
