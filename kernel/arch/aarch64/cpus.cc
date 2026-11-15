@@ -116,7 +116,7 @@ bool init_timer_acpi()
 
     auto current_el = (mrs<currentel>() >> 2) & 0x3;
     if (current_el == 1) {
-        timer_interrupt = gtdt->el1_non_secure_gsiv;
+        timer_interrupt = gtdt->el1_virtual_gsiv;
     } else if (current_el == 2) {
         if (!(mrs<hcr_el2>() & EL2_VHE_MASK))
             panic("Kernel in EL2 w/o VHE, not (yet) supported");
@@ -215,6 +215,8 @@ void init_scheduling(u64 cpu_id)
     log::serial_logger.printf("Scheduling initialized\n");
 
     init_timer();
+    arm::interrupts::do_cpu_interrupts_init();
+
     enable_timer_interrupt();
 }
 

@@ -145,3 +145,14 @@ ReturnStr<interrupts::InterruptHandler *> interrupts::allocate_or_get_handler(u3
         panic("Unknown interrupt controller type %u\n", (u32)controller);
     }
 }
+
+void arm::interrupts::do_cpu_interrupts_init()
+{
+    switch (controller) {
+    case InterruptControllerType::GICv3:
+        gicv3_do_cpu_interrupts_init();
+        break;
+    default:
+        panic("Unknown interrupt controller type %u\n", (u32)controller);
+    }
+}

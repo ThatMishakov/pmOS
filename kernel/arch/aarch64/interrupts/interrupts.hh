@@ -9,4 +9,6 @@ void init_interrupt_controllers();
 void ppi_clear(u32 ppi);
 void ppi_enable(u32 ppi);
 
+void do_cpu_interrupts_init();
+
 } // namespace kernel::arm::interrupts

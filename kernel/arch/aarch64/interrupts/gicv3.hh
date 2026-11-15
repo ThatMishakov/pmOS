@@ -15,4 +15,6 @@ ReturnStr<kernel::interrupts::InterruptHandler *> gicv3_get_handler(u32 gsi, boo
 void gicv3_enable(kernel::interrupts::InterruptHandler *handler);
 void gicv3_disable(kernel::interrupts::InterruptHandler *handler);
 
+void gicv3_do_cpu_interrupts_init();
+
 } // namespace kernel::arm::interrupts

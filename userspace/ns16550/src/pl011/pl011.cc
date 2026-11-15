@@ -143,7 +143,7 @@ void init_pl011()
     uartlcr_h &= ~(1 << 4); // Clear FEN bit
     mmio_writel(virt_pl011_base + UARTLCR_H, uartlcr_h);
 
-    if (baud_rate == 0) {
+    if (baud_rate != 0) {
         const uint64_t divisor64 = (4ULL * clock_frequency + baud_rate / 2) / baud_rate;
         const uint16_t ibrd = divisor64 / 64;
         const uint16_t fbrd = divisor64 % 64;

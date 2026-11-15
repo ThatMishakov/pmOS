@@ -11,9 +11,16 @@
 #include <arm_acle.h>
 #include <algorithm>
 #include <sched/sched.hh>
+#include <arm_asm.hh>
 
 using namespace kernel;
 using namespace kernel::arm::interrupts;
+
+DEFINE_SYSREG(icc_sre_el1)
+DEFINE_SYSREG(icc_pmr_el1)
+DEFINE_SYSREG(icc_bpr0_el1)
+DEFINE_SYSREG(icc_ctlr_el1)
+DEFINE_SYSREG(icc_igrpen1_el1)
 
 namespace {
 
@@ -35,8 +42,12 @@ constexpr u32 GICD_CTLR_RWP = 1u << 31;
 constexpr size_t GICD_CTLR_IDX = 0x0000 / sizeof(u32);
 constexpr size_t GICD_TYPER_IDX = 0x0004 / sizeof(u32);
 
+constexpr size_t GICD_IGROUPR0_IDX = 0x0080 / sizeof(u32);
+
 constexpr size_t GICD_ISENABLER0_IDX = 0x0100 / sizeof(u32);
 constexpr size_t GICD_ICENABLER0_IDX = 0x0180 / sizeof(u32);
+
+constexpr size_t GICD_IPRIORITYR0_IDX = 0x0400 / sizeof(u32);
 
 constexpr size_t GICD_ICFGR0_IDX = 0x0C00 / sizeof(u32);
 
@@ -54,11 +65,17 @@ pmos::containers::vector<GICR> gic_redistributors;
 
 constexpr u32 GICR_CTLR_UWP = 1u << 31;
 
+constexpr u32 GICR_WAKER_PS = 1 << 1;
+constexpr u32 GICR_WAKER_CA = 1 << 2;
+
 constexpr u32 GICR_TYPER_VLPIS = 1 << 1;
 constexpr u32 GICR_TYPER_LAST = 1 << 4;
 
 constexpr size_t GICR_CTLR_IDX = 0x0000 / sizeof(u32);
 constexpr size_t GICR_TYPER_IDX = 0x0008 / sizeof(u32);
+constexpr size_t GICR_WAKER_IDX = 0x0014 / sizeof(u32);
+
+constexpr size_t GICR_IGROUPR0_IDX = 0x10080 / sizeof(u32);
 
 constexpr size_t GICR_ISENABLER0_IDX = 0x10100 / sizeof(u32);
 constexpr size_t GICR_ICENABLER0_IDX = 0x10180 / sizeof(u32);
@@ -316,7 +333,51 @@ void kernel::arm::interrupts::gicv3_ppi_enable(u32 ppi)
 {
     assert(ppi >= 16 && ppi <= 31);
     auto r = get_gicr_for_cpu(affinity_from_mpidr(sched::get_cpu_struct()->mpidr_el1));
+
+    // Set group 1 for the PPI
+    u32 group_idx = 0;
+    u32 group_shift = ppi;
+    auto group_reg = mmio_readl(r.virt_base + GICR_IGROUPR0_IDX + group_idx);
+    group_reg |= (1u << group_shift);
+    mmio_writel(r.virt_base + GICR_IGROUPR0_IDX + group_idx, group_reg);
+    
+
     mmio_writel(r.virt_base + GICR_ISENABLER0_IDX, 1u << ppi);
+}
+
+void kernel::arm::interrupts::gicv3_do_cpu_interrupts_init()
+{
+    auto r = get_gicr_for_cpu(affinity_from_mpidr(sched::get_cpu_struct()->mpidr_el1));
+    
+    auto waker = mmio_readl(r.virt_base + GICR_WAKER_IDX);
+    if (waker & GICR_WAKER_PS) {
+        waker &= ~GICR_WAKER_PS;
+        mmio_writel(r.virt_base + GICR_WAKER_IDX, waker);
+        
+        while (mmio_readl(r.virt_base + GICR_WAKER_IDX) & GICR_WAKER_CA)
+            __yield();
+    }
+
+    auto sre = mrs<icc_sre_el1>();
+    if (!(sre & 0x1)) {
+        sre |= 0x1;
+        msr<icc_sre_el1>(sre);
+    }
+    isb();
+
+    msr<icc_igrpen1_el1>(0);
+    isb();
+
+    auto ctlr = mrs<icc_ctlr_el1>();
+    ctlr |= 1 << 0; // CBPR
+    ctlr &= ~((ulong)1 << 1); // EOImode
+    msr<icc_ctlr_el1>(ctlr);
+
+    msr<icc_bpr0_el1>(7);
+    msr<icc_pmr_el1>(0xff);
+    isb();
+
+    msr<icc_igrpen1_el1>(1);
 }
 
 static Spinlock lock;
@@ -364,7 +425,12 @@ ReturnStr<kernel::interrupts::InterruptHandler *> kernel::arm::interrupts::gicv3
         type_reg |= (0x2u << type_shift);
     mmio_writel(gicd_virt_base + GICD_ICFGR0_IDX + type_idx, type_reg);
 
-    // TODO: Priority
+    // Group 1 for everything
+    u32 group_idx = gsi / 32;
+    u32 group_shift = gsi % 32;
+    auto group_reg = mmio_readl(gicd_virt_base + GICD_IGROUPR0_IDX + group_idx);
+    group_reg |= (1u << group_shift);
+    mmio_writel(gicd_virt_base + GICD_IGROUPR0_IDX + group_idx, group_reg);
 
     gicd_wait_rwp();
 

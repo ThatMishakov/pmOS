@@ -111,9 +111,9 @@ TaskDescriptor *TaskDescriptor::create(Process *parent, TaskDescriptor::Privileg
         return nullptr;
 #elif defined(__aarch64__)
     if (level == PrivilegeLevel::Kernel) {
-        n->regs.spsr_el1 = 0x3c4; // EL1t, interrupts enabled
+        n->regs.spsr_el1 = 0x344; // EL1t, interrupts enabled
     } else {
-        n->regs.spsr_el1 = 0x3c0; // EL0t, interrupts enabled
+        n->regs.spsr_el1 = 0x340; // EL0t, interrupts enabled
     }
     // auto result = n->init_fp_state();
     // if (result)
