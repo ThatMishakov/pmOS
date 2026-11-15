@@ -121,9 +121,15 @@ void kernel::arm::interrupts::ppi_disable(u32 ppi)
     }
 }
 
-void interrupts::interrupt_complete(interrupts::InterruptHandler*)
+void interrupts::interrupt_complete(interrupts::InterruptHandler *handler)
 {
-    panic("interrupt_complete() not implemented");
+    switch (controller) {
+    case InterruptControllerType::GICv3:
+        gicv3_interrupt_complete(handler);
+        break;
+    default:
+        panic("Unknown interrupt controller type %u\n", (u32)controller);
+    }
 }
 
 void interrupts::interrupt_disable(interrupts::InterruptHandler *handler)

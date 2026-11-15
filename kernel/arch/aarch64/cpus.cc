@@ -195,9 +195,12 @@ void proc::TaskDescriptor::after_task_switch()
     msr<cpacr_el1>(cpacr);
     isb();
 
+    if (fp_class == FPClass::None)
+        return;
+
     switch(fp_class) {
     case FPClass::None:
-        return;
+        break;
     case FPClass::FP:
         restore_fp_registers(fp_state.get());
         break;

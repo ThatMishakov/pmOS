@@ -490,6 +490,18 @@ void kernel::arm::interrupts::gicv3_disable(kernel::interrupts::InterruptHandler
     disable_spi(gsi);
 }
 
+void kernel::arm::interrupts::gicv3_interrupt_complete(kernel::interrupts::InterruptHandler *handler)
+{
+    assert(handler);
+    auto gic_handler = static_cast<GICHandler *>(handler);
+    assert(gic_handler->parent_cpu == sched::get_cpu_struct());
+
+    u32 gsi = (gic_handler - spi_handlers.data()) + 32;
+    assert(gsi >= 32 && gsi < 32 + spi_handlers.size());
+
+    msr<icc_eoir1_el1>(gsi);
+}
+
 void kernel::arm::interrupts::gicv3_handle_fiq()
 {
     panic("GICv3 FIQ not implemented");

@@ -151,8 +151,9 @@ qemu-aarch64: $(aarch64-IMG)
 		-M virt,gic-version=3 -cpu cortex-a72 -m 2G \
 		-bios "$(AARCH64_UEFI)" \
 		-device ramfb -device qemu-xhci -device usb-kbd \
-		-drive if=none,id=disk,format=raw,file="$(aarch64-IMG)" \
-		-device virtio-blk-device,drive=disk,bootindex=0 \
+		-drive if=none,id=sata,format=raw,file="$(aarch64-IMG)" \
+		-device ich9-ahci,id=ahci \
+		-device ide-hd,bus=ahci.0,drive=sata,bootindex=0 \
 		-serial stdio -smp 4
 
 qemu-single: $(riscv64-IMG) ovmf-riscv64
