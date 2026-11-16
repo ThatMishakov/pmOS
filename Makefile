@@ -149,13 +149,12 @@ qemu: $(riscv64-IMG) ovmf-riscv64
 qemu-loongarch64: $(loongarch64-IMG) ovmf-loongarch64
 	qemu-system-loongarch64 -device ramfb -device virtio-keyboard -device qemu-xhci -device usb-kbd -m 2G -drive if=pflash,unit=0,format=raw,file=ovmf-loongarch64/OVMF.fd -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive file=$(loongarch64-IMG),if=none,id=hdd0 -serial stdio -smp 4
 
-.PHONY: qemu-aarch64
-qemu-aarch64: $(aarch64-IMG)
+qemu-aarch64: $(aarch64-HYPER-IMG)
 	qemu-system-aarch64 \
 		-M virt,gic-version=3 -cpu cortex-a72 -m 2G \
 		-bios "$(AARCH64_UEFI)" \
 		-device ramfb -device qemu-xhci -device usb-kbd \
-		-drive if=none,id=bootdisk,format=raw,file="$(aarch64-IMG)" \
+		-drive if=none,id=bootdisk,format=raw,file="$(aarch64-HYPER-IMG)" \
 		-device virtio-blk-device,drive=bootdisk,bootindex=0 \
 		-serial stdio -smp 4
 

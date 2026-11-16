@@ -545,4 +545,8 @@ void flush_tlb_kernel()
     flush_tlb();
 }
 
+void kernel::paging::arch_tlb_finalize(bool)
+{
+}
+
 }

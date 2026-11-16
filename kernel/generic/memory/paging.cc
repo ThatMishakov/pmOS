@@ -693,9 +693,10 @@ void TLBShootdownContext::finalize()
         kernel_shootdown_desc = this;
 
         int old_generation   = kernel_pt_generation;
-        kernel_pt_generation = kernel_pt_generation == 0 ? 1 : 0;
-
-        __sync_synchronize();
+        if (my_cpu) {
+            kernel_pt_generation = kernel_pt_generation == 0 ? 1 : 0;
+            __sync_synchronize();
+        }
 
         if (!skip_ipis)
             for (auto cpu: sched::cpus) {
@@ -708,7 +709,7 @@ void TLBShootdownContext::finalize()
 
         Page_Table::trigger_shootdown(nullptr, my_cpu);
 
-        if (!skip_ipis)
+        if (my_cpu)
         while (__atomic_load_n(&kernel_pt_active_cpus_count[old_generation], __ATOMIC_ACQUIRE))
             spin_pause();
     } else {
