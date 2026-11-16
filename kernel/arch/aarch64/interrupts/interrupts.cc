@@ -75,6 +75,17 @@ bool init_interrupts_acpi()
     return true;
 }
 
+void ipi_send(sched::CPU_Info *cpu, u32 interrupt)
+{
+    switch (controller) {
+    case InterruptControllerType::GICv3:
+        gicv3_spi_send(cpu->mpidr_el1, interrupt);
+        break;
+    default:
+        panic("Unknown interrupt controller type %u\n", (u32)controller);
+    }
+}
+
 }
 
 void kernel::arm::interrupts::init_interrupt_controllers()
@@ -220,4 +231,22 @@ void arm::interrupts::handle_ppi_spi(unsigned interrupt)
     }
 
     handler();
+}
+
+void sched::CPU_Info::ipi_reschedule()
+{
+    __atomic_fetch_or(&ipi_mask, IPI_RESCHEDULE, __ATOMIC_RELEASE);
+    ipi_send(this, 0x00);
+}
+
+void sched::CPU_Info::ipi_cpu_park()
+{
+    __atomic_or_fetch(&ipi_mask, IPI_CPU_PARK, __ATOMIC_RELEASE);
+    ipi_send(this, 2);
+}
+
+void sched::CPU_Info::ipi_get_attention()
+{
+    __atomic_or_fetch(&ipi_mask, IPI_GET_ATTENTION, __ATOMIC_RELEASE);
+    ipi_send(this, 3);
 }

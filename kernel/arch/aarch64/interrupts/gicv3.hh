@@ -21,4 +21,6 @@ void gicv3_do_cpu_interrupts_init();
 void gicv3_handle_irq();
 void gicv3_handle_fiq();
 
+void gicv3_spi_send(u64 cpu_id, u32 interrupt);
+
 } // namespace kernel::arm::interrupts

@@ -87,7 +87,7 @@ return {
     ["hyper"] = function()
         return Source {
             name = "hyper",
-            Git("https://github.com/UltraOS/Hyper.git", "d4f446550ebb5df460e6c5ef8e5759b2d180d0a4"),
+            Git("https://github.com/UltraOS/Hyper.git", "89334e65b66c84d5fc0b62880a5c401d909a005a"),
             dependencies = { "git", "ca-certificates" },
             prepare = [[git submodule update --init --recursive --depth=1]],
         }

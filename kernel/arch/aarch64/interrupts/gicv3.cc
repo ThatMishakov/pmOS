@@ -27,6 +27,7 @@ DEFINE_SYSREG(icc_iar0_el1)
 DEFINE_SYSREG(icc_iar1_el1)
 DEFINE_SYSREG(icc_eoir0_el1)
 DEFINE_SYSREG(icc_eoir1_el1)
+DEFINE_SYSREG(icc_sgi1r_el1)
 
 namespace {
 
@@ -551,4 +552,23 @@ void kernel::arm::interrupts::gicv3_handle_irq()
             msr<icc_eoir1_el1>(iar);
         }
     }
+}
+
+void kernel::arm::interrupts::gicv3_spi_send(u64 cpu_id, u32 interrupt)
+{
+    assert(interrupt < 16);
+
+    u64 aff0 = cpu_id & 0xff;
+    u64 aff1 = (cpu_id >> 8) & 0xff;
+    u64 aff2 = (cpu_id >> 16) & 0xff;
+    u64 aff3 = (cpu_id >> 32) & 0xff;
+
+    u64 target_mask = 1 << (aff0 & 0xf); // TargetList
+    target_mask |= (u64)(aff0 / 16) << 44; // RS
+    target_mask |= aff1 << 16; // Aff1
+    target_mask |= aff2 << 32; // Aff2
+    target_mask |= aff3 << 48; // Aff3
+    target_mask |= interrupt << 24; // INTID
+    msr<icc_sgi1r_el1>(target_mask);
+    isb();
 }

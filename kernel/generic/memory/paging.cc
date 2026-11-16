@@ -685,7 +685,7 @@ void TLBShootdownContext::finalize()
     if (sched::cpu_struct_works && sched::other_cpus_online)
         my_cpu = sched::get_cpu_struct(); 
 
-    bool skip_ipis = !sched::other_cpus_online;
+    bool skip_ipis = !my_cpu || arch_tlb_dont_ipi();
 
     if (for_kernel()) {
         Auto_Lock_Scope l(shootdown_barrier);
@@ -709,7 +709,7 @@ void TLBShootdownContext::finalize()
 
         Page_Table::trigger_shootdown(nullptr, my_cpu);
 
-        if (my_cpu)
+        if (!skip_ipis)
         while (__atomic_load_n(&kernel_pt_active_cpus_count[old_generation], __ATOMIC_ACQUIRE))
             spin_pause();
     } else {

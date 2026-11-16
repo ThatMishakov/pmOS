@@ -38,21 +38,6 @@ using namespace kernel::sched;
 using namespace kernel;
 using namespace kernel::arm;
 
-void CPU_Info::ipi_cpu_park()
-{
-    panic("IPI CPU park not implemented");
-}
-
-void CPU_Info::ipi_reschedule()
-{
-    panic("IPI CPU reschedule not implemented");
-}
-
-void CPU_Info::ipi_get_attention()
-{
-    panic("IPI CPU get attention not implemented");
-}
-
 enum FPClass {
     None,
     FP,
