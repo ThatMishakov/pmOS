@@ -16,7 +16,7 @@ DEFINE_SYSREG(cntfrq_el0)
 DEFINE_SYSREG(cntvct_el0)
 DEFINE_SYSREG(cntv_cval_el0)
 DEFINE_SYSREG(cntv_ctl_el0)
-DEFINE_SYSREG(cntp_tval_el0)
+DEFINE_SYSREG(cntp_cval_el0)
 DEFINE_SYSREG(cntp_ctl_el0)
 DEFINE_SYSREG(cntvoff_el2)
 DEFINE_SYSREG(currentel)
@@ -355,7 +355,7 @@ struct ARMGenericTimer final: kernel::time::LocalTimer {
     {
         u64 wanted_ticks = timer_freq * deadline_nanoseconds;
         if (use_physical_timer) {
-            msr<cntp_tval_el0>(wanted_ticks);
+            msr<cntp_cval_el0>(wanted_ticks);
             msr<cntp_ctl_el0>(1);
         } else {
             msr<cntv_cval_el0>(wanted_ticks);
