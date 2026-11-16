@@ -7,6 +7,7 @@
 DEFINE_SYSREG(mair_el1)
 DEFINE_SYSREG(ttbr0_el1)
 DEFINE_SYSREG(ttbr1_el1)
+DEFINE_SYSREG(tcr_el1)
 
 using namespace kernel::aarch64::paging;
 using namespace kernel::paging;
@@ -62,6 +63,7 @@ unsigned top_level = 0;
 unsigned page_table_mask = 0;
 unsigned top_level_mask = 0;
 unsigned va_bits = 0;
+bool ds = false;
 
 unsigned page_ptr_idx(void *virt_addr, unsigned level)
 {
@@ -181,7 +183,8 @@ u64 construct_pte(u64 phys_addr, Page_Table_Arguments arg, bool block = false)
         pte |= DESCR_TABLE;
     pte |= type_to_attridx(arg.cache_policy);
     pte |= arg_to_ap(arg);
-    pte |= DESCR_INNER_SHAREABLE;
+    if (!ds || page_order == 16)
+        pte |= DESCR_INNER_SHAREABLE;
     pte |= DESCR_ACCESS;
     pte |= extra_to_flags(arg.extra);
 
@@ -391,6 +394,8 @@ void invalidate_pages(::kernel::paging::TLBShootdownContext& ctx, u64 page_table
 
 } // namespace
 
+constexpr u64 TCR_DS = 1ULL << 59;
+
 void init_paging(unsigned va_bits)
 {
     assert(page_order == 12 || page_order == 14 || page_order == 16);
@@ -410,6 +415,9 @@ void init_paging(unsigned va_bits)
     const unsigned top_level_bits = va_bits - top_level_shift;
 
     top_level_mask = (1U << top_level_bits) - 1;
+
+    if (mrs<tcr_el1>() & TCR_DS)
+        ds = true;
 }
 
 kresult_t kernel::paging::map_page(u64 page_table, u64 phys_addr, void *virt_addr, ::kernel::paging::Page_Table_Arguments arg)
@@ -666,6 +674,9 @@ void AArch64_Page_Table::apply()
 extern bool use_ttcnp;
 constexpr u64 TTBRx_EL1_CnP = 1 << 0;
 
+constexpr u64 TCR_SH0_INNER = 3ULL << 12;
+constexpr u64 TCR_SH1_INNER = 3ULL << 28;
+
 void paging::apply_page_table(phys_addr_t kernel_page_table)
 {
     constexpr u64 mair = mair_attridx(MAIR_NORMAL, MT_NORMAL) 
@@ -678,6 +689,21 @@ void paging::apply_page_table(phys_addr_t kernel_page_table)
 
     if (use_ttcnp)
         kernel_page_table |= TTBRx_EL1_CnP;
+
+    // TODO-ish...
+    if (ds) {
+        auto tcr = mrs<tcr_el1>();
+        // Inner shareable for both TTBR0 and TTBR1
+        tcr |= TCR_SH0_INNER | TCR_SH1_INNER;
+        msr<tcr_el1>(tcr);
+    }
+
+    unsigned txsz = 64 - va_bits;
+    // Set the right T0SZ for userspace...
+    auto tcr = mrs<tcr_el1>();
+    tcr &= ~u64(0x3f);
+    tcr |= txsz;
+    msr<tcr_el1>(tcr);
 
     msr<ttbr1_el1>(kernel_page_table);
     flush_tlb();

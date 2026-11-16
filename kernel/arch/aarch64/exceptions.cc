@@ -76,6 +76,9 @@ void handle_user_abort(u64 esr)
     case 0x0c ... 0x0f:
         // Permission fault
         break;
+    case 0x2b:
+        // Level -1 fault (lol)
+        break;
 
     // TODO
     default:
