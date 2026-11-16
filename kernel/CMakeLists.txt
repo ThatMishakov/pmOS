@@ -41,6 +41,8 @@ if (${TARGET_ARCH} STREQUAL "i686")
   endif()
 elseif (${TARGET_ARCH} STREQUAL "m68k")
   target_link_libraries(kernel PUBLIC gcc)
+elseif (${TARGET_ARCH} STREQUAL "aarch64")
+  set(ENABLE_ACPI TRUE)
 elseif (NOT ${TARGET_ARCH} STREQUAL "x86_64")
   set(ENABLE_ACPI TRUE)
   # NB: target_compile_options (not add_compile_options): the kernel target

@@ -443,7 +443,7 @@ void enable_timer_interrupt()
     arm::interrupts::ppi_enable(timer_interrupt);
 }
 
-void init_scheduling(u64 cpu_id)
+void init_scheduling_on_bsp()
 {
     CPU_Info *i = new CPU_Info();
     if (!i)

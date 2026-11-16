@@ -715,7 +715,7 @@ void limine_main()
     if (!idle_page_table)
         panic("Could not create idle page table");
 
-    #ifdef __x86_64__
+    #if defined(__x86_64__) || defined(__aarch64__)
     init_scheduling_on_bsp();
     #else
     init_scheduling(bsp_cpu_id);

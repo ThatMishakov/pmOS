@@ -1,5 +1,5 @@
 // Again, maybe this should be done with different defines?
-#if defined(__x86_64__) || defined(__i386__)
+#if defined(__x86_64__) || defined(__i386__) || defined(__aarch64__)
 
 #include "ultra_protocol.h"
 
@@ -9,18 +9,24 @@
 #include <memory/pmm.hh>
 #include <memory/temp_mapper.hh>
 #include <memory/vmm.hh>
-#include <paging/x86_paging.hh>
 #include <processes/tasks.hh>
 #include <types.hh>
 #include <utils.hh>
 #include "kernel_pages.hh"
 #include "common.hh"
 
+#if defined(__x86_64__) || defined(__i386__)
+#include <paging/x86_paging.hh>
+#endif
+
 using namespace kernel;
 using namespace kernel::pmm;
 using namespace kernel::log;
 using namespace kernel::paging;
+
+#if defined(__x86_64__) || defined(__i386__)
 using namespace kernel::x86::paging;
+#endif
 
 #ifdef __i386__
 using namespace kernel::ia32::paging;
@@ -35,12 +41,6 @@ void hcf();
 
 extern phys_addr_t temp_alloc_reserved;
 extern long temp_alloc_entry_id;
-
-#ifdef __i386__
-constexpr phys_addr_t temp_mapper_memory_limit = 0x40000000;
-#else
-constexpr phys_addr_t temp_mapper_memory_limit = 1UL << 52;
-#endif
 
 static Temp_Mapper *temp_temp_mapper = nullptr;
 #ifdef __i386__
@@ -66,12 +66,24 @@ ultra_attribute_header *find_attribute(ultra_boot_context *ctx, uint32_t type)
     return hdr;
 }
 
+#ifdef __aarch64__
+static bool aarch64_5lvl_paging = false;
+void init_paging(unsigned va_bits);
+extern u64 kernel_page_table;
+#endif
+
 void map_kernel(ultra_boot_context *ctx)
 {
     auto kernel_info =
         (ultra_kernel_info_attribute *)find_attribute(ctx, ULTRA_ATTRIBUTE_KERNEL_INFO);
 
+    #if defined(__x86_64__) || defined(__i386__)
     map_kernel_pages(idle_cr3, kernel_info->physical_base);
+    #elif defined(__aarch64__)
+    map_kernel_pages(kernel_page_table, kernel_info->physical_base);
+    #else
+    #error "Unsupported architecture"
+    #endif
 }
 
 extern void *_kernel_start;
@@ -100,6 +112,11 @@ void init_memory(ultra_boot_context *ctx)
     #ifdef __x86_64__
     if (kernel::x86_64::paging::use_5lvl_paging)
         direct_map_location = (void *)0xFF00'0000'0000'0000;
+    else
+        direct_map_location = (void *)0xFFFF'8000'0000'0000;
+    #elif defined(__aarch64__)
+    if (aarch64_5lvl_paging)
+        direct_map_location = (void *)0xFFF0'0000'0000'0000;
     else
         direct_map_location = (void *)0xFFFF'8000'0000'0000;
     #elif defined(__i386__)
@@ -174,6 +191,9 @@ void init_memory(ultra_boot_context *ctx)
     #elif defined(__x86_64__)
     idle_cr3 = (u64)alloc_pages_from_temp_pool(1);
     clear_page(idle_cr3);
+    #elif defined(__aarch64__)
+    kernel_page_table = (u64)alloc_pages_from_temp_pool(1);
+    clear_page(kernel_page_table);
     #else
     #error "Unsupported architecture"
     #endif
@@ -186,6 +206,17 @@ void init_memory(ultra_boot_context *ctx)
         heap_space_start = 0xFF00'0000'0000'0000;
     else
         heap_space_start = 0xFFFF'8000'0000'0000;
+    #elif defined(__aarch64__)
+    unsigned va_bits = 48;
+    if (aarch64_5lvl_paging)
+        va_bits = 52;
+
+    ulong heap_space_start = 0;
+    if (aarch64_5lvl_paging)
+        heap_space_start = 0xFFF0'0000'0000'0000;
+    else
+        heap_space_start = 0xFFFF'8000'0000'0000;
+    init_paging(va_bits);
     #else
     #error "Unsupported architecture"
     #endif
@@ -269,7 +300,13 @@ void init_memory(ultra_boot_context *ctx)
     global_temp_mapper = temp_temp_mapper;
 
     serial_logger.printf("Switching to kernel page tables...\n");
+    #if defined(__x86_64__) || defined(__i386__)
     apply_page_table(idle_cr3);
+    #elif defined(__aarch64__)
+    apply_page_table(kernel_page_table);
+    #else
+    #error "Unsupported architecture"
+    #endif
 
     serial_logger.printf("Paging initialized!\n");
 
@@ -326,7 +363,13 @@ void init_memory(ultra_boot_context *ctx)
         });
     }
 
+    #if defined(__x86_64__) || defined(__i386__)
     init_pmm(idle_cr3);
+    #elif defined(__aarch64__)
+    init_pmm(kernel_page_table);
+    #else
+    #error "Unsupported architecture"
+    #endif
 }
 
 namespace kernel::paging
@@ -636,6 +679,11 @@ void ultra_main(struct ultra_boot_context *ctx, uint32_t magic)
 
     support_nx = detect_nx();
     serial_logger.printf("NX: %s\n", support_nx ? "enabled" : "disabled");
+    #elif defined(__aarch64__)
+    if (attr.page_table_depth == 5) {
+        aarch64_5lvl_paging = true;
+        serial_logger.printf("5-level paging enabled\n");
+    }
     #endif
 
     init_memory(ctx);
@@ -655,7 +703,13 @@ void ultra_main(struct ultra_boot_context *ctx, uint32_t magic)
 
     init_acpi(attr.acpi_rsdp_address);
 
+    #if defined(__x86_64__) || defined(__i386__)
     kernel::paging::idle_page_table = Arch_Page_Table::capture_initial(idle_cr3);
+    #else
+    kernel::paging::idle_page_table = Arch_Page_Table::create_empty();
+    #endif
+    if (!kernel::paging::idle_page_table)
+        panic("Could not create idle page table");
 
     init_scheduling_on_bsp();
 

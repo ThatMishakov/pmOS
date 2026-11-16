@@ -47,7 +47,7 @@ binary:
     path = "/kernel"
 EOF
 
-if [ "$ARCH" = "x86_64" ]; then
+if [ "$ARCH" = "x86_64" ] || [ "$ARCH" = "aarch64" ]; then
     cat <<EOF >> "$FILE"
     allocate-anywhere = true
 

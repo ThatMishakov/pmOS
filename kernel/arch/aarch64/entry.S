@@ -20,3 +20,18 @@ _limine_entry:
     msr spsel, #1
     mov  sp, x0
     b return_to_user
+
+    .globl kernel_main
+    .type kernel_main, %function
+kernel_main:
+    msr spsel, #1
+    adrp x4, stack + STACK_SIZE
+    add  sp, x4, :lo12:stack + STACK_SIZE
+
+    bl kmain
+
+    mrs x0, tpidr_el1
+    ldr x0, [x0, #8]
+    msr spsel, #1
+    mov  sp, x0
+    b return_to_user
