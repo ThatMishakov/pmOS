@@ -160,7 +160,7 @@ qemu-aarch64: $(aarch64-HYPER-IMG)
 
 qemu-aarch64-limine: $(aarch64-IMG)
 	qemu-system-aarch64 \
-		-M virt,gic-version=3 -cpu max,sve=off -m 2G \
+		-M virt,gic-version=3 -cpu max -m 2G \
 		-bios "$(AARCH64_UEFI)" \
 		-device ramfb -device qemu-xhci -device usb-kbd \
 		-drive if=none,id=bootdisk,format=raw,file="$(aarch64-IMG)" \

@@ -312,7 +312,7 @@ void early_detect_cpu_features()
         system_fp_class = FPClass::SVE;
 
         // Enable SVE
-        msr<cpacr_el1>(mrs<cpacr_el1>() | (0b11 << 16));
+        msr<cpacr_el1>(mrs<cpacr_el1>() | (0b11 << 16) | (0b11 << 20));
         isb();
 
         // ZCR_EL1
