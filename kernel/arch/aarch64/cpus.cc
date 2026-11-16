@@ -278,7 +278,7 @@ constexpr u64 CnP_MASK = 0xf << 0;
 void early_detect_cpu_features()
 {
     boot_el = (mrs<currentel>() >> 2) & 0x3;
-    // uint64_t id_aa64mmfr0_el1 = mrs<id_aa64mmfr0_el1>();
+    // u64 id_aa64mmfr0_el1 = mrs<id_aa64mmfr0_el1>();
 
     auto id_aa64mmfr1 = mrs<id_aa64mmfr1_el1>();
     use_pan = id_aa64mmfr1 & PAN_MASK;
@@ -475,7 +475,7 @@ void init_scheduling_on_bsp()
         panic("Could not allocate CPU_Info struct\n");
 
     i->kernel_stack_top = i->kernel_stack.get_stack_top();
-    i->mpidr_el1        = mpidr_el1();
+    i->mpidr_el1        = mpidr_el1() & 0xff00ffffff;
     set_cpu_struct(i);
 
     cpu_struct_works = true;
@@ -512,12 +512,231 @@ void init_scheduling_on_bsp()
     enable_timer_interrupt();
 }
 
+static void prepare_cpu(u64 mpidr)
+{
+    sched::CPU_Info *i = new sched::CPU_Info();
+    if (!i)
+        panic("Could not allocate sched::CPU_Info struct\n");
+
+    i->kernel_stack_top = i->kernel_stack.get_stack_top();
+    i->mpidr_el1        = mpidr;
+
+    i->kernel_pt_generation = -1;
+
+    i->cpu_id = sched::cpus.size();
+    if (!sched::cpus.push_back(i))
+        panic("Could not add sched::CPU_Info struct to cpus vector\n");
+
+    auto idle = proc::init_idle(i);
+    if (idle != 0)
+        panic("Failed to initialize idle task: %i\n", idle);
+
+    assert(proc::kernel_tasks);
+    if (auto t = proc::kernel_tasks->atomic_register_task(i->idle_task); t)
+        panic("Failed to add idle task to the kernel process group: %i\n", t);
+
+    i->current_task = i->idle_task;
+
+    log::serial_logger.printf("Initialized CPU %u (mpidr: 0x%lx)\n", i->cpu_id, i->mpidr_el1);
+}
+
+static bool have_online_capable_bit = false;
+static bool psci_compliant = false;
+static bool use_hvc = false;
+static void setup_online_capable()
+{
+    struct acpi_fadt *fadt;
+    auto res = uacpi_table_fadt(&fadt);
+    if (res != UACPI_STATUS_OK)
+        panic("No FADT!");
+
+    have_online_capable_bit = (fadt->hdr.revision > 6) or 
+        (fadt->hdr.revision == 6 and fadt->fadt_minor_verison >= 3);
+
+    psci_compliant = fadt->arm_boot_arch & ACPI_ARM_PSCI_COMPLIANT;
+    use_hvc = fadt->arm_boot_arch & ACPI_ARM_PSCI_USE_HVC;
+}
+
+static bool cpu_usable(u32 flags)
+{
+    if (flags & ACPI_GICC_ENABLED)
+        return true;
+
+    if (!have_online_capable_bit)
+        return false;
+
+    return flags & ACPI_GICC_ONLINE_CAPABLE;
+}
+
+void init_smp_acpi()
+{
+    setup_online_capable();
+
+    auto c = sched::get_cpu_struct();
+
+    uacpi_table madt;
+    auto res = uacpi_table_find_by_signature(ACPI_MADT_SIGNATURE, &madt);
+    if (res != UACPI_STATUS_OK) {
+        return;
+    }
+    auto guard = pmos::utility::make_scope_guard([&]{
+        uacpi_table_unref(&madt);
+    });
+
+    struct Ctx {
+        pmos::containers::set<u64> physical_ids;
+    } ctx;
+
+
+    if (ctx.physical_ids.insert_noexcept(c->mpidr_el1).first == ctx.physical_ids.end())
+        panic("Failed to allocate memory for my physical id");
+
+    res = uacpi_for_each_subtable(madt.hdr, sizeof(struct acpi_madt), [](auto c, auto hdr) -> uacpi_iteration_decision {
+        Ctx &ctx = *(Ctx *)c;
+        if (hdr->type == ACPI_MADT_ENTRY_TYPE_GICC) {
+            acpi_madt_gicc *gicc = (acpi_madt_gicc *)hdr;
+
+            if (!cpu_usable(gicc->flags))
+                return UACPI_ITERATION_DECISION_CONTINUE;
+
+            auto mpidr = gicc->mpidr & 0xff00ffffff;
+
+            auto res = ctx.physical_ids.insert_noexcept(mpidr);
+            if (res.first == ctx.physical_ids.end())
+                panic("Couldn't allocate memory for set in CPU initialization");
+
+            if (!res.second)
+                return UACPI_ITERATION_DECISION_CONTINUE;
+
+            prepare_cpu(mpidr);
+        }
+        return UACPI_ITERATION_DECISION_CONTINUE;
+    }, (void *)&ctx);
+    if (res != UACPI_STATUS_OK)
+        panic("uacpi_for_each_subtable error");
+}
+
+static inline u64 psci_smc(
+    u64 function,
+    u64 arg1 = 0,
+    u64 arg2 = 0,
+    u64 arg3 = 0
+) {
+    register u64 x0 asm("x0") = function;
+    register u64 x1 asm("x1") = arg1;
+    register u64 x2 asm("x2") = arg2;
+    register u64 x3 asm("x3") = arg3;
+
+    asm volatile(
+        "smc #0"
+        : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3)
+        :
+        : "x4", "x5", "x6", "x7",
+          "x8", "x9", "x10", "x11",
+          "x12", "x13", "x14", "x15",
+          "x16", "x17",
+          "memory"
+    );
+
+    return x0;
+}
+
+static inline u64 psci_hvc(
+    u64 function,
+    u64 arg1 = 0,
+    u64 arg2 = 0,
+    u64 arg3 = 0
+) {
+    register u64 x0 asm("x0") = function;
+    register u64 x1 asm("x1") = arg1;
+    register u64 x2 asm("x2") = arg2;
+    register u64 x3 asm("x3") = arg3;
+
+    asm volatile(
+        "hvc #0"
+        : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3)
+        :
+        : "x4", "x5", "x6", "x7",
+          "x8", "x9", "x10", "x11",
+          "x12", "x13", "x14", "x15",
+          "x16", "x17",
+          "memory"
+    );
+
+    return x0;
+}
+
+namespace kernel::paging {
+
+// This can't go in a header because of reasons
+extern klib::shared_ptr<kernel::paging::Arch_Page_Table> idle_page_table;
+
+}
+
+
+// Instructions are u32s
+extern u32 smp_trampoline_start;
+extern u32 smp_trampoline_end;
+
+static void start_aps()
+{
+    assert(cpus.size());
+    if (cpus.size() == 1)
+        return;
+
+    if (!psci_compliant)
+        panic("Non-PSCI compliant system, can't continue");
+
+    assert(&smp_trampoline_start < &smp_trampoline_end);
+    const auto trampoline_size = (size_t)((char *)&smp_trampoline_end - (char *)&smp_trampoline_start);
+    const phys_addr_t trampoline_phys = (reinterpret_cast<char *>(&smp_trampoline_start) - reinterpret_cast<char *>(&_kernel_start)) + kernel::paging::kernel_phys_base;
+    const phys_addr_t trampoline_phys_end = trampoline_phys + trampoline_size;
+    const phys_addr_t page_mask = PAGE_SIZE - 1;
+    const phys_addr_t trampoline_phys_start = trampoline_phys & ~page_mask;
+    const phys_addr_t trampoline_phys_end_aligned = (trampoline_phys_end + page_mask) & ~page_mask;
+    const size_t trampoline_phys_size = trampoline_phys_end_aligned - trampoline_phys_start;
+
+    paging::Page_Table_Arguments args = {
+        .readable           = true,
+        .writeable          = true,
+        .user_access        = false,
+        .global             = true,
+        .execution_disabled = false,
+        .extra              = PAGING_FLAG_NOFREE,
+    };
+
+    assert(paging::idle_page_table);
+    for (size_t offset = 0; offset < trampoline_phys_size; offset += PAGE_SIZE) {
+        auto phys = trampoline_phys_start + offset;
+        auto virt = (void *)phys;
+        auto result = paging::idle_page_table->map(phys, virt, args);
+        if (result)
+            panic("Failed to map trampoline page at phys 0x%lx", phys);
+    }
+
+    for (size_t i = 1; i < cpus.size(); i++) {
+        auto cpu = cpus[i];
+        auto mpidr = cpu->mpidr_el1;
+
+        log::serial_logger.printf("[Kernel] Info: Starting CPU %u (mpidr: 0x%lx)\n", cpu->cpu_id, mpidr);
+        u64 result;
+        if (use_hvc)
+            result = psci_hvc(0xC4000003, mpidr, (u64)&smp_trampoline_start, (u64)cpu);
+        else
+            result = psci_smc(0xC4000003, mpidr, (u64)&smp_trampoline_start, (u64)cpu);
+
+        if (result != 0) {
+            panic("[Kernel] Error: Failed to start CPU %u (mpidr: 0x%lx), PSCI returned %i", cpu->cpu_id, mpidr, (int)result);
+        }
+    }
+}
+
 void init_smp()
 {
-    // init_smp_acpi();
+    init_smp_acpi();
 
     memory::init_rcu();
     other_cpus_online = true;
 
-    // start_aps();
+    start_aps();
 }

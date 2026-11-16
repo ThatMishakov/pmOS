@@ -609,4 +609,8 @@ void offline_cpu(sched::CPU_Info *cpu);
 void arch_tlb_finalize(bool for_kernel);
 bool arch_tlb_dont_ipi();
 
+extern phys_addr_t kernel_phys_base;
+
 } // namespace kernel::paging
+
+extern void *_kernel_start;

@@ -27,7 +27,7 @@ extern u8 _kernel_end;
 using namespace kernel::ia32::paging;
 #endif
 
-static phys_addr_t kernel_phys_base = 0;
+phys_addr_t kernel::paging::kernel_phys_base = 0;
 
 #ifdef __i386__
 #define ELF_BITNESS R_LARCH_32
