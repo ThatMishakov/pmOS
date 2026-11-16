@@ -78,7 +78,19 @@ size_t vector_data_length()
 }
 
 bool use_fpmr = false;
+unsigned boot_el = 0;
 
+void proc::TaskDescriptor::arch_set_system(PrivilegeLevel level)
+{
+    if (level == PrivilegeLevel::Kernel) {
+        if (boot_el == 2)
+            regs.spsr_el1 = 0x348; // EL2t, interrupts enabled
+        else
+            regs.spsr_el1 = 0x344; // EL1t, interrupts enabled
+    } else {
+        regs.spsr_el1 = 0x340; // EL0t, interrupts enabled
+    }
+}
 
 namespace {
 
@@ -280,6 +292,7 @@ constexpr u64 CnP_MASK = 0xf << 0;
 
 void early_detect_cpu_features()
 {
+    boot_el = (mrs<currentel>() >> 2) & 0x3;
     // uint64_t id_aa64mmfr0_el1 = mrs<id_aa64mmfr0_el1>();
 
     auto id_aa64mmfr1 = mrs<id_aa64mmfr1_el1>();

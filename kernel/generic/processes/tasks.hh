@@ -440,6 +440,8 @@ namespace proc
 
         void exception(unsigned signal);
 
+        void arch_set_system(PrivilegeLevel level);
+
     protected:
         TaskDescriptor() = default;
 

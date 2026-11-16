@@ -107,7 +107,7 @@ bool TaskDescriptor::is_32bit() const
 
 bool TaskDescriptor::is_kernel_task() const
 {
-    return (regs.spsr_el1 & 0b1111) == 0b0100;
+    return (regs.spsr_el1 & 0b1111) != 0b0000;
 }
 
 kresult_t TaskDescriptor::set_32bit()

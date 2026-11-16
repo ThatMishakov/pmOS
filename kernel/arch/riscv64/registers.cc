@@ -5,6 +5,11 @@ using namespace kernel::proc;
 
 bool TaskDescriptor::is_32bit() const { return false; }
 
+void TaskDescriptor::arch_set_system(PrivilegeLevel level)
+{
+    is_system = level == PrivilegeLevel::Kernel;
+}
+
 ulong syscalls::syscall_arg(TaskDescriptor *d, int number, int)
 {
     switch (number) {

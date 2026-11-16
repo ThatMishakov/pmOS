@@ -155,3 +155,24 @@ kresult_t TaskDescriptor::set_32bit()
 
     return 0;
 }
+
+extern bool use_fred;
+
+void TaskDescriptor::arch_set_system(PrivilegeLevel level)
+{
+    switch (level) {
+    case PrivilegeLevel::Kernel:
+        if (use_fred) {
+            regs.cs         = R0_CODE_SEGMENT;
+            regs.entry_type = 1;
+        } else {
+            regs.cs = KERNEL_THREAD_CODE_SEGMENT;
+        }
+        regs.ss = R0_DATA_SEGMENT;
+        break;
+    case PrivilegeLevel::User:
+        regs.cs = R3_CODE_SEGMENT;
+        regs.ss = R3_DATA_SEGMENT;
+        break;
+    }
+}

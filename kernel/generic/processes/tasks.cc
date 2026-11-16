@@ -50,10 +50,6 @@ namespace kernel::paging
 extern klib::shared_ptr<kernel::paging::Arch_Page_Table> idle_page_table;
 }
 
-#ifdef __x86_64__
-extern bool use_fred;
-#endif
-
 namespace kernel::proc
 {
 
@@ -67,43 +63,8 @@ TaskDescriptor *TaskDescriptor::create(Process *parent, TaskDescriptor::Privileg
     if (!n)
         return nullptr;
 
-#ifdef __x86_64__
-    // Assign cs and ss
-    switch (level) {
-    case PrivilegeLevel::Kernel:
-        if (use_fred) {
-            n->regs.cs         = R0_CODE_SEGMENT;
-            n->regs.entry_type = 1;
-        } else {
-            n->regs.cs = KERNEL_THREAD_CODE_SEGMENT;
-        }
-        n->regs.ss = R0_DATA_SEGMENT;
-        break;
-    case PrivilegeLevel::User:
-        n->regs.cs = R3_CODE_SEGMENT;
-        n->regs.ss = R3_DATA_SEGMENT;
-        break;
-    }
-#elif defined(__i386__)
-    // Assign cs and ss
-    switch (level) {
-    case PrivilegeLevel::Kernel:
-        n->regs.cs         = KERNEL_THREAD_CODE_SEGMENT;
-        n->regs.entry_type = 4;
-        break;
-    case PrivilegeLevel::User:
-        n->regs.cs = R3_CODE_SEGMENT;
-        break;
-    }
-#elif defined(__riscv) || defined(__loongarch__)
-    n->is_system = level == PrivilegeLevel::Kernel;
-#elif defined(__aarch64__)
-    if (level == PrivilegeLevel::Kernel) {
-        n->regs.spsr_el1 = 0x344; // EL1t, interrupts enabled
-    } else {
-        n->regs.spsr_el1 = 0x340; // EL0t, interrupts enabled
-    }
-#endif
+    n->arch_set_system(level);
+
     kresult_t result = 0;
     if (level == PrivilegeLevel::User)
         result = n->init_fp_state();
