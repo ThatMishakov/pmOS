@@ -113,7 +113,7 @@ return {
     ["limine"] = function()
         return Source {
             name = "limine",
-            Archive("https://codeberg.org/Limine/Limine/releases/download/v10.8.5/limine-10.8.5.tar.gz", "fb9eb2734258a6afd35f129dac29c04879b96d2930af940f4960be20b3033ece"),
+            Archive("https://github.com/Limine-Bootloader/Limine/releases/download/v12.10.0/limine-12.10.0.tar.gz", "89d043166c34dcf764171f2563a3820e836206f9696bfb01fee540efba4f6c81"),
         }
     end,
     ["lisp"] = function()

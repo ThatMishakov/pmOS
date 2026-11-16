@@ -2,7 +2,7 @@ return function(c)
     -- Build one host bundle containing all supported bootloader targets.
     return Tool {
         name = "limine",
-        version = "10.8.5",
+        version = "12.10.0",
         revision = 1,
         source = c.source("limine"),
         dependencies = { "clang", "lld", "llvm", "nasm", "build-essential", "mtools", "pkg-config" },

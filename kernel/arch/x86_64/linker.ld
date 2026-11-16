@@ -6,7 +6,6 @@ PHDRS
     text PT_LOAD FILEHDR PHDRS FLAGS((1 << 0) | (1 << 2)) ;
     rodata PT_LOAD FLAGS((1 << 2)) ;
     data PT_LOAD FLAGS((1 << 1) | (1 << 2));
-    dynamic PT_DYNAMIC FLAGS((1 << 1) | (1 << 2));
 }
 
 SECTIONS
@@ -77,11 +76,6 @@ SECTIONS
         *(.sdata .sdata.*)
     } :data
 
-    /* Dynamic section for relocations, both in its own PHDR and inside data PHDR */
-    .dynamic : AT (ADDR (.dynamic) - kernel_offset + KERNEL_PHYS_BASE) {
-        *(.dynamic)
-    } :data :dynamic
- 
     .bss : AT (ADDR (.bss) - kernel_offset + KERNEL_PHYS_BASE) {
         *(.bss .bss.*)
         *(.sbss .sbss.*)

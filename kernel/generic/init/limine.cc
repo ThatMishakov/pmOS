@@ -64,7 +64,7 @@ extern "C" void _limine_entry();
 
 u64 kernel_phys_base = 0;
 
-static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(5);
+static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(6);
 
 __attribute__((used)) limine_bootloader_info_request boot_request = {
         .id       = LIMINE_BOOTLOADER_INFO_REQUEST_ID,
