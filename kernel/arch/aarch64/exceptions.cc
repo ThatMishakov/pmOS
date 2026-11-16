@@ -161,7 +161,8 @@ extern "C" void unexpected_exception(KernelRegisters *regs)
     u64 elr = mrs<elr_el1>();
     u64 spsr = mrs<spsr_el1>();
     u64 esr = mrs<esr_el1>();
-    log::serial_logger.printf("sp: 0x%lx elr_el1: 0x%lx spsr_el1: 0x%lx esr_el1: 0x%lx\n", regs->sp, elr, spsr, esr);
+    log::serial_logger.printf("sp: 0x%lx\n", regs->sp);
+    log::serial_logger.printf("elr_el1: 0x%lx spsr_el1: 0x%lx esr_el1: 0x%lx ", elr, spsr, esr);
     log::serial_logger.printf("far_el1: 0x%lx\n", mrs<far_el1>());
     panic("Unexpected exception!\n");
 }

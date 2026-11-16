@@ -104,7 +104,10 @@ TaskDescriptor *TaskDescriptor::create(Process *parent, TaskDescriptor::Privileg
         n->regs.spsr_el1 = 0x340; // EL0t, interrupts enabled
     }
 #endif
-    auto result = n->init_fp_state();
+    kresult_t result = 0;
+    if (level == PrivilegeLevel::User)
+        result = n->init_fp_state();
+    
     if (result)
         return nullptr;
 

@@ -16,6 +16,9 @@ DEFINE_SYSREG(cntfrq_el0)
 DEFINE_SYSREG(cntvct_el0)
 DEFINE_SYSREG(cntv_cval_el0)
 DEFINE_SYSREG(cntv_ctl_el0)
+DEFINE_SYSREG(cntp_tval_el0)
+DEFINE_SYSREG(cntp_ctl_el0)
+DEFINE_SYSREG(cntvoff_el2)
 DEFINE_SYSREG(currentel)
 DEFINE_SYSREG(hcr_el2)
 DEFINE_SYSREG(pan)
@@ -332,18 +335,30 @@ struct ARMTimeSource final: kernel::time::TimeSource {
     virtual void init_as_main() override {}
 } arm_time_source;
 
+static bool use_physical_timer = false;
+
 struct ARMGenericTimer final: kernel::time::LocalTimer {
     virtual void set_deadline(u64 deadline_nanoseconds) override
     {
         u64 wanted_ticks = timer_freq * deadline_nanoseconds;
-        msr<cntv_cval_el0>(wanted_ticks);
-        msr<cntv_ctl_el0>(1);
+        if (use_physical_timer) {
+            msr<cntp_tval_el0>(wanted_ticks);
+            msr<cntp_ctl_el0>(1);
+        } else {
+            msr<cntv_cval_el0>(wanted_ticks);
+            msr<cntv_ctl_el0>(1);
+        }
     }
 
     virtual void cancel_deadline() override
     {
-        msr<cntv_ctl_el0>(2);
+        if (use_physical_timer) {
+            msr<cntp_ctl_el0>(2);
+        } else {
+            msr<cntv_ctl_el0>(2);
+        }
         isb();
+
     }
 
     virtual void init_as_main() override {}
@@ -380,10 +395,15 @@ bool init_timer_acpi()
         if (!(mrs<hcr_el2>() & EL2_VHE_MASK))
             panic("Kernel in EL2 w/o VHE, not (yet) supported");
 
-        if (gtdt->hdr.revision < 3)
-            panic("GTDT revision %u", gtdt->hdr.revision);
+        msr<cntvoff_el2>(0);
 
-        timer_interrupt = gtdt->el2_virtual_gsiv;
+        if (gtdt->hdr.revision < 3) {
+            // No EL2 virtual timer interrupt from the firmware...
+            use_physical_timer = true;
+            timer_interrupt = gtdt->el2_gsiv;
+        } else {
+            timer_interrupt = gtdt->el2_virtual_gsiv;
+        }
         // Mode and polarity don't matter here since it's a PPI
     } else {
         panic("Kernel in EL%u", current_el);
@@ -410,7 +430,10 @@ void init_timer()
     assert(timer_interrupt >= 16 && timer_interrupt < 32);
     auto timer_ppi = timer_interrupt - 16;
     arm::interrupts::ppi_handlers[timer_ppi] = []() {
-        msr<cntv_ctl_el0>(2);
+        if (use_physical_timer)
+            msr<cntp_ctl_el0>(2);
+        else
+            msr<cntv_ctl_el0>(2);
         isb();
         sched::cpu_timer_interrupt();
     };
@@ -438,7 +461,11 @@ extern int kernel_pt_active_cpus_count[2];
 
 void enable_timer_interrupt()
 {
-    msr<cntv_ctl_el0>(2);
+    if (use_physical_timer) {
+        msr<cntp_ctl_el0>(2);
+    } else {
+        msr<cntv_ctl_el0>(2);
+    }
     isb();
     arm::interrupts::ppi_enable(timer_interrupt);
 }

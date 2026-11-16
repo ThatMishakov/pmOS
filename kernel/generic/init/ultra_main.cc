@@ -648,13 +648,13 @@ void ultra_main(struct ultra_boot_context *ctx, uint32_t magic)
         panic("Could not find platform attribute!\n");
     ultra_platform_info_attribute attr = *ptr;
 
+    direct_map_location = (void *)attr.higher_half_base;
+
     #ifdef __i386__
     use_pae = attr.page_table_depth == 3;
     serial_logger.printf("PAE: %s (page depth %i)\n", use_pae ? "enabled" : "disabled",
                          attr.page_table_depth);
     
-    direct_map_location = attr.higher_half_base;
-
     if (use_pae) {
         support_nx = detect_nx();
         serial_logger.printf("NX: %s\n", support_nx ? "enabled" : "disabled");

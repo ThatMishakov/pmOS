@@ -9,7 +9,8 @@ x86_64-GRUB-ISO=build-x86_64/pmos-grub.iso
 x86_64-HYPER-ISO=build-x86_64/pmos-hyper.iso
 riscv64-IMG=build-riscv64/pmos.img
 loongarch64-IMG=build-loongarch64/pmos.img
-aarch64-IMG=build-aarch64/pmos-hyper.img
+aarch64-HYPER-IMG=build-aarch64/pmos-hyper.img
+aarch64-IMG=build-aarch64/pmos.img
 AARCH64_UEFI ?= edk2-aarch64-code.fd
 
 # The Lua configuration owns dependencies and incremental rebuilds. Always ask
@@ -61,6 +62,9 @@ $(x86_64-HYPER-ISO): FORCE | $(CHARIOT)
 	$(call build_image,x86_64,hyper-iso,pmos-hyper.iso)
 
 $(aarch64-IMG): FORCE | $(CHARIOT)
+	$(call build_image,aarch64,limine-disk-image,pmos.img)
+
+$(aarch64-HYPER-IMG): FORCE | $(CHARIOT)
 	$(call build_image,aarch64,hyper-disk-image,pmos-hyper.img)
 
 .chariot-tools/bin/chariot $(CURDIR)/.chariot-tools/bin/chariot: scripts/install-chariot.sh
