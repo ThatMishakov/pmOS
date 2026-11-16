@@ -109,20 +109,6 @@ void init_memory(ultra_boot_context *ctx)
 {
     serial_logger.printf("Initializing memory\n");
 
-    #ifdef __x86_64__
-    if (kernel::x86_64::paging::use_5lvl_paging)
-        direct_map_location = (void *)0xFF00'0000'0000'0000;
-    else
-        direct_map_location = (void *)0xFFFF'8000'0000'0000;
-    #elif defined(__aarch64__)
-    if (aarch64_5lvl_paging)
-        direct_map_location = (void *)0xFFF0'0000'0000'0000;
-    else
-        direct_map_location = (void *)0xFFFF'8000'0000'0000;
-    #elif defined(__i386__)
-    direct_map_location = (void *)0xC0000000;
-    #endif
-
     auto mem = ultra_memory_map(ctx);
 
     auto number_of_entries = ULTRA_MEMORY_MAP_ENTRY_COUNT(mem->header);
@@ -205,7 +191,7 @@ void init_memory(ultra_boot_context *ctx)
     if (kernel::x86_64::paging::use_5lvl_paging)
         heap_space_start = 0xFF00'0000'0000'0000;
     else
-        heap_space_start = 0xFFFF'8000'0000'0000;
+        heap_space_start = 0xFFFF'0000'0000'0000;
     #elif defined(__aarch64__)
     unsigned va_bits = 48;
     if (aarch64_5lvl_paging)
@@ -667,6 +653,8 @@ void ultra_main(struct ultra_boot_context *ctx, uint32_t magic)
     serial_logger.printf("PAE: %s (page depth %i)\n", use_pae ? "enabled" : "disabled",
                          attr.page_table_depth);
     
+    direct_map_location = attr.higher_half_base;
+
     if (use_pae) {
         support_nx = detect_nx();
         serial_logger.printf("NX: %s\n", support_nx ? "enabled" : "disabled");
