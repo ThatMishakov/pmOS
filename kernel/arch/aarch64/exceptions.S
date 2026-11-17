@@ -80,7 +80,7 @@ exception_vectors:
     // Current EL, SP_EL1
     .balign 128
     save_kernel_state
-    bl kernel_sync
+    bl handle_kernel_sync
     b return_to_kernel
 
     .balign 128
@@ -174,7 +174,6 @@ return_to_user:
     eret
 
 
-kernel_sync:
 kernel_irq:
 kernel_fiq:
 kernel_serror:
