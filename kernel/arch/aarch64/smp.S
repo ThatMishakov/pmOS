@@ -108,4 +108,5 @@ smp_trampoline_higher_half:
     b return_to_user
 
     .data
+    .globl trampoline_entry_virt
 trampoline_entry_virt: .quad smp_trampoline_higher_half

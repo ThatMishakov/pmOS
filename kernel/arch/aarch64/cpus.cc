@@ -34,6 +34,7 @@ DEFINE_SYSREG(S3_0_C1_C2_0) // ZCR_EL1
 DEFINE_SYSREG(S3_3_C4_C4_0)
 DEFINE_SYSREG(S3_3_C4_C4_1)
 DEFINE_SYSREG(S3_3_C4_C4_2)
+DEFINE_SYSREG(ctr_el0)
 
 using namespace kernel::sched;
 using namespace kernel;
@@ -513,6 +514,11 @@ void init_scheduling_on_bsp()
     enable_timer_interrupt();
 }
 
+namespace kernel::sched
+{
+void check_synchronous_ipis();
+}
+
 extern "C" void enter_ap(sched::CPU_Info *i)
 {
     set_cpu_struct(i);
@@ -528,7 +534,12 @@ extern "C" void enter_ap(sched::CPU_Info *i)
 
     assert(i->current_task == i->idle_task);
 
-    panic("AP %lx entered kernel", i->mpidr_el1);
+    check_synchronous_ipis();
+
+    call_after_smp_entry();
+    reschedule();
+
+    log::serial_logger.printf("AP %u (mpidr: 0x%lx) started\n", i->cpu_id, i->mpidr_el1);
 }
 
 static void prepare_cpu(u64 mpidr)
@@ -693,10 +704,17 @@ extern klib::shared_ptr<kernel::paging::Arch_Page_Table> idle_page_table;
 }
 
 extern u64 ttbr0;
+extern u64 ttbr1;
+extern u64 tcr;
+extern u64 sctlr;
+
+extern u32 trampoline_entry_virt;
 
 // Instructions are u32s
 extern u32 smp_trampoline_start;
 extern u32 smp_trampoline_end;
+
+extern const u64 mair;
 
 static void start_aps()
 {
@@ -734,8 +752,27 @@ static void start_aps()
             panic("Failed to map trampoline page at phys 0x%lx", phys);
     }
     // TODO: Do something about this...
-    auto page = klib::static_pointer_cast<aarch64::paging::AArch64_Page_Table>(paging::idle_page_table);
+    const auto page = klib::static_pointer_cast<aarch64::paging::AArch64_Page_Table>(paging::idle_page_table);
     ttbr0 = page->get_page_directory();
+
+    const auto line_size = (mrs<ctr_el0>() >> 16) & 0xf;
+    const auto cache_line = 4 << line_size;
+
+    // APs enter without paging which means no cache which means mismatched cache attributes...
+    dc_cvac((void *)&ttbr0);
+    dc_cvac((void *)&ttbr1);
+    dc_cvac((void *)&tcr);
+    dc_cvac((void *)&sctlr);
+    dc_cvac((void *)&boot_el);
+    dc_cvac((void *)&mair);
+    dc_cvac((void *)&trampoline_entry_virt);
+    const auto first = reinterpret_cast<ulong>(&smp_trampoline_start);
+    const auto end = reinterpret_cast<ulong>(&smp_trampoline_end);
+    const ulong line_mask = cache_line - 1;
+
+    for (auto addr = first & ~line_mask; addr < end; addr += cache_line)
+        dc_cvac(reinterpret_cast<void *>(addr));
+    dsb<Barrier::SY>();
 
     for (size_t i = 1; i < cpus.size(); i++) {
         auto cpu = cpus[i];
@@ -762,6 +799,4 @@ void init_smp()
     other_cpus_online = true;
 
     start_aps();
-
-    panic("Started APs");
 }

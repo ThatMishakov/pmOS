@@ -26,6 +26,11 @@ inline void isb()
     __builtin_arm_isb(0xF);
 }
 
+inline void dc_cvac(void *ptr)
+{
+    asm volatile("dc cvac, %0" :: "r"(ptr) : "memory");
+}
+
 #ifdef __aarch64__
 inline u64 mpidr_el1()
 {

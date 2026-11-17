@@ -219,7 +219,22 @@ void arm::interrupts::handle_ppi_spi(unsigned interrupt)
     assert(interrupt < 32);
 
     if (interrupt < 16) {
-        panic("PPI %u unhandled!", interrupt);
+        // SPI
+        switch (interrupt) {
+        case 0:
+            sched::reschedule();
+            break;
+        case 2:
+            sched::park_self();
+            break;
+        case 3:
+            sched::get_attention();
+            break;
+        default:
+            panic("Unknown PPI %u received", interrupt);
+        }
+
+        return;
     }
 
     interrupt -= 16;
