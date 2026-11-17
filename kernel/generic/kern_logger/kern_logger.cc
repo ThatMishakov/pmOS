@@ -144,7 +144,7 @@ void Logger::printf(const char *str, ...)
     va_list arg;
     va_start(arg, str);
 
-    vprintf(str, arg);
+    vprintf_nolock(str, arg);
 
     va_end(arg);
 }
@@ -154,13 +154,15 @@ void Logger::printf_nolock(const char *str, ...)
     va_list arg;
     va_start(arg, str);
 
-    vprintf(str, arg);
+    vprintf_nolock(str, arg);
 
     va_end(arg);
 }
 
 void Logger::vprintf(const char *str, va_list arg)
 {
+    Auto_Lock_Scope scope_lock(logger_lock);
+
     vprintf_nolock(str, arg);
 }
 

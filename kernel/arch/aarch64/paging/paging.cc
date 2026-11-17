@@ -4,10 +4,11 @@
 #include <pmos/utility/scope_guard.hh>
 #include <kern_logger/kern_logger.hh>
 
-DEFINE_SYSREG(mair_el1)
-DEFINE_SYSREG(ttbr0_el1)
-DEFINE_SYSREG(ttbr1_el1)
-DEFINE_SYSREG(tcr_el1)
+DEFINE_SYSREG(MAIR_EL1)
+DEFINE_SYSREG(TTBR0_EL1)
+DEFINE_SYSREG(TTBR1_EL1)
+DEFINE_SYSREG(TCR_EL1)
+DEFINE_SYSREG(SCTLR_EL1)
 
 using namespace kernel::aarch64::paging;
 using namespace kernel::paging;
@@ -416,7 +417,7 @@ void init_paging(unsigned va_bits)
 
     top_level_mask = (1U << top_level_bits) - 1;
 
-    if (mrs<tcr_el1>() & TCR_DS)
+    if (mrs<TCR_EL1>() & TCR_DS)
         ds = true;
 }
 
@@ -665,11 +666,23 @@ void AArch64_Page_Table::tlb_flush_all()
 void AArch64_Page_Table::apply()
 {
     assert(page_directory != PAGE_DIRECTORY_INITIALIZER);
-    msr<ttbr0_el1>(page_directory);
+    msr<TTBR0_EL1>(page_directory);
     flush_tlb();
     dsb<Barrier::ISH>();
     isb();
 }
+
+// For the AP trampoline:
+u64 ttbr0 = 0;
+u64 ttbr1 = 0;
+u64 tcr = 0;
+u64 sctlr = 0;
+extern "C"
+const u64 mair = mair_attridx(MAIR_NORMAL, MT_NORMAL) 
+                        | mair_attridx(MAIR_NORMAL_NC, MT_NORMAL_NC) 
+                        | mair_attridx(MAIR_DEVICE_nGnRnE, MT_DEVICE_nGnRnE) 
+                        | mair_attridx(MAIR_DEVICE_nGnRE, MT_DEVICE_nGnRE)
+                        | mair_attridx(MAIR_DEVICE_nGRE, MT_DEVICE_nGRE);
 
 extern bool use_ttcnp;
 constexpr u64 TTBRx_EL1_CnP = 1 << 0;
@@ -679,34 +692,32 @@ constexpr u64 TCR_SH1_INNER = 3ULL << 28;
 
 void paging::apply_page_table(phys_addr_t kernel_page_table)
 {
-    constexpr u64 mair = mair_attridx(MAIR_NORMAL, MT_NORMAL) 
-                        | mair_attridx(MAIR_NORMAL_NC, MT_NORMAL_NC) 
-                        | mair_attridx(MAIR_DEVICE_nGnRnE, MT_DEVICE_nGnRnE) 
-                        | mair_attridx(MAIR_DEVICE_nGnRE, MT_DEVICE_nGnRE)
-                        | mair_attridx(MAIR_DEVICE_nGRE, MT_DEVICE_nGRE);
-
-    msr<mair_el1>(mair);
+    msr<MAIR_EL1>(mair);
 
     if (use_ttcnp)
         kernel_page_table |= TTBRx_EL1_CnP;
 
     // TODO-ish...
     if (ds) {
-        auto tcr = mrs<tcr_el1>();
+        auto tcr = mrs<TCR_EL1>();
         // Inner shareable for both TTBR0 and TTBR1
         tcr |= TCR_SH0_INNER | TCR_SH1_INNER;
-        msr<tcr_el1>(tcr);
+        msr<TCR_EL1>(tcr);
     }
 
     unsigned txsz = 64 - va_bits;
     // Set the right T0SZ for userspace...
-    auto tcr = mrs<tcr_el1>();
+    tcr = mrs<TCR_EL1>();
     tcr &= ~u64(0x3f);
     tcr |= txsz;
-    msr<tcr_el1>(tcr);
+    msr<TCR_EL1>(tcr);
 
-    msr<ttbr1_el1>(kernel_page_table);
+    msr<TTBR1_EL1>(kernel_page_table);
     flush_tlb();
     dsb<Barrier::ISH>();
     isb();
+
+    ttbr1 = kernel_page_table;
+
+    sctlr = mrs<SCTLR_EL1>();
 }

@@ -8,6 +8,7 @@
 #include <uacpi/tables.h>
 #include <uacpi/acpi.h>
 #include <pmos/utility/scope_guard.hh>
+#include <paging/aarch64_paging.hh>
 
 
 DEFINE_SYSREG(tpidr_el1)
@@ -512,6 +513,24 @@ void init_scheduling_on_bsp()
     enable_timer_interrupt();
 }
 
+extern "C" void enter_ap(sched::CPU_Info *i)
+{
+    set_cpu_struct(i);
+    program_cpu_stuff(i);
+
+    auto current_el = (mrs<currentel>() >> 2) & 0x3;
+
+    if (current_el != boot_el)
+        panic("AP %lx entered with EL%u, expected EL%u", i->mpidr_el1, current_el, boot_el);
+
+    arm::interrupts::do_cpu_interrupts_init();
+    enable_timer_interrupt();
+
+    assert(i->current_task == i->idle_task);
+
+    panic("AP %lx entered kernel", i->mpidr_el1);
+}
+
 static void prepare_cpu(u64 mpidr)
 {
     sched::CPU_Info *i = new sched::CPU_Info();
@@ -673,6 +692,7 @@ extern klib::shared_ptr<kernel::paging::Arch_Page_Table> idle_page_table;
 
 }
 
+extern u64 ttbr0;
 
 // Instructions are u32s
 extern u32 smp_trampoline_start;
@@ -713,6 +733,9 @@ static void start_aps()
         if (result)
             panic("Failed to map trampoline page at phys 0x%lx", phys);
     }
+    // TODO: Do something about this...
+    auto page = klib::static_pointer_cast<aarch64::paging::AArch64_Page_Table>(paging::idle_page_table);
+    ttbr0 = page->get_page_directory();
 
     for (size_t i = 1; i < cpus.size(); i++) {
         auto cpu = cpus[i];
@@ -721,9 +744,9 @@ static void start_aps()
         log::serial_logger.printf("[Kernel] Info: Starting CPU %u (mpidr: 0x%lx)\n", cpu->cpu_id, mpidr);
         u64 result;
         if (use_hvc)
-            result = psci_hvc(0xC4000003, mpidr, (u64)&smp_trampoline_start, (u64)cpu);
+            result = psci_hvc(0xC4000003, mpidr, trampoline_phys, (u64)cpu);
         else
-            result = psci_smc(0xC4000003, mpidr, (u64)&smp_trampoline_start, (u64)cpu);
+            result = psci_smc(0xC4000003, mpidr, trampoline_phys, (u64)cpu);
 
         if (result != 0) {
             panic("[Kernel] Error: Failed to start CPU %u (mpidr: 0x%lx), PSCI returned %i", cpu->cpu_id, mpidr, (int)result);
@@ -739,4 +762,6 @@ void init_smp()
     other_cpus_online = true;
 
     start_aps();
+
+    panic("Started APs");
 }

@@ -35,6 +35,8 @@ public:
     bool is_32bit() const;
     void apply();
 
+    phys_addr_t get_page_directory() const { return page_directory; }
+
 private:
     constexpr static u64 PAGE_DIRECTORY_INITIALIZER = -1UL;
     u64 page_directory = PAGE_DIRECTORY_INITIALIZER;
