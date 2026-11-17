@@ -27,7 +27,7 @@ extern u8 _kernel_end;
 using namespace kernel::ia32::paging;
 #endif
 
-static phys_addr_t kernel_phys_base = 0;
+phys_addr_t kernel::paging::kernel_phys_base = 0;
 
 #ifdef __i386__
 #define ELF_BITNESS R_LARCH_32
@@ -75,7 +75,7 @@ void kernel::map_kernel_pages(ptable_top_ptr_t kernel_pt_top, phys_addr_t kernel
                 .extra              = PAGING_FLAG_STRUCT_PAGE,
             };
 
-            constexpr ulong PAGE_MASK = PAGE_SIZE - 1;
+            const ulong PAGE_MASK = PAGE_SIZE - 1;
 
             size_t offset = phdr.p_vaddr & PAGE_MASK;
             void *virt_addr = (void *)(phdr.p_vaddr + load_bias - offset);
@@ -107,7 +107,7 @@ void kernel::map_kernel_pages(ptable_top_ptr_t kernel_pt_top, phys_addr_t kernel
                 .extra              = PAGING_FLAG_STRUCT_PAGE,
             };
 
-            constexpr ulong PAGE_MASK = PAGE_SIZE - 1;
+            const ulong PAGE_MASK = PAGE_SIZE - 1;
 
             size_t offset = phdr.p_vaddr & PAGE_MASK;
             void *virt_addr = (void *)(phdr.p_vaddr - offset);
@@ -161,7 +161,7 @@ long temp_alloc_entry_id = 0;
 
 pmm::Page::page_addr_t alloc_pages_from_temp_pool(size_t pages)
 {
-    size_t size_bytes = pages * 4096;
+    size_t size_bytes = pages * PAGE_SIZE;
     if (temp_alloc_reserved + size_bytes > temp_alloc_size)
         assert(!"Not enough memory in the temp pool");
 

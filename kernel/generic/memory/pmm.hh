@@ -108,9 +108,9 @@ namespace pmm
         /// @brief Allocates a page
         /// @param alignment_log Logarithm of the alignment of the page (e.g. 12 for 4096 bytes)
         /// @return Newly allocated page. Throws on error
-        static ReturnStr<Page_Descriptor> allocate_page(u8 alignment_log);
+        static ReturnStr<Page_Descriptor> allocate_page();
 
-        static ReturnStr<Page_Descriptor> allocate_page_zeroed(u8 alignment_log);
+        static ReturnStr<Page_Descriptor> allocate_page_zeroed();
 
         /// Creates a page descriptor, allocating a new page struct, taking ownership of the given
         /// page
@@ -204,7 +204,8 @@ namespace pmm
         {
         }
 
-        inline static constexpr auto page_lists = 30 - PAGE_ORDER; // 1GB max allocation
+        // Take 12 (4KB) as the base page addr, even on arches with variable page size
+        inline static constexpr auto page_lists = 30 - 12 /* PAGE_ORDER */; // 1GB max allocation
         PageLL free_pages_list[page_lists];
 
         static PMMRegion *get(Page::page_addr_t start_addr);

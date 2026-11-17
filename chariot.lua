@@ -1,6 +1,6 @@
 -- Keep target names aligned with the kernel and the existing Make/QEMU interface.
 local arch = chariot.target_arch
-assert(({x86_64=true, i686=true, riscv64=true, loongarch64=true, m68k=true})[arch],
+assert(({x86_64=true, i686=true, riscv64=true, loongarch64=true, m68k=true, aarch64=true})[arch],
     "unsupported architecture: " .. arch)
 for key in pairs(chariot.options) do
     assert(key == "toolchain" or key == "kernel-arch", "unknown option: " .. key)

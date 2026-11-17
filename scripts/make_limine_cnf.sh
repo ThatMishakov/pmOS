@@ -114,7 +114,7 @@ elif [ "$ARCH" = "x86_64" ]; then
     cat <<EOF >> "$FILE"
 /pmos (limine protocol, KASLR OFF)
     protocol: limine
-    kaslr: off
+    kaslr: no
 
 EOF
 
@@ -147,7 +147,7 @@ else
     cat <<EOF >> "$FILE"
 /pmos (limine protocol, KASLR OFF)
     protocol: limine
-    kaslr: off
+    kaslr: no
 
 EOF
 
@@ -166,7 +166,7 @@ EOF
 
 /pmos (limine protocol, KASLR ON)
     protocol: limine
-    kaslr: on
+    kaslr: yes
 
 EOF
 

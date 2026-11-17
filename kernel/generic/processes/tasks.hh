@@ -317,7 +317,15 @@ namespace proc
 #elif defined(__loongarch__)
         klib::unique_ptr<u64[]> fp_registers = nullptr;
         bool using_fp                        = false;
+#elif defined(__aarch64__)
+        u64 fpcr = 0;
+        u64 fpsr = 0;
+        u64 fpmr = 0;
+
+        klib::unique_ptr<u64[]> fp_state = nullptr;
+        unsigned fp_class = 0;
 #endif
+
         u64 syscall_num = 0;
 
         // Interrupts handlers
@@ -410,9 +418,7 @@ namespace proc
 
         void set_continuation(continuation_func_type func, cancel_callback_type cancel_func = nullptr);
 
-#if defined(__riscv) || defined(__loongarch__)
         kresult_t init_fp_state();
-#endif
 
         #if defined(__i386) || defined(__x86_64)
         kresult_t get_io_permissions();
@@ -431,6 +437,10 @@ namespace proc
         u64 process_id() const;
 
         ReturnStr<ipc::Port *> get_port(u64 port_id);
+
+        void exception(unsigned signal);
+
+        void arch_set_system(PrivilegeLevel level);
 
     protected:
         TaskDescriptor() = default;

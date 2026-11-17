@@ -154,3 +154,9 @@ void kernel::paging::flush_tlb_kernel()
 
     setCR4(cr4);
 }
+
+bool kernel::paging::arch_tlb_dont_ipi()
+{
+    // TODO: AMD broadcast invalidation...
+    return false;
+}

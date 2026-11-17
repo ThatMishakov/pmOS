@@ -40,7 +40,7 @@
 #include <types.hh>
 #include <utility>
 
-#if defined(__x86_64__) || defined(__riscv)
+#if defined(__x86_64__) || defined(__riscv) || defined(__aarch64__)
 #define USE_SOFTWARE_DIRECT_MAP
 #endif
 
@@ -67,7 +67,7 @@ namespace kernel::paging {
 
 
 /// @brief Memory mapping type
-enum class Memory_Type { Normal, MemoryNoCache, IONoCache, Framebuffer };
+enum class Memory_Type { Normal, MemoryNoCache, IONoCache, Framebuffer, IORelaxed, IOPosted };
 
 /// @brief Arguments for mapping of pages
 struct Page_Table_Arguments {
@@ -165,6 +165,7 @@ struct Page_Info {
     bool writeable : 1    = 0;
     bool executable : 1   = 0;
     bool readable : 1     = 0;
+    bool invalid : 1      = 0;
     Memory_Type cache_policy = Memory_Type::Normal;
     u64 page_addr         = 0;
 
@@ -605,4 +606,11 @@ void flush_tlb_kernel();
 void online_cpu(sched::CPU_Info *cpu);
 void offline_cpu(sched::CPU_Info *cpu);
 
+void arch_tlb_finalize(bool for_kernel);
+bool arch_tlb_dont_ipi();
+
+extern phys_addr_t kernel_phys_base;
+
 } // namespace kernel::paging
+
+extern void *_kernel_start;

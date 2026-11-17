@@ -220,9 +220,12 @@ template<spinlock_type T, size_t max_locks> struct LockCarousel {
 
 inline void spin_pause() {}
 
-inline constexpr auto PAGE_ORDER = 12;
-// inline constexpr auto PAGE_SIZE  = 4096;
-#define PAGE_SIZE 4096
+#ifndef __aarch64__
+inline constexpr auto page_order = 12;
+#else
+inline auto page_order = 12;
+#endif
+#define PAGE_SIZE (1 << page_order)
 
 inline constexpr auto MAX_PHYS_ADDR_ORDER = 56;
 

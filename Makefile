@@ -9,6 +9,9 @@ x86_64-GRUB-ISO=build-x86_64/pmos-grub.iso
 x86_64-HYPER-ISO=build-x86_64/pmos-hyper.iso
 riscv64-IMG=build-riscv64/pmos.img
 loongarch64-IMG=build-loongarch64/pmos.img
+aarch64-HYPER-IMG=build-aarch64/pmos-hyper.img
+aarch64-IMG=build-aarch64/pmos.img
+AARCH64_UEFI ?= edk2-aarch64-code.fd
 
 # The Lua configuration owns dependencies and incremental rebuilds. Always ask
 # Chariot to evaluate them before running QEMU, even when an image already exists.
@@ -19,7 +22,7 @@ CHARIOT_FLAGS ?=
 define build_image
 	@mkdir -p build-$(1)
 	$(CHARIOT) install --force --arch $(1) -o toolchain=$(TOOLCHAIN) $(CHARIOT_FLAGS) $(2) build-$(1)/chariot-$(TOOLCHAIN)
-	cp build-$(1)/chariot-$(TOOLCHAIN)/images/$(3) build-$(1)/$(3)
+	cp -T build-$(1)/chariot-$(TOOLCHAIN)/images/$(3) build-$(1)/$(3)
 endef
 
 # Chariot has one target architecture per graph. Export the normal amd64 kernel,
@@ -57,6 +60,12 @@ $(x86_64-GRUB-ISO): FORCE | $(CHARIOT)
 
 $(x86_64-HYPER-ISO): FORCE | $(CHARIOT)
 	$(call build_image,x86_64,hyper-iso,pmos-hyper.iso)
+
+$(aarch64-IMG): FORCE | $(CHARIOT)
+	$(call build_image,aarch64,limine-disk-image,pmos.img)
+
+$(aarch64-HYPER-IMG): FORCE | $(CHARIOT)
+	$(call build_image,aarch64,hyper-disk-image,pmos-hyper.img)
 
 .chariot-tools/bin/chariot $(CURDIR)/.chariot-tools/bin/chariot: scripts/install-chariot.sh
 	./scripts/install-chariot.sh
@@ -139,6 +148,24 @@ qemu: $(riscv64-IMG) ovmf-riscv64
 	
 qemu-loongarch64: $(loongarch64-IMG) ovmf-loongarch64
 	qemu-system-loongarch64 -device ramfb -device virtio-keyboard -device qemu-xhci -device usb-kbd -m 2G -drive if=pflash,unit=0,format=raw,file=ovmf-loongarch64/OVMF.fd -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive file=$(loongarch64-IMG),if=none,id=hdd0 -serial stdio -smp 4
+
+qemu-aarch64: $(aarch64-HYPER-IMG)
+	qemu-system-aarch64 \
+		-M virt,gic-version=3 -cpu max -m 2G \
+		-bios "$(AARCH64_UEFI)" \
+		-device ramfb -device qemu-xhci -device usb-kbd \
+		-drive if=none,id=bootdisk,format=raw,file="$(aarch64-HYPER-IMG)" \
+		-device virtio-blk-device,drive=bootdisk,bootindex=0 \
+		-serial stdio -smp 4
+
+qemu-aarch64-limine: $(aarch64-IMG)
+	qemu-system-aarch64 \
+		-M virt,gic-version=3 -cpu max -m 2G \
+		-bios "$(AARCH64_UEFI)" \
+		-device ramfb -device qemu-xhci -device usb-kbd \
+		-drive if=none,id=bootdisk,format=raw,file="$(aarch64-IMG)" \
+		-device virtio-blk-device,drive=bootdisk,bootindex=0 \
+		-serial stdio -smp 4
 
 qemu-single: $(riscv64-IMG) ovmf-riscv64
 	qemu-system-riscv64 -M virt -cpu rv64 -device ramfb -device virtio-keyboard -device qemu-xhci -device usb-kbd -m 2G -drive if=pflash,unit=0,format=raw,file=ovmf-riscv64/OVMF.fd -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive file=$(riscv64-IMG),if=none,id=hdd0 -serial stdio

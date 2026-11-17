@@ -28,10 +28,10 @@
 
 #pragma once
 #include <types.hh>
+#include <algorithm>
 
 /// Size of the kernel stacks
-static constexpr long STACK_SIZE = KB(8);
-static constexpr long GUARD_SIZE = PAGE_SIZE;
+static constexpr long MIN_STACK_SIZE = KB(8);
 
 class Kernel_Stack_Pointer
 {
@@ -42,7 +42,10 @@ public:
     Kernel_Stack_Pointer();
     ~Kernel_Stack_Pointer();
 
-    inline size_t total_size() const { return STACK_SIZE + GUARD_SIZE; }
+    inline static size_t stack_size() { return std::max<size_t>(MIN_STACK_SIZE, PAGE_SIZE); }
+    inline static size_t guard_size() { return PAGE_SIZE; }
+
+    inline size_t total_size() const { return stack_size() + guard_size(); }
     inline ulong *get_stack_top() { return (ulong *)((char *)stack + total_size()); }
     operator bool() const { return static_cast<bool>(stack); }
 };

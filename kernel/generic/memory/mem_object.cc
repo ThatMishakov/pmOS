@@ -42,8 +42,8 @@
 using namespace kernel;
 using namespace kernel::paging;
 
-Mem_Object::Mem_Object(u64 page_size_log, u64 size_pages, u32 max_user_permissions, int flags)
-    : page_size_log(page_size_log), pages_storage(nullptr), pages_size(size_pages), flags(flags),
+Mem_Object::Mem_Object(u64 size_pages, u32 max_user_permissions, int flags)
+    : pages_storage(nullptr), pages_size(size_pages), flags(flags),
       max_user_access_perm(max_user_permissions) {};
 
 Mem_Object::~Mem_Object()
@@ -58,11 +58,11 @@ Mem_Object::~Mem_Object()
     }
 }
 
-klib::shared_ptr<Mem_Object> Mem_Object::create(u64 page_size_log, u64 size_pages, int flags)
+klib::shared_ptr<Mem_Object> Mem_Object::create(u64 size_pages, int flags)
 {
     // Create new object
     klib::shared_ptr<Mem_Object> ptr(new Mem_Object(
-        page_size_log, size_pages,
+        size_pages,
         Protection::Readable | Protection::Writeable | Protection::Executable, flags));
     if (!ptr)
         return nullptr;
@@ -106,14 +106,15 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
                                                           bool take_ownership,
                                                           u32 max_user_permissions)
 {
-    const u64 size_aligned  = (size_bytes + 0xFFF) & ~0xFFFUL;
-    const u64 start_aligned = phys_addr & ~0xFFFUL;
-    const u64 pages_count    = size_aligned >> 12;
+    const u64 page_mask = PAGE_SIZE - 1;
+    const u64 size_aligned  = (size_bytes + page_mask) & ~page_mask;
+    const u64 start_aligned = phys_addr & ~page_mask;
+    const u64 pages_count    = size_aligned >> page_order;
 
     assert(take_ownership && "not taking ownership is not implemented");
 
     // Create new object
-    klib::shared_ptr<Mem_Object> ptr(new Mem_Object(12, pages_count, max_user_permissions, 0));
+    klib::shared_ptr<Mem_Object> ptr(new Mem_Object(pages_count, max_user_permissions, 0));
     if (!ptr)
         return nullptr;
 
@@ -123,10 +124,10 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
     // Provide the pages
     // This can't fail
     for (u64 i = 0; i < pages_count; ++i) {
-        auto page = pmm::Page_Descriptor::create_from_allocated(start_aligned + i * 0x1000);
+        auto page = pmm::Page_Descriptor::create_from_allocated(start_aligned + i * PAGE_SIZE);
         auto c    = page.page_struct_ptr;
         page.takeout_page();
-        c->l.offset        = i * 0x1000;
+        c->l.offset        = i * PAGE_SIZE;
         c->l.next          = ptr->pages_storage;
         ptr->pages_storage = c;
     }
@@ -181,7 +182,7 @@ ReturnStr<pmm::Page_Descriptor> Mem_Object::atomic_request_anonymous_page(u64 of
 {
     if (empty or (flags & FLAG_ANONYMOUS)) {
         // TODO: Play with uninitialized pages?
-        auto pp = pmm::Page_Descriptor::allocate_page_zeroed(page_size_log);
+        auto pp = pmm::Page_Descriptor::allocate_page_zeroed();
         if (!pp.success())
             return pp.propagate();
 
@@ -221,7 +222,7 @@ ReturnStr<pmm::Page_Descriptor> Mem_Object::atomic_request_anonymous_page(u64 of
 ReturnStr<pmm::Page_Descriptor> Mem_Object::request_page(u64 offset, bool write, bool cow) noexcept
 {
     if ((flags & FLAG_ANONYMOUS) and cow) {
-        auto pp = pmm::Page_Descriptor::allocate_page_zeroed(page_size_log);
+        auto pp = pmm::Page_Descriptor::allocate_page_zeroed();
         if (!pp.success())
             return pp.propagate();
 
@@ -233,12 +234,12 @@ ReturnStr<pmm::Page_Descriptor> Mem_Object::request_page(u64 offset, bool write,
         return pp;
     }
 
-    const auto index = offset >> page_size_log;
+    const auto index = offset >> page_size_log();
 
     if (pages_size <= index)
         return Error(-EINVAL);
 
-    offset &= ~0xfffUL;
+    offset &= ~page_mask();
     auto page = pages_storage;
     while (page and page->l.offset != offset)
         page = page->l.next;
@@ -253,7 +254,7 @@ ReturnStr<pmm::Page_Descriptor> Mem_Object::request_page(u64 offset, bool write,
         // TODO
         auto pager_port = pager;
         if (not pager_port) {
-            auto pp = pmm::Page_Descriptor::allocate_page_zeroed(page_size_log);
+            auto pp = pmm::Page_Descriptor::allocate_page_zeroed();
             if (!pp.success())
                 return pp.propagate();
 
@@ -365,9 +366,10 @@ ReturnStr<bool> Mem_Object::read_to_kernel(u64 offset, void *buffer, u64 size)
     Auto_Lock_Scope l(lock);
 
     assert(!(flags & FLAG_ANONYMOUS));
+    const auto mask = page_mask();
 
     Temp_Mapper_Obj<char> mapper(request_temp_mapper());
-    for (u64 i = offset & ~0xfffUL; i < offset + size; i += 0x1000) {
+    for (u64 i = offset & ~mask; i < offset + size; i += PAGE_SIZE) {
         const auto page = request_page(i, false, false);
         if (!page.success())
             return page.propagate();
@@ -380,9 +382,9 @@ ReturnStr<bool> Mem_Object::read_to_kernel(u64 offset, void *buffer, u64 size)
         char *ptr = mapper.map(page_struct->get_phys_addr());
 
         const u64 start = i < offset ? offset : i;
-        const u64 end   = i + 0x1000 < offset + size ? i + 0x1000 : offset + size;
+        const u64 end   = i + PAGE_SIZE < offset + size ? i + PAGE_SIZE : offset + size;
         const u64 len   = end - start;
-        memcpy(reinterpret_cast<char *>(buffer) + start - offset, ptr + (start & 0xfff), len);
+        memcpy(reinterpret_cast<char *>(buffer) + start - offset, ptr + (start & mask), len);
     }
 
     return true;
@@ -396,9 +398,10 @@ ReturnStr<bool> Mem_Object::write_from_kernel(u64 offset, const void *buffer, u6
     Auto_Lock_Scope l(lock);
 
     assert(!(flags & FLAG_ANONYMOUS));
+    const auto mask = page_mask();
 
     Temp_Mapper_Obj<char> mapper(request_temp_mapper());
-    for (u64 i = offset & ~0xfffUL; i < offset + size; i += 0x1000) {
+    for (u64 i = offset & ~mask; i < offset + size; i += PAGE_SIZE) {
         const auto page = request_page(i, true, false);
         if (!page.success())
             return page.propagate();
@@ -411,9 +414,9 @@ ReturnStr<bool> Mem_Object::write_from_kernel(u64 offset, const void *buffer, u6
         char *ptr = mapper.map(page_struct->get_phys_addr());
 
         const u64 start = i < offset ? offset : i;
-        const u64 end   = i + 0x1000 < offset + size ? i + 0x1000 : offset + size;
+        const u64 end   = i + PAGE_SIZE < offset + size ? i + PAGE_SIZE : offset + size;
         const u64 len   = end - start;
-        memcpy(ptr + (start & 0xfff), reinterpret_cast<const char *>(buffer) + start - offset, len);
+        memcpy(ptr + (start & mask), reinterpret_cast<const char *>(buffer) + start - offset, len);
     }
 
     return true;
@@ -423,16 +426,16 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
 {
     // Lock might be needed here?
     // Also, TODO: magic numbers everywhere
-    u64 object_size_bytes = pages_size * (1 << page_size_log);
+    u64 object_size_bytes = pages_size << page_size_log();
 
-    assert((offset & ((1 << page_size_log) - 1)) == 0);
-    assert(size > 0 && (size & ((1 << page_size_log) - 1)) == 0);
+    assert((offset & ((1 << page_size_log()) - 1)) == 0);
+    assert(size > 0 && (size & ((1 << page_size_log()) - 1)) == 0);
     assert(offset + size <= object_size_bytes);
 
-    const size_t size_pages = size >> page_size_log;
+    const size_t size_pages = size >> page_size_log();
 
     // Make sure all pages are allocated
-    for (size_t i = 0; i < size; i += (1 << page_size_log)) {
+    for (size_t i = 0; i < size; i += (1 << page_size_log())) {
         auto p = atomic_request_page(offset + i, args.writeable);
         if (!p.success())
             return p.propagate();
@@ -442,14 +445,14 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
     }
 
     // TODO: Remove magic number
-    void *mem_virt = vmm::kernel_space_allocator.virtmem_alloc(size >> 12);
+    void *mem_virt = vmm::kernel_space_allocator.virtmem_alloc(size >> page_size_log());
     if (mem_virt == nullptr)
         return Error(-ENOMEM);
 
     size_t i   = 0;
     auto guard = pmos::utility::make_scope_guard([&]() {
         auto ctx = TLBShootdownContext::create_kernel();
-        for (size_t ii = 0; ii < i; ii += (1 << page_size_log)) {
+        for (size_t ii = 0; ii < i; ii += (1 << page_size_log())) {
             void *const virt_addr = (void *)(size_t(mem_virt) + ii);
             unmap_kernel_page(ctx, virt_addr, false);
         }
@@ -458,7 +461,7 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
         vmm::kernel_space_allocator.virtmem_free(mem_virt, size_pages);
     });
 
-    for (i = 0; i < size; i += (1 << page_size_log)) {
+    for (i = 0; i < size; i += (1 << page_size_log())) {
         auto p = atomic_request_page(offset + i, true);
         assert(p.success());
 
@@ -479,7 +482,7 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
     return mem_virt;
 }
 
-u64 Mem_Object::size_bytes() const noexcept { return pages_size << page_size_log; }
+u64 Mem_Object::size_bytes() const noexcept { return pages_size << page_size_log(); }
 
 u64 Mem_Object::atomic_size_bytes() const
 {

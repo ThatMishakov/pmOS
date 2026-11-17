@@ -87,7 +87,7 @@ return {
     ["hyper"] = function()
         return Source {
             name = "hyper",
-            Git("https://github.com/UltraOS/Hyper.git", "707cf65b7aa864f58232012e4c409aeb85d00584"),
+            Git("https://github.com/UltraOS/Hyper.git", "89334e65b66c84d5fc0b62880a5c401d909a005a"),
             dependencies = { "git", "ca-certificates" },
             prepare = [[git submodule update --init --recursive --depth=1]],
         }
@@ -113,7 +113,7 @@ return {
     ["limine"] = function()
         return Source {
             name = "limine",
-            Archive("https://codeberg.org/Limine/Limine/releases/download/v10.8.5/limine-10.8.5.tar.gz", "fb9eb2734258a6afd35f129dac29c04879b96d2930af940f4960be20b3033ece"),
+            Archive("https://github.com/Limine-Bootloader/Limine/releases/download/v12.10.0/limine-12.10.0.tar.gz", "89d043166c34dcf764171f2563a3820e836206f9696bfb01fee540efba4f6c81"),
         }
     end,
     ["lisp"] = function()
@@ -205,7 +205,7 @@ meson subprojects download freestnd-c-hdrs freestnd-cxx-hdrs
     ["rust"] = function()
         return Source {
             name = "rust",
-            Git("https://gitlab.com/mishakov/rust-pmos.git", "47e3153daf7cb3947fb019ade3b3562acc6adce0"),
+            Git("https://gitlab.com/mishakov/rust-pmos.git", "39943d9c17c16e3eff17e7efd340abc899c087a9"),
             dependencies = { "git", "ca-certificates" },
             prepare = [[git submodule update --init --recursive --depth=1]],
         }

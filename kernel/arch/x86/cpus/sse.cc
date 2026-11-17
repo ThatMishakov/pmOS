@@ -34,6 +34,7 @@
 #include <types.hh>
 #include <x86_asm.hh>
 #include <x86_utils.hh>
+#include <processes/tasks.hh>
 
 using namespace kernel::log;
 using namespace kernel::x86::sse;
@@ -207,4 +208,9 @@ void SSE_Data::copy_from(const SSE_Data &other)
 
     memcpy(data.get(), other.data.get(), sse_ctx_size);
     holds_state = true;
+}
+
+kresult_t kernel::proc::TaskDescriptor::init_fp_state()
+{
+    return sse_data.init_on_thread_start();
 }

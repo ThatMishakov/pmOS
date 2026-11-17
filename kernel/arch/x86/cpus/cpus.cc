@@ -632,6 +632,11 @@ u64 arch_phys_addr_limit()
     return (u64)1 << max_memory_bits;
 }
 
+void arch_tlb_finalize(bool)
+{
+    // Nothing to do for x86
+}
+
 }
 
 extern "C" void x86_syscall_handler()

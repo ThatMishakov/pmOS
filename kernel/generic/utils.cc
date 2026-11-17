@@ -175,82 +175,10 @@ void t_print_bochs(const char *str, ...)
 
 void term_write(const klib::string &s) { global_logger.log(s); }
 
-ReturnStr<bool> prepare_user_buff_rd(const char *buff, size_t size)
-{
-    // u64 addr_start = (u64)buff;
-    // u64 end        = addr_start + size;
-
-    // TaskDescriptor *current_task = get_current_task();
-
-    // if (buff > current_task->page_table->user_addr_max() or
-    //     (void *) end > current_task->page_table->user_addr_max() or buff > (void *)end)
-    //     return Error(-EFAULT);
-
-    // current_task->request_repeat_syscall();
-
-    // auto result = [&]() -> ReturnStr<bool> {
-    //     for (u64 i = addr_start; i < end; ++i) {
-    //         u64 page    = i & ~0xfffULL;
-    //         auto result = current_task->page_table->prepare_user_page(
-    //             (void *)page, Page_Table::Protection::Readable);
-    //         if (!result.success())
-    //             return result.propagate();
-
-    //         if (not result.val) {
-    //             current_task->atomic_block_by_page((void *)page);
-    //             return false;
-    //         }
-    //     }
-    //     return true;
-    // }();
-
-    // if (!result.success() || result.val)
-    //     current_task->pop_repeat_syscall();
-
-    // return result;
-
-    panic("Not implemented");
-}
-
-ReturnStr<bool> prepare_user_buff_wr(char *buff, size_t size)
-{
-    // u64 addr_start = (u64)buff;
-    // u64 end        = addr_start + size;
-
-    // TaskDescriptor *current_task = get_current_task();
-    // void *kern_addr_start        = current_task->page_table->user_addr_max();
-
-    // if (buff > kern_addr_start or (void *) end > kern_addr_start or buff > (void *)end)
-    //     return Error(-EFAULT);
-
-    // auto result = [&]() -> ReturnStr<bool> {
-    //     current_task->request_repeat_syscall();
-    //     for (u64 i = addr_start; i < end; ++i) {
-    //         u64 page = i & ~0xfffULL;
-    //         auto t   = current_task->page_table->prepare_user_page((void *)page,
-    //                                                                Page_Table::Protection::Writeable);
-    //         if (!t.success())
-    //             return t.propagate();
-
-    //         if (not t.val) {
-    //             current_task->atomic_block_by_page((void *)page);
-    //             return false;
-    //         }
-    //     }
-    //     return true;
-    // }();
-
-    // if (!result.success() || result.val)
-
-    // return result;
-    panic("Not implemented");
-}
-
 extern "C" void allow_access_user();
 extern "C" void disallow_access_user();
 
-extern "C" ReturnStr<bool> fast_copy_from_user(char *dest, const char *src, size_t size)
-    __attribute__((weak));
+extern "C" ReturnStr<bool> fast_copy_from_user(char *dest, const char *src, size_t size);
 ReturnStr<bool> copy_from_user(char *to, const char *from, size_t size)
 {
     auto current_task = get_current_task();
@@ -259,23 +187,21 @@ ReturnStr<bool> copy_from_user(char *to, const char *from, size_t size)
     if (addr + size > max_addr or addr > (UINTPTR_MAX - size))
         return Error(-EFAULT);
 
-    if (fast_copy_from_user)
-        return fast_copy_from_user(to, from, size);
+    return fast_copy_from_user(to, from, size);
 
-    Auto_Lock_Scope l(current_task->page_table->lock);
+    // Auto_Lock_Scope l(current_task->page_table->lock);
 
-    auto result = prepare_user_buff_rd(from, size);
-    if (result.success() && result.val) {
-        allow_access_user();
-        memcpy(to, from, size);
-        disallow_access_user();
-    }
+    // auto result = prepare_user_buff_rd(from, size);
+    // if (result.success() && result.val) {
+    //     allow_access_user();
+    //     memcpy(to, from, size);
+    //     disallow_access_user();
+    // }
 
-    return result;
+    // return result;
 }
 
-extern "C" ReturnStr<bool> fast_copy_to_user(char *dest, const char *src, size_t size)
-    __attribute__((weak));
+extern "C" ReturnStr<bool> fast_copy_to_user(char *dest, const char *src, size_t size);
 ReturnStr<bool> copy_to_user(const char *from, char *to, size_t size)
 {
     auto current_task = get_current_task();
@@ -284,19 +210,7 @@ ReturnStr<bool> copy_to_user(const char *from, char *to, size_t size)
     if (addr + size > max_addr or addr > (UINTPTR_MAX - size))
         return Error(-EFAULT);
 
-    if (fast_copy_to_user)
-        return fast_copy_to_user(to, from, size);
-
-    Auto_Lock_Scope l(current_task->page_table->lock);
-
-    auto result = prepare_user_buff_wr(to, size);
-    if (result.success() && result.val) {
-        allow_access_user();
-        memcpy(to, from, size);
-        disallow_access_user();
-    }
-
-    return result;
+    return fast_copy_to_user(to, from, size);
 }
 
 extern "C" void print_stack_trace();
@@ -491,13 +405,13 @@ extern "C" void *memset(void *str, int c, size_t n)
     return str;
 }
 
-void clear_page(u64 phys_addr, u64 pattern)
+void clear_page(u64 phys_addr)
 {
     Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
     mapper.map(phys_addr);
 
-    for (size_t i = 0; i < 4096 / sizeof(u64); ++i)
-        mapper.ptr[i] = pattern;
+    for (size_t i = 0; i < PAGE_SIZE / sizeof(u64); ++i)
+        mapper.ptr[i] = 0;
 }
 
 extern "C" int fflush(FILE *) { return 0; }
@@ -537,10 +451,12 @@ extern "C" int strcmp(const char *str1, const char *str2)
 void copy_from_phys(u64 phys_addr, void *to, size_t size)
 {
     Temp_Mapper_Obj<void> mapper(request_temp_mapper());
-    for (u64 i = phys_addr & ~0xfffULL; i < phys_addr + size; i += 0x1000) {
+    const phys_addr_t page_size = PAGE_SIZE;
+    const phys_addr_t page_mask = page_size - 1;
+    for (u64 i = phys_addr & ~page_mask; i < phys_addr + size; i += page_size) {
         mapper.map(i);
         const u64 start = i < phys_addr ? phys_addr : i;
-        const u64 end   = i + 0x1000 < phys_addr + size ? i + 0x1000 : phys_addr + size;
+        const u64 end   = i + page_size < phys_addr + size ? i + page_size : phys_addr + size;
         memcpy((char *)to + (start - phys_addr), (char *)mapper.ptr + (start - i), end - start);
     }
 }
@@ -548,12 +464,14 @@ void copy_from_phys(u64 phys_addr, void *to, size_t size)
 size_t strlen_over_phys(u64 phys_addr)
 {
     Temp_Mapper_Obj<char> mapper(request_temp_mapper());
+    const phys_addr_t page_size = PAGE_SIZE;
+    const phys_addr_t page_mask = page_size - 1;
 
     size_t len = 0;
-    for (u64 i = phys_addr & ~0xfffULL;; i += 0x1000) {
+    for (u64 i = phys_addr & ~page_mask;; i += page_size) {
         mapper.map(i);
         const u64 start = i < phys_addr ? phys_addr : i;
-        const u64 end   = i + 0x1000;
+        const u64 end   = i + page_size;
         for (u64 j = start; j < end; ++j) {
             if (mapper.ptr[j - i] == '\0')
                 return len;
@@ -662,7 +580,7 @@ __attribute__((noreturn)) void __stack_chk_fail(void)
 }
 
 extern "C" ReturnStr<bool> user_access_page_fault(unsigned access, const char *faulting_addr,
-                                                  char **dst, char **src, size_t &size)
+                                                  char **dst, char **src, size_t *size)
 {
     TaskDescriptor *current_task = get_current_task();
 
@@ -727,6 +645,10 @@ ReturnStr<bool> atomic_read_from_user(u32 *to, const u32 *from)
     uintptr_t addr    = (uintptr_t)from;
     constexpr size_t size = sizeof(*from);
     if (addr + size > max_addr or addr > (UINTPTR_MAX - size))
+        return Error(-EFAULT);
+
+    assert(!(uintptr_t(to) & 0x3));
+    if ((uintptr_t(from) & 0x3))
         return Error(-EFAULT);
 
     return fast_atomic_read_from_user(to, from);

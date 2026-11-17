@@ -236,38 +236,19 @@ void page_fault(u32 error)
     auto task       = get_cpu_struct()->current_task;
     auto page_table = task->page_table;
 
-    auto result = [&]() -> kresult_t {
-        Auto_Lock_Scope lock(page_table->lock);
-
-        auto &regions = page_table->paging_regions;
-        auto it       = regions.get_smaller_or_equal(virt_addr);
-        if (it != regions.end() and it->is_in_range(virt_addr)) {
-            auto r = it->on_page_fault(access_type, virt_addr);
-            if (!r.success())
-                return r.result;
-
-            if (not r.val) {
-                task->cancel_callback = proc::TaskDescriptor::cancel_noop;
-                task->atomic_block_by_page(virt_addr);
-            }
-
-            return 0;
-        } else
-            return -EFAULT;
-    }();
-
-    if (result) {
+    auto result = page_table->atomic_page_fault(virt_addr, access_type);
+    if (!result) {
         static Spinlock print_lock;
         Auto_Lock_Scope lock(print_lock);
 
         serial_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error "
                              "%h -> %i killing process...\n",
                              virt_addr, task->task_id, task->name.c_str(), task->regs.pc, badv,
-                             result);
+                             result.result);
         global_logger.printf("Warning: Pagefault %h pid %i (%s) pc %h error %h "
                              "-> %i killing process...\n",
                              virt_addr, task->task_id, task->name.c_str(), task->regs.pc, badv,
-                             result);
+                             result.result);
         print_registers(&task->regs, global_logger);
         print_registers(&task->regs, serial_logger);
         task->atomic_kill(SIGSEGV + 128);

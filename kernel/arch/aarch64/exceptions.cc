@@ -1,0 +1,212 @@
+#include <types.hh>
+#include <utils.hh>
+#include <arm_asm.hh>
+#include <kern_logger/kern_logger.hh>
+#include <registers.hh>
+#include <signal.h>
+#include <memory/paging.hh>
+#include <sched/sched.hh>
+#include <processes/tasks.hh>
+#include <processes/syscalls.hh>
+
+
+using namespace kernel;
+
+DEFINE_SYSREG(esr_el1)
+DEFINE_SYSREG(far_el1)
+DEFINE_SYSREG(elr_el1)
+DEFINE_SYSREG(spsr_el1)
+
+namespace {
+
+void print_registers(Task_Regs *regs, log::Logger &logger)
+{
+    logger.printf("Registers:\n");
+    for (int i = 0; i < 28/4; ++i) {
+        logger.printf("x%d: 0x%lx x%d: 0x%lx x%d: 0x%lx x%d: 0x%lx\n", i * 4 + 0, regs->x[i * 4 + 0],
+                      i * 4 + 1, regs->x[i * 4 + 1], i * 4 + 2, regs->x[i * 4 + 2], i * 4 + 3,
+                      regs->x[i * 4 + 3]);
+    }
+    logger.printf("x28: 0x%lx x29: 0x%lx x30: 0x%lx ", regs->x[28], regs->x[29], regs->x[30]);
+
+    logger.printf("pc: 0x%lx\n", regs->pc);
+    logger.printf("sp: 0x%lx ", regs->sp);
+    logger.printf("spsr_el1: 0x%lx ", regs->spsr_el1);
+    logger.printf("tpidr_el0: 0x%lx ", regs->tpidr_el0);
+    logger.printf("tpidrro_el0: 0x%lx\n", regs->tpidrro_el0);
+}
+
+constexpr u32 SVC_EC = 0x15;
+constexpr u32 USER_INSTRUCTION_ABORT_EC = 0x20;
+constexpr u32 USER_DATA_ABORT_EC = 0x24;
+constexpr u32 KERNEL_DATA_ABORT_EC = 0x25;
+constexpr u32 SP_ALIGNMENT_FAULT_EC = 0x26;
+
+u32 ec_from_esr(u64 esr)
+{
+    return (esr >> 26) & 0x3f;
+}
+
+static bool is_userspace_fault(u32 dfsc)
+{
+    switch (dfsc) {
+    case 0x04 ... 0x07:
+        // Translation fault
+    case 0x08 ... 0x0b:
+        // Access flag fault
+    case 0x0c ... 0x0f:
+        // Permission fault
+    case 0x2b:
+        // Level -1 fault (lol)
+        return true;
+    default:
+        return false;
+    }
+}
+
+void handle_user_abort(u64 esr)
+{
+    ulong fault_addr = mrs<far_el1>();
+
+    unsigned access_type = 0;
+
+    u32 ec = ec_from_esr(esr);
+    if (ec == USER_INSTRUCTION_ABORT_EC) {
+        access_type = paging::Generic_Mem_Region::Executable;
+    } else {
+        assert(ec == USER_DATA_ABORT_EC);
+        bool write = esr & (1 << 6);
+        if (write)
+            access_type = paging::Generic_Mem_Region::Writeable;
+        else
+            access_type = paging::Generic_Mem_Region::Readable;
+    }
+
+    ReturnStr<bool> result = true;
+    u32 dfsc = esr & 0x3f;
+    if (!is_userspace_fault(dfsc))
+        panic("Unhandled user abort, ESR_EL1 0x%lx dfsc 0x%x", esr, dfsc);
+
+    auto task       = sched::get_cpu_struct()->current_task;
+    auto page_table = task->page_table;
+    ulong PAGE_MASK = PAGE_SIZE - 1;
+    void *virt_addr = (void *)(fault_addr & ~PAGE_MASK);
+
+    if (result)
+        result = page_table->atomic_page_fault(virt_addr, access_type);
+    
+    if (!result) {
+        static Spinlock print_lock;
+        Auto_Lock_Scope lock(print_lock);
+
+        log::serial_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error "
+                             "%h -> %i killing process...\n",
+                             virt_addr, task->task_id, task->name.c_str(), task->regs.pc, fault_addr,
+                             result.result);
+        log::global_logger.printf("Warning: Pagefault %h pid %i (%s) pc %h error %h "
+                             "-> %i killing process...\n",
+                             virt_addr, task->task_id, task->name.c_str(), task->regs.pc, fault_addr,
+                             result.result);
+        print_registers(&task->regs, log::global_logger);
+        print_registers(&task->regs, log::serial_logger);
+        task->exception(SIGSEGV);
+    }
+}
+
+}
+
+extern "C" void handle_user_sync()
+{
+    u64 esr = mrs<esr_el1>();
+
+    // log::serial_logger.printf("Synchronous user int esr_el1 %lx...\n", esr);
+
+    u32 ec = ec_from_esr(esr);
+    switch (ec) {
+    case USER_DATA_ABORT_EC:
+    case USER_INSTRUCTION_ABORT_EC:
+        handle_user_abort(esr);
+        break;
+    case SP_ALIGNMENT_FAULT_EC:
+        log::serial_logger.printf("Warning: SP alignment fault...\n");
+        print_registers(&sched::get_cpu_struct()->current_task->regs, log::serial_logger);
+        sched::get_cpu_struct()->current_task->exception(SIGBUS);    
+        break;
+    case SVC_EC:
+        proc::syscalls::syscall_handler();
+        break;
+
+    default:
+        panic("Unhandled synchronous user exception class 0x%x, ESR_EL1 0x%lx", ec, esr);
+        break;
+    }
+
+    sched::handle_scheduling();
+}
+
+extern "C" void handle_user_serror()
+{
+    panic("Unhandled handle_user_serror");
+}
+
+struct KernelRegisters {
+    u64 x[31];
+    u64 sp; // discarded on return
+};
+
+void print_kernel_registers(KernelRegisters *regs)
+{
+    for (int i = 0; i < 28/4; ++i) {
+        log::serial_logger.printf("x%d: 0x%lx x%d: 0x%lx x%d: 0x%lx x%d: 0x%lx\n", i * 4 + 0, regs->x[i * 4 + 0],
+                      i * 4 + 1, regs->x[i * 4 + 1], i * 4 + 2, regs->x[i * 4 + 2], i * 4 + 3,
+                      regs->x[i * 4 + 3]);
+    }
+    log::serial_logger.printf("x28: 0x%lx x29: 0x%lx x30: 0x%lx ", regs->x[28], regs->x[29], regs->x[30]);
+    u64 elr = mrs<elr_el1>();
+    u64 spsr = mrs<spsr_el1>();
+    u64 esr = mrs<esr_el1>();
+    log::serial_logger.printf("sp: 0x%lx\n", regs->sp);
+    log::serial_logger.printf("elr_el1: 0x%lx spsr_el1: 0x%lx esr_el1: 0x%lx ", elr, spsr, esr);
+    log::serial_logger.printf("far_el1: 0x%lx\n", mrs<far_el1>());
+}
+
+extern "C" void unexpected_exception(KernelRegisters *regs)
+{
+    log::serial_logger.printf("Unexpected kernel exception!\n");
+    print_kernel_registers(regs);
+    panic("Unexpected exception!\n");
+}
+
+extern "C" void handle_kernel_sync(KernelRegisters *regs)
+{
+    u64 esr = mrs<esr_el1>();
+    u32 ec = ec_from_esr(esr);
+    
+    switch (ec) {
+    case KERNEL_DATA_ABORT_EC: {
+        u32 dfsc = esr & 0x3f;    
+        if (!is_userspace_fault(dfsc)) {
+            log::serial_logger.printf("Kernel data abort, ESR_EL1 0x%lx dfsc 0x%x\n", esr, dfsc);
+            unexpected_exception(regs);
+        }
+
+        auto c = sched::get_cpu_struct();
+        if (c && c->jumpto_func) {
+            msr<elr_el1>((ulong)c->jumpto_func);
+            regs->x[0] = c->jumpto_arg;
+            regs->x[1] = mrs<far_el1>();
+
+            return;
+        }
+
+        log::serial_logger.printf("Kernel data abort, ESR_EL1 0x%lx dfsc 0x%x\n", esr, dfsc);
+        print_kernel_registers(regs);
+        panic("Kernel data abort, ESR_EL1 0x%lx dfsc 0x%x\n", esr, dfsc);
+    }
+        break;
+    default:
+        log::serial_logger.printf("Unexpected kernel synchronous exception class 0x%x, ESR_EL1 0x%lx\n", ec, esr);
+        unexpected_exception(regs);
+        break;
+    }
+}

@@ -42,7 +42,7 @@ extern "C" void *mmap(void *, size_t length, int, int, int, long)
 {
     // This function is (only) called by malloc
     // Only len is interesting
-    void *p = palloc(length / 4096 + (length % 4096 ? 1 : 0));
+    void *p = palloc(length / PAGE_SIZE + (length % PAGE_SIZE ? 1 : 0));
     return p;
 }
 

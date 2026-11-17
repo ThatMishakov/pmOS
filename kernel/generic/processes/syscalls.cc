@@ -557,7 +557,8 @@ void syscall_load_executable(TaskDescriptor *task)
                            .header = LOAD_TAG_CLOSE_HEADER,
         };
 
-        const u64 tag_size_page = (size + 0xFFF) & ~0xFFFUL;
+        const u64 page_mask = PAGE_SIZE - 1;
+        const u64 tag_size_page = (size + page_mask) & ~page_mask;
 
         auto pos_p = table->atomic_create_normal_region(
             0, tag_size_page,
@@ -1673,10 +1674,8 @@ void syscall_create_mem_object(TaskDescriptor *current_task)
         return;
     }
 
-    const auto page_size_log = 12; // 2^12 = 4096 bytes
-    const auto size_pages    = size_bytes / 4096;
-
-    const auto ptr = Mem_Object::create(page_size_log, size_pages, flags);
+    const auto size_pages    = size_bytes / PAGE_SIZE;
+    const auto ptr = Mem_Object::create(size_pages, flags);
     if (!ptr) {
         syscall_error(current_task) = -ENOMEM;
         return;

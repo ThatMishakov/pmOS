@@ -172,7 +172,7 @@ read_on_failure:
     # faulting addr is already in a1
     xor a2, a2, a2 # void *dst = nullptr
     xor a3, a3, a3 # const void *src = nullptr
-    li a4, 4 # size_t size = 4
+    xor a4, a4, a4 # size_t *size = nullptr
 
     call user_access_page_fault
 

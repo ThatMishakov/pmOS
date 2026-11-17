@@ -50,10 +50,6 @@ namespace kernel::paging
 extern klib::shared_ptr<kernel::paging::Arch_Page_Table> idle_page_table;
 }
 
-#ifdef __x86_64__
-extern bool use_fred;
-#endif
-
 namespace kernel::proc
 {
 
@@ -67,49 +63,14 @@ TaskDescriptor *TaskDescriptor::create(Process *parent, TaskDescriptor::Privileg
     if (!n)
         return nullptr;
 
-#ifdef __x86_64__
-    // Assign cs and ss
-    switch (level) {
-    case PrivilegeLevel::Kernel:
-        if (use_fred) {
-            n->regs.cs         = R0_CODE_SEGMENT;
-            n->regs.entry_type = 1;
-        } else {
-            n->regs.cs = KERNEL_THREAD_CODE_SEGMENT;
-        }
-        n->regs.ss = R0_DATA_SEGMENT;
-        break;
-    case PrivilegeLevel::User:
-        n->regs.cs = R3_CODE_SEGMENT;
-        n->regs.ss = R3_DATA_SEGMENT;
-        break;
-    }
+    n->arch_set_system(level);
 
-    auto result = n->sse_data.init_on_thread_start();
-    if (result != 0)
-        return nullptr;
-#elif defined(__i386__)
-    // Assign cs and ss
-    switch (level) {
-    case PrivilegeLevel::Kernel:
-        n->regs.cs         = KERNEL_THREAD_CODE_SEGMENT;
-        n->regs.entry_type = 4;
-        break;
-    case PrivilegeLevel::User:
-        n->regs.cs = R3_CODE_SEGMENT;
-        break;
-    }
-
-    auto result = n->sse_data.init_on_thread_start();
-    if (result != 0)
-        return nullptr;
-
-#elif defined(__riscv) || defined(__loongarch__)
-    n->is_system = level == PrivilegeLevel::Kernel;
-    auto result  = n->init_fp_state();
+    kresult_t result = 0;
+    if (level == PrivilegeLevel::User)
+        result = n->init_fp_state();
+    
     if (result)
         return nullptr;
-#endif
 
     // Assign a pid
     n->task_id = get_new_task_id();
@@ -380,6 +341,8 @@ kresult_t
 #define ELF_INSTR_SET EM_LOONGARCH
 #elif defined(__m68k__)
 #define ELF_INSTR_SET EM_68K
+#elif defined(__aarch64__)
+#define ELF_INSTR_SET EM_AARCH64
 #else
 #error "Unsupported architecture"
 #endif
@@ -705,7 +668,7 @@ ReturnStr<bool>
     if (!auxvals.push_back({AT_PHNUM, (int64_t) phdr_tag.phdr_num}))
         return Error(-ENOMEM);
 
-    if (!auxvals.push_back({AT_PAGESZ, (int64_t) 4096})) // TODO...
+    if (!auxvals.push_back({AT_PAGESZ, (int64_t) PAGE_SIZE}))
         return Error(-ENOMEM);
 
     if (!auxvals.push_back({AT_ENTRY, (uint64_t) program_entry}))
@@ -782,7 +745,8 @@ ReturnStr<bool>
                        .header = LOAD_TAG_CLOSE_HEADER,
     };
 
-    const u64 tag_size_page = (size + 0xFFF) & ~0xFFFUL;
+    const u64 page_mask = PAGE_SIZE - 1;
+    const u64 tag_size_page = (size + page_mask) & ~page_mask;
 
     auto pos_p = table->atomic_create_normal_region(0, tag_size_page,
                                                     paging::Page_Table::Protection::Readable |
@@ -1233,6 +1197,11 @@ ReturnStr<ipc::Port *> TaskDescriptor::get_port(u64 port_id)
 
     port_hint = &*it;
     return port_hint;
+}
+
+void TaskDescriptor::exception(unsigned signal)
+{
+    return atomic_kill(128 + signal);
 }
 
 } // namespace kernel::proc

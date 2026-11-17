@@ -6,7 +6,6 @@
 #include <memory/mem_object.hh>
 #include <processes/task_group.hh>
 #include <memory/pmm.hh>
-#include <memory/paging.hh>
 
 
 constexpr phys_addr_t RSDP_INITIALIZER = -1ULL;

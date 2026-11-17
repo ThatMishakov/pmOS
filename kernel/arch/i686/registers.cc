@@ -103,3 +103,17 @@ void syscall_ret_high(TaskDescriptor *task, u64 value) { ::syscall_ret_high(task
 i64 syscall_ret_low(TaskDescriptor *task) { return (i64(task->regs.ebx) << 32) | task->regs.eax; }
 
 } // namespace kernel::syscalls
+
+void TaskDescriptor::arch_set_system(PrivilegeLevel level)
+{
+    switch (level) {
+    case PrivilegeLevel::Kernel:
+        regs.cs         = KERNEL_THREAD_CODE_SEGMENT;
+        regs.entry_type = 4;
+        break;
+    case PrivilegeLevel::User:
+        regs.cs = R3_CODE_SEGMENT;
+        break;
+    }
+}
+

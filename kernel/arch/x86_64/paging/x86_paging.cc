@@ -903,8 +903,8 @@ kresult_t x86_Page_Table::get_io_permissions()
     if (pmm::alloc_failure(p))
         return -ENOMEM;
 
-    clear_page(p, 0);
-    clear_page(p + PAGE_SIZE, 0);
+    clear_page(p);
+    clear_page(p + PAGE_SIZE);
 
     bitmap_pages_phys = p;
 

@@ -7,6 +7,11 @@ bool TaskDescriptor::is_32bit() const {
     return false;
 }
 
+void TaskDescriptor::arch_set_system(PrivilegeLevel level)
+{
+    is_system = level == PrivilegeLevel::Kernel;
+}
+
 kresult_t TaskDescriptor::set_32bit()
 {
     // NOOP

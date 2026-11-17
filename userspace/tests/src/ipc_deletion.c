@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 
 void test_delete_ipc_send_once()
 {
@@ -67,6 +68,27 @@ void test_delete_ipc_send_many()
     pmos_delete_port(port);
 }
 
+void test_kernel_fault()
+{
+    printf("Testing kernel fault on get_message with invalid pointers...\n");
+
+    ports_request_t port_req = create_port(TASK_ID_SELF, 0);
+    assert(port_req.result == SUCCESS);
+
+    pmos_port_t port = port_req.port;
+    pmos_right_t receive_right;
+    right_request_t right_req = create_right(port, &receive_right, 0);
+    assert(right_req.result == SUCCESS);
+
+    result_t delete_result = delete_right(right_req.right);
+    assert(delete_result == SUCCESS);
+
+    result_t get_result = get_message(NULL, NULL, port_req.port, NULL, NULL);
+    assert(get_result == -EFAULT);
+
+    // delete_port(port_req.port);
+}
+
 void test_watch_right()
 {
     printf("Testing watch right...\n");
@@ -124,4 +146,5 @@ void test_delete_ipc()
     test_delete_ipc_send_once();
     test_delete_ipc_send_many();
     test_watch_right();
+    test_kernel_fault();
 }

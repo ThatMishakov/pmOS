@@ -27,7 +27,7 @@
  */
 
 // Nice code!
-#if defined(__x86_64__) || defined(__riscv) || defined(__loongarch64) || defined(__m68k__)
+#if defined(__x86_64__) || defined(__riscv) || defined(__loongarch64) || defined(__m68k__) || defined(__aarch64__)
 
 
 #include "limine.h"
@@ -62,9 +62,7 @@ using namespace kernel::proc;
 extern "C" void limine_main();
 extern "C" void _limine_entry();
 
-u64 kernel_phys_base = 0;
-
-static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(5);
+static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(6);
 
 __attribute__((used)) limine_bootloader_info_request boot_request = {
         .id       = LIMINE_BOOTLOADER_INFO_REQUEST_ID,
@@ -103,8 +101,13 @@ __attribute__((used)) limine_paging_mode_request paging_request = {
     .response = nullptr,
     #ifdef __riscv
     .mode = LIMINE_PAGING_MODE_RISCV_SV57,
+    .max_mode = LIMINE_PAGING_MODE_RISCV_SV57,
     #elif defined(__x86_64__)
     .mode = LIMINE_PAGING_MODE_X86_64_5LVL,
+    .max_mode = LIMINE_PAGING_MODE_X86_64_5LVL,
+    #elif defined(__aarch64__)
+    .mode = LIMINE_PAGING_MODE_AARCH64_5LVL,
+    .max_mode = LIMINE_PAGING_MODE_AARCH64_5LVL,
     #else
     .mode = 0,
     #endif
@@ -154,6 +157,8 @@ namespace kernel::riscv64::paging
 {
 extern ulong idle_pt;
 }
+    #elif defined(__aarch64__)
+extern u64 kernel_page_table;
     #endif
 
 extern phys_addr_t temp_alloc_base;
@@ -189,6 +194,10 @@ static void init_fb()
                        fb.blue_mask_size, fb.blue_mask_shift, fb.memory_model);
     }
 }
+
+#ifdef __aarch64__
+void init_paging(unsigned va_bits);
+#endif
 
 void construct_paging()
 {
@@ -234,6 +243,14 @@ void construct_paging()
         kernel::x86_64::paging::use_5lvl_paging = true;
         serial_logger.printf("Using 5-level paging\n");
     }
+    #elif defined(__aarch64__)
+    unsigned va_bits = 48;
+    auto rr = paging_request.response;
+    if (rr->mode == LIMINE_PAGING_MODE_AARCH64_5LVL) {
+        va_bits = 52;
+    }
+
+    init_paging(va_bits);
     #endif
 
     // While we're here, initialize virtmem
@@ -241,6 +258,8 @@ void construct_paging()
     const u64 heap_space_shift = 12 + (kernel::riscv64::paging::riscv64_paging_levels - 1) * 9;
     #elif defined(__x86_64__)
     const u64 heap_space_shift = 12 + (kernel::x86_64::paging::use_5lvl_paging ? 4 : 3) * 9;
+    #elif defined(__aarch64__)
+    const u64 heap_space_shift = va_bits - 9;
     #else
     const u64 heap_space_shift = 12 + 27;
     #endif
@@ -273,10 +292,14 @@ void construct_paging()
 
     kernel_ptable_top = pmm::get_memory_for_kernel(1);
     clear_page(kernel_ptable_top);
+
+    // TODO: This is a mess
     #ifdef __x86_64__
     idle_cr3 = kernel_ptable_top;
     #elif defined(__riscv)
     riscv64::paging::idle_pt = kernel_ptable_top;
+    #elif defined(__aarch64__)
+    kernel_page_table = kernel_ptable_top;
     #endif
 
     #ifdef USE_SOFTWARE_DIRECT_MAP
@@ -424,6 +447,7 @@ void init_modules()
     if (!::modules.reserve(r.module_count))
         panic("Failed to reserve memory for modules");
 
+    const u64 page_mask = PAGE_SIZE - 1;
     for (auto &mm: modules) {
         limine_file f;
         copy_from_phys((u64)mm - hhdm_offset, &f, sizeof(f));
@@ -433,7 +457,7 @@ void init_modules()
             .phys_addr = (u64)f.address - hhdm_offset,
             .size      = f.size,
             .object    = Mem_Object::create_from_phys((u64)f.address - hhdm_offset,
-                                                      (f.size + 0xfff) & ~0xfffUL, true),
+                                                      (f.size + page_mask) & ~page_mask, true),
         };
 
         serial_logger.printf("Module: %s, cmdline: %s\n", m.path.c_str(), m.cmdline.c_str());
@@ -681,7 +705,7 @@ void limine_main()
     init_dtb();
 
     // Init idle task page table
-    #if !defined(__loongarch__) && !defined(__m68k__)
+    #if !defined(__loongarch__) && !defined(__m68k__) && !defined(__aarch64__)
     idle_page_table = Arch_Page_Table::capture_initial(kernel_ptable_top);
     #else
     idle_page_table = Arch_Page_Table::create_empty();
@@ -689,7 +713,7 @@ void limine_main()
     if (!idle_page_table)
         panic("Could not create idle page table");
 
-    #ifdef __x86_64__
+    #if defined(__x86_64__) || defined(__aarch64__)
     init_scheduling_on_bsp();
     #else
     init_scheduling(bsp_cpu_id);

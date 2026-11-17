@@ -545,4 +545,13 @@ void flush_tlb_kernel()
     flush_tlb();
 }
 
+void arch_tlb_finalize(bool)
+{
+}
+
+bool arch_tlb_dont_ipi()
+{
+    return false;
+}
+
 }
