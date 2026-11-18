@@ -835,6 +835,134 @@ end:
         delete_right(reply_right);
 }
 
+static void get_acpi_device_type(pmos_right_t *reply_right)
+{
+    IPC_Get_Device_Type_Reply reply = {
+        .type   = IPC_Get_Device_Type_Reply_NUM,
+        .device_type = IPC_DEVICE_TYPE_ACPI,
+    };
+
+    int result = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT).result;
+    if (result != 0) {
+        fprintf(stderr, "Failed to send device type reply message: %i (%s)\n", result, strerror(-result));
+    } else {
+        *reply_right = 0;
+    }
+}
+
+struct Resource {
+    bool found;
+    unsigned index;
+    unsigned count;
+    uint64_t start;
+    uint64_t length;
+    unsigned type;
+    unsigned wanted;
+};
+
+static uacpi_iteration_decision find_request_resources(void *ctx, uacpi_resource *res)
+{
+    struct Resource *c = ctx;
+    
+    unsigned wanted_index = c->index - c->count;
+
+    switch (res->type) {
+    case UACPI_RESOURCE_TYPE_FIXED_IO: {
+        if (!(c->wanted & IPC_DEVICE_RESOURCE_IO_PORT))
+            break;
+
+        if (wanted_index > 0) {
+            c->count++;
+            break;
+        }
+
+        c->found = true;
+        c->start = res->fixed_io.address;
+        c->length = res->fixed_io.length;
+        c->type = IPC_DEVICE_RESOURCE_IO_PORT;
+    } break;
+    // case UACPI_RESOURCE_TYPE_IO: {
+    //     if (!(wanted & IPC_RESOURCE_TYPE_IO))
+    //         break;
+
+    //     if (wanted_index > 0) {
+    //         c->count++;
+    //         break;
+    //     }
+
+    //     c->found = true;
+    //     c->start = res->io.minimum;
+    //     c->length = res->io.maximum - res->io.minimum + 1;
+
+    // } break;
+    case UACPI_RESOURCE_TYPE_FIXED_MEMORY32: {
+        if (!(c->wanted & IPC_DEVICE_RESOURCE_MMIO))
+            break;
+
+        if (wanted_index > 0) {
+            c->count++;
+            break;
+        }
+
+        c->found = true;
+        c->start = res->fixed_memory32.address;
+        c->length = res->fixed_memory32.length;
+        c->type = IPC_DEVICE_RESOURCE_MMIO;
+    } break;
+    // TODO...
+
+    default:
+        break;
+    }
+
+    return UACPI_ITERATION_DECISION_CONTINUE;
+}
+
+static void get_acpi_resources(struct ACPIDevice *device, void *msg_buff, size_t msg_size, pmos_right_t *reply_right)
+{
+    IPC_Request_Resource *request = (IPC_Request_Resource *)msg_buff;
+    if (msg_size < sizeof(*request)) {
+        fprintf(stderr, "Received IPC_Request_Resource which is too small for ACPI device %s\n", device->path);
+        return;
+    }
+
+    struct Resource ctx = {
+        .found = false,
+        .index = request->resource_index,
+        .count = 0,
+        .start = 0,
+        .length = 0,
+        .type = 0,
+        .wanted = request->resource_type,
+    };
+
+    uacpi_status status = uacpi_for_each_device_resource(device->device_node, "_CRS", find_request_resources, &ctx);
+    if (uacpi_unlikely_error(status)) {
+        fprintf(stderr, "Failed to get resources for device %s: %s\n", device->path, uacpi_status_to_string(status));
+        IPC_Request_Resource_Reply reply = {
+            .type   = IPC_Request_Resource_Reply_NUM,
+            .result = uacpi_status_to_errno(status),
+        };
+        send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+        *reply_right = 0;
+    }
+
+    IPC_Request_Resource_Reply reply = {
+        .type   = IPC_Request_Resource_Reply_NUM,
+        .result = ctx.found ? 0 : -ENOENT,
+        .resource_type = ctx.type,
+        .resource_start  = ctx.start,
+        .resource_length = ctx.length,
+    };
+
+    int result = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT).result;
+    if (result != 0) {
+        fprintf(stderr, "Failed to send resource reply message: %i (%s)\n", result, strerror(-result));
+    } else {
+        *reply_right = 0;
+    }
+}
+
 static int acpi_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *reply_right,
                      pmos_right_t *other_rights, void *ctx, struct pmos_msgloop_data *)
 {
@@ -846,18 +974,37 @@ static int acpi_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t 
 
     IPC_Generic_Msg *msg = (IPC_Generic_Msg *)msg_buff;
     switch (msg->type) {
-    case IPC_Request_ACPI_Interrupt_NUM: {
-        if (desc->size < sizeof(IPC_Request_ACPI_Interrupt)) {
-            fprintf(stderr, "Received IPC_Request_ACPI_Interrupt which is too small for ACPI device %s\n",
+    case IPC_Request_Interrupt_NUM: {
+        if (desc->size < sizeof(IPC_Request_Interrupt)) {
+            fprintf(stderr, "Received IPC_Request_Interrupt which is too small for ACPI device %s\n",
                     device->path);
             break;
         }
 
-        uint16_t index = ((IPC_Request_ACPI_Interrupt *)msg)->index;
+        uint16_t index = ((IPC_Request_Interrupt *)msg)->index;
         get_acpi_interrupt(device, index, *reply_right);
         *reply_right = 0;
     }
         break;
+    case IPC_Get_Device_Type_NUM: {
+        if (desc->size < sizeof(IPC_Get_Device_Type)) {
+            fprintf(stderr, "Received IPC_Get_Device_Type which is too small for ACPI device %s\n",
+                    device->path);
+            break;
+        }
+        // TODO: There is no reason for the ACPI code to be different from PCI and so on...
+        get_acpi_device_type(reply_right);
+    }
+        break;
+    case IPC_Request_Resource_NUM: {
+        if (desc->size < sizeof(IPC_Request_Resource)) {
+            fprintf(stderr, "Received IPC_Request_Resource which is too small for ACPI device %s\n",
+                    device->path);
+            break;
+        }
+
+        get_acpi_resources(device, msg_buff, desc->size, reply_right);
+    }
     default:
         fprintf(stderr, "Received message with unknown type %i for ACPI device %s\n", msg->type,
                 device->path);

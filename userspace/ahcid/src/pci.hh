@@ -3,7 +3,9 @@
 #include <pmos/async/coroutines.hh>
 #include <expected>
 #include <memory>
+#include <variant>
 #include <pmos/helpers.hh>
+#include <string>
 
 struct PCIDevice
 {
@@ -41,6 +43,34 @@ struct PCIDevice
     uint8_t function() const;
 
     PCIDevice() = default;
+
+    enum class ResourceType {
+        Memory,
+        IO,
+        Unknown,
+        Any = Unknown,
+    };
+
+    struct PCIBar {};
+    struct GenericResource {};
+
+    using RequestType = std::variant<PCIBar, GenericResource>;
+
+    struct Resource {
+        ResourceType type;
+        uint64_t base;
+        uint64_t size;  
+    };
+
+    pmos::async::task<Resource> get_resource(RequestType request_type, uint32_t index, std::string_view name = {}, ResourceType type = ResourceType::Any);
+
+    enum class DeviceType {
+        Unknown,
+        PCI,
+        ACPI,
+    };
+
+    pmos::async::task<DeviceType> get_device_type();
 };
 
 pmos::async::task<std::unique_ptr<PCIDevice>> get_pci_device();

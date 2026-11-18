@@ -79,6 +79,18 @@ struct PCILegacyDescriptor {
 
 struct PCIHostBridge *pci_host_bridge_find(unsigned group_number);
 
+enum PCIBarType {
+    PCI_BAR_NONE = 0,
+    PCI_BAR_IO,
+    PCI_BAR_MEMORY,
+};
+struct PCIBarInfo {
+    enum PCIBarType type;
+    bool is_64bit;
+    uint64_t bar_size;
+    uint64_t address;
+};
+
 struct PCIDevice {
     uint16_t group;
     uint8_t bus;
@@ -104,6 +116,9 @@ struct PCIDevice {
 
     // For PCI bridges
     uint8_t secondary_bus;
+
+    // If the BAR is 64 bits, the next BAR is reported as none
+    struct PCIBarInfo bars[6];
 };
 
 struct LegacyAddr {
@@ -209,3 +224,14 @@ static inline int pcie_capability_pointer(struct PCIDevicePtr *s)
     // TODO: PCI-to-CardBus Bridge ???
     return pci_read_register(s, 0x34/4) & 0xfc;
 }
+
+#define PCI_IO_BAR      0x1
+
+#define PCI_IO_BAR_MASK 0xfffffffc
+#define PCI_MEM_BAR_MASK 0xfffffff0
+
+#define PCI_MEM_BAR_TYPE_MASK 0x6
+#define PCI_MEM_BAR_TYPE_32 0x0
+#define PCI_MEM_BAR_TYPE_1M 0x2
+#define PCI_MEM_BAR_TYPE_64 0x4
+#define PCI_MEM_BAR_PREFETCHABLE 0x8

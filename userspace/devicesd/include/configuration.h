@@ -38,7 +38,7 @@
 uint8_t get_ioapic_int(uint32_t intno, uint64_t dest_pid, uint64_t chan);
 
 void request_interrupts_for(Message_Descriptor *msg, IPC_Request_Int *desc, pmos_right_t reply_right);
-void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc, pmos_right_t reply_right);
+void register_pci_interrupt(Message_Descriptor *msg, IPC_Request_Interrupt *desc, pmos_right_t reply_right);
 
 struct interrupt_descriptor {
     uint32_t intno;

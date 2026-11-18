@@ -35,11 +35,18 @@ struct PCIFilter {
     char *prog_if;
 };
 
+struct ClassFilter {
+    u8 class;
+    u8 subclass;
+    u8 prog_if;
+};
+
 struct MatchFilter {
     char *key;
     union {
         char **strings; // Get converted to ints if necessary
         struct PCIFilter pci_filter;
+        struct ClassFilter class_filter;
     };
 
     bool require_all;

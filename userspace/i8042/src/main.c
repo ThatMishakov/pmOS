@@ -88,8 +88,8 @@ pmos_right_t get_interrupt_right(pmos_right_t device_right)
         exit(1);
     }
 
-    IPC_Request_ACPI_Interrupt req = {
-        .type  = IPC_Request_ACPI_Interrupt_NUM,
+    IPC_Request_Interrupt req = {
+        .type  = IPC_Request_Interrupt_NUM,
         .flags = 0,
         .index = 0,
     };

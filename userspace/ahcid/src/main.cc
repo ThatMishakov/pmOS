@@ -567,22 +567,36 @@ pmos::async::detached_task ahci_handle()
 
     printf("AHCI controller created\n");
 
-    uint16_t vendor_id = co_await ahci_controller->readw(0);
-    uint16_t device_id = co_await ahci_controller->readw(2);
-    uint8_t class_code = co_await ahci_controller->readb(0xb);
-    uint8_t subclass   = co_await ahci_controller->readb(0xa);
-    uint8_t prog_if    = co_await ahci_controller->readb(0x9);
-    printf("AHCI controller: vendor 0x%x device 0x%x class 0x%x subclass 0x%x prog_if 0x%x\n",
-           vendor_id, device_id, class_code, subclass, prog_if);
+    // uint16_t vendor_id = co_await ahci_controller->readw(0);
+    // uint16_t device_id = co_await ahci_controller->readw(2);
+    // uint8_t class_code = co_await ahci_controller->readb(0xb);
+    // uint8_t subclass   = co_await ahci_controller->readb(0xa);
+    // uint8_t prog_if    = co_await ahci_controller->readb(0x9);
+    // printf("AHCI controller: vendor 0x%x device 0x%x class 0x%x subclass 0x%x prog_if 0x%x\n",
+    //        vendor_id, device_id, class_code, subclass, prog_if);
 
-    // Enable DMA and memory space access
-    uint32_t command = co_await ahci_controller->readw(0x4);
-    command |= 0x06;
-    co_await ahci_controller->writew(0x4, command);
+    auto my_device_type = co_await ahci_controller->get_device_type();
+
+    if (my_device_type == PCIDevice::DeviceType::PCI) {
+        // Enable DMA and memory space access
+        uint32_t command = co_await ahci_controller->readw(0x4);
+        command |= 0x06;
+        co_await ahci_controller->writew(0x4, command);
+    }
 
     // Get BAR5
-    uint32_t bar5 = co_await ahci_controller->readl(0x24);
-    printf("ACHI BAR5: %#x\n", bar5);
+    uint32_t bar5;
+    uint32_t size = 0;
+    if (my_device_type == PCIDevice::DeviceType::PCI) {
+        auto resource = co_await ahci_controller->get_resource(PCIDevice::PCIBar{}, 5, {}, PCIDevice::ResourceType::Memory);
+        bar5 = resource.base;
+        size = resource.size;
+    } else {
+        auto resource = co_await ahci_controller->get_resource(PCIDevice::GenericResource{}, 0, "ahci", PCIDevice::ResourceType::Memory);
+        bar5 = resource.base;
+        size = resource.size;
+    }
+    printf("ACHI MMIO: %#x, size: %#x\n", bar5, size);
 
     bar5 &= 0xfffffff0;
 
@@ -689,10 +703,10 @@ pmos::async::detached_task ahci_handle()
 
     {
     // Clear 'interrupt disable' bit
-    auto command = co_await ahci_controller->readw(0x4);
-    command &= ~(1 << 10);
-    printf("Command: %#x\n", command);
-    co_await ahci_controller->writew(0x4, command);
+    // auto command = co_await ahci_controller->readw(0x4);
+    // command &= ~(1 << 10);
+    // printf("Command: %#x\n", command);
+    // co_await ahci_controller->writew(0x4, command);
 
     // Clear interrupt status
     ahci_virt_base[2] = 0xffffffff;

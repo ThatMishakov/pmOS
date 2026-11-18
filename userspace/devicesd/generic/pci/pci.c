@@ -112,6 +112,7 @@ void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
         .prog_if           = pci_prog_if(&p),
         .revision_id       = pci_revision_id(&p),
         .associated_bridge = parent_bridge,
+        .bars              = {},
     };
 
     // Capabilities
@@ -176,53 +177,126 @@ void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
     if (result != 0) {
         fprintf(stderr, "Error: Could not allocate PCIDevice: %i\n", errno);
         free(d);
+        return;
     }
 
     uint8_t header_type = pci_header_type(&p);
-    if (header_type != 1)
-        return;
+    switch (header_type) {
+    case 0: { // PCI device
+        // Discover BAR types and sizes
+        auto command = pci_read_word(&p, 0x4);
+        // Disable memory and I/O space access to avoid side effects
+        pci_write_word(&p, 0x4, command & ~0x3);
 
-    uacpi_namespace_node *bus_node = node;
-    uint8_t secondary_bus = 0;
+        for (int i = 0; i < 6; ++i) {
+            const unsigned register_offset = 4 + i;
 
-    secondary_bus = pci_secondary_bus(&p);
-    printf("PCI bridge, secondary bus %x\n", secondary_bus);
-    
-    d->secondary_bus = secondary_bus;
+            uint32_t bar = pci_read_register(&p, register_offset);
+            if (bar & PCI_IO_BAR) { // I/O space
+                auto value = pci_read_register(&p, register_offset);
+                pci_write_register(&p, register_offset, 0xffffffff);
+                uint32_t mask = pci_read_register(&p, register_offset);
+                if (mask == 0 || mask == 0xffffffff) {
+                    d->bars[i].bar_size = 0;
+                } else {
+                    mask &= PCI_IO_BAR_MASK;
+                    d->bars[i].bar_size = mask & (0u - mask);
+                    d->bars[i].type = PCI_BAR_IO;
+                    d->bars[i].address = value & PCI_IO_BAR_MASK;
+                }
+                pci_write_register(&p, register_offset, value);
+                printf("BAR %i: I/O space, address 0x%" PRIx64 ", size 0x%" PRIx64 "\n", i, d->bars[i].address, d->bars[i].bar_size);
+            } else {
+                // Memory space
+                auto value = pci_read_register(&p, register_offset);
 
-    result = 0;
-    VECTOR_PUSH_BACK_CHECKED(g->bridges, d, result);
-    if (result != 0) {
-        fprintf(stderr, "Error: Could not allocate bridge: %i\n", errno);
-        return;
-    }
-    
-    if (secondary_bus == 0) {
-        printf("Unconfigured...\n");
-        return;
-    }
+                pci_write_register(&p, register_offset, 0xffffffff);
+                uint32_t size = pci_read_register(&p, register_offset);
+                uint64_t bar_size = {};
+                uint64_t address = value & PCI_MEM_BAR_MASK;
+                bool is_64bit = false;
+                if (size == 0 || size == 0xffffffff) {
+                    bar_size = 0;
+                } else {
+                    if ((size & PCI_MEM_BAR_TYPE_MASK) == PCI_MEM_BAR_TYPE_64 && i < 5) {
+                        is_64bit = true;
+                        uint32_t next_bar = pci_read_register(&p, register_offset + 1);
+                        pci_write_register(&p, register_offset + 1, 0xffffffff);
+                        uint32_t next_size = pci_read_register(&p, register_offset + 1);
+                        pci_write_register(&p, register_offset + 1, next_bar);
+                        uint64_t full_size = ((uint64_t)next_size << 32) | (size & PCI_MEM_BAR_MASK);
+                        
+                        bar_size = (UINT64_MAX - full_size) + 1;
+                        address |= ((uint64_t)next_bar << 32);
+                    } else {
+                        bar_size = (UINT32_MAX - (size & PCI_MEM_BAR_MASK)) + 1;
+                    }
+                }
+                pci_write_register(&p, register_offset, value);
 
-    struct DeviceSearchCtx ctx = {
-        .addr     = d->device << 16 | d->function,
-        .out_node = NULL,
-    };
-    uacpi_namespace_for_each_child(node, find_pci_device, UACPI_NULL, UACPI_OBJECT_DEVICE_BIT,
-                                    UACPI_MAX_DEPTH_ANY, &ctx);
+                if (bar_size) {
+                    d->bars[i].bar_size = bar_size;
+                    d->bars[i].is_64bit = is_64bit;
+                    d->bars[i].type = PCI_BAR_MEMORY;
+                    d->bars[i].address = address;
 
-    if (ctx.out_node) {
-        bus_node = ctx.out_node;
-        uacpi_pci_routing_table *pci_routes;
-        uacpi_status ret = uacpi_get_pci_routing_table(ctx.out_node, &pci_routes);
-        if (ret != UACPI_STATUS_OK) {
-            fprintf(stderr, "Warning: Could not get PCI routing for root bridge bus %0x: %i (%s)\n", bus,
-                    ret, uacpi_status_to_string(ret));
-        } else {
-            parse_interrupt_table(g, secondary_bus, pci_routes);
-            uacpi_free_pci_routing_table(pci_routes);
+                    printf("BAR %i: Memory space, address 0x%" PRIx64 ", size 0x%" PRIx64 ", 64 bit: %s\n", i, address, bar_size, is_64bit ? "true" : "false");
+                }
+
+                if (is_64bit)
+                    i++; // Skip next BAR
+            }
         }
-    }
 
-    check_bus(g, secondary_bus, d, bus_node);
+        pci_write_word(&p, 0x4, command);
+
+    } break;
+    case 1: { // Bridge
+        uacpi_namespace_node *bus_node = node;
+        uint8_t secondary_bus = 0;
+
+        secondary_bus = pci_secondary_bus(&p);
+        printf("PCI bridge, secondary bus %x\n", secondary_bus);
+        
+        d->secondary_bus = secondary_bus;
+
+        result = 0;
+        VECTOR_PUSH_BACK_CHECKED(g->bridges, d, result);
+        if (result != 0) {
+            fprintf(stderr, "Error: Could not allocate bridge: %i\n", errno);
+            return;
+        }
+        
+        if (secondary_bus == 0) {
+            printf("Unconfigured...\n");
+            return;
+        }
+
+        struct DeviceSearchCtx ctx = {
+            .addr     = d->device << 16 | d->function,
+            .out_node = NULL,
+        };
+        uacpi_namespace_for_each_child(node, find_pci_device, UACPI_NULL, UACPI_OBJECT_DEVICE_BIT,
+                                        UACPI_MAX_DEPTH_ANY, &ctx);
+
+        if (ctx.out_node) {
+            bus_node = ctx.out_node;
+            uacpi_pci_routing_table *pci_routes;
+            uacpi_status ret = uacpi_get_pci_routing_table(ctx.out_node, &pci_routes);
+            if (ret != UACPI_STATUS_OK) {
+                fprintf(stderr, "Warning: Could not get PCI routing for root bridge bus %0x: %i (%s)\n", bus,
+                        ret, uacpi_status_to_string(ret));
+            } else {
+                parse_interrupt_table(g, secondary_bus, pci_routes);
+                uacpi_free_pci_routing_table(pci_routes);
+            }
+        }
+
+        check_bus(g, secondary_bus, d, bus_node);
+    } break;
+    default:
+        break;
+    }
 }
 
 void check_device(struct PCIHostBridge *g, uint8_t bus, uint8_t device,
@@ -1038,7 +1112,100 @@ void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI
         delete_right(reply_right);
 }
 
-void request_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right);
+void request_pci_interrupt(Message_Descriptor *msg, IPC_Request_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right);
+
+static void handle_get_device_type(Message_Descriptor *desc, void *msg_buff, struct PCIDevice *device, pmos_right_t reply_right)
+{
+    if (desc->size < sizeof(IPC_Get_Device_Type)) {
+        delete_right(reply_right);
+        return;
+    }
+
+    IPC_Get_Device_Type_Reply reply = {
+        .type   = IPC_Get_Device_Type_Reply_NUM,
+        .device_type = IPC_DEVICE_TYPE_PCI,
+    };
+
+    auto result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+    if (result.result)
+        delete_right(reply_right);
+}
+
+static void handle_get_resource(Message_Descriptor *desc, void *msg_buff, struct PCIDevice *device, pmos_right_t *reply_right)
+{
+    IPC_Request_Resource_Reply reply = {
+        .type   = IPC_Request_Resource_Reply_NUM,
+        .flags  = 0,
+        .result = 0,
+    };
+
+    if (desc->size < sizeof(IPC_Request_Resource)) {
+        reply.result = -EINVAL;
+        goto end;
+    }
+
+    IPC_Request_Resource *r = (IPC_Request_Resource *)msg_buff;
+
+    if (r->lookup_type != LOOKUP_TYPE_PCI_BAR) {
+        // TODO
+        reply.result = -ENOSYS;
+        goto end;
+    }
+
+    auto bar = r->resource_index;
+
+    if (bar >= 6) {
+        reply.result = -ENOENT;
+        goto end;
+    }
+
+    struct PCIHostBridge *g = pci_host_bridge_find(device->group);
+    if (!g) {
+        reply.result = -ENOENT;
+        goto end;
+    }
+
+    struct PCIDevicePtr p;
+    reply.result = fill_device(&p, g, device->bus, device->device, device->function);
+    if (reply.result != 0)
+        goto end;
+
+    struct PCIBarInfo info = device->bars[bar];
+    if (info.type == PCI_BAR_NONE) {
+        reply.result = -ENOENT;
+        goto end;
+    }
+
+    unsigned bar_type = 0;
+    switch (r->resource_type) {
+    case IPC_DEVICE_RESOURCE_MMIO:
+        bar_type = PCI_BAR_MEMORY;
+        break;
+    case IPC_DEVICE_RESOURCE_IO_PORT:
+        bar_type = PCI_BAR_IO;
+        break;
+    case IPC_DEVICE_RESOURCE_ANY:
+        bar_type = info.type;
+        break;
+    default:
+        reply.result = -ENOENT;
+        goto end;
+    }
+
+    if (bar_type != info.type) {
+        reply.result = -ENOENT;
+        goto end;
+    }
+
+    reply.resource_type = bar_type == PCI_BAR_IO ? IPC_DEVICE_RESOURCE_IO_PORT : IPC_DEVICE_RESOURCE_MMIO;
+    reply.resource_start = info.address;
+    reply.resource_length = info.bar_size;
+
+end:
+    auto result = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+    if (!result.result)
+        *reply_right = 0;
+}
 
 static int pci_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *reply_right,
                      pmos_right_t *other_rights, void *ctx, struct pmos_msgloop_data *)
@@ -1051,7 +1218,7 @@ static int pci_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *
 
     IPC_Generic_Msg *msg = msg_buff;
     switch (msg->type) {
-    case IPC_Request_PCI_Interrupt_NUM:
+    case IPC_Request_Interrupt_NUM:
         request_pci_interrupt(desc, msg_buff, device, *reply_right);
         *reply_right = 0;
         break;
@@ -1067,6 +1234,13 @@ static int pci_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *
         handle_pci_write(desc, msg_buff, device, *reply_right);
         *reply_right = 0;
         break;
+    case IPC_Get_Device_Type_NUM:
+        handle_get_device_type(desc, msg_buff, device, *reply_right);
+        *reply_right = 0;
+        break;
+    case IPC_Request_Resource_NUM:
+        handle_get_resource(desc, msg_buff, device, reply_right);
+        break;
     default:
         printf("devicesd: Unknown message type for PCI device: %" PRIu32 "\n", msg->type);
         break;
@@ -1076,7 +1250,7 @@ static int pci_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *
     return PMOS_MSGLOOP_CONTINUE;
 }
 
-void request_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right)
+void request_pci_interrupt(Message_Descriptor *msg, IPC_Request_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right)
 {
     IPC_Request_Int_Reply reply;
     int result      = 0;
@@ -1087,8 +1261,13 @@ void request_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *
 
     message_extra_t extra = {0};
 
-    if (msg->size != sizeof(IPC_Register_PCI_Interrupt)) {
+    if (msg->size != sizeof(IPC_Request_Interrupt)) {
         result = -EINVAL;
+        goto end;
+    }
+
+    if (desc->index != 0) {
+        result = -ENOENT;
         goto end;
     }
 
@@ -1098,7 +1277,21 @@ void request_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *
         goto end;
     }
 
-    result = resolve_gsi_for(g, device->bus, device->device, device->function, desc->pin, &vector,
+    struct PCIDevicePtr p;
+    result = fill_device(&p, g, device->bus, device->device, device->function);
+    if (result != 0)
+        goto end;
+
+    unsigned pin = pci_read_byte(&p, 0x3d);
+    if (pin > 4 || pin < 1) {
+        printf("devicesd: PCI device %i:%i:%i:%i has invalid interrupt pin %i\n", g->group_number, device->bus,
+            device->device, device->function, pin);
+        result = -ENOENT;
+        goto end;
+    }
+    pin -= 1;
+
+    result = resolve_gsi_for(g, device->bus, device->device, device->function, pin, &vector,
                              &active_low, &level_trig, NULL);
     if (result != 0)
         goto end;
@@ -1117,6 +1310,11 @@ void request_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *
         goto end;
     }
     extra.extra_rights[0] = irq_right.right;
+
+    // Enable interrupt since there is a handler for it (TODO...)
+    auto command = pci_read_word(&p, 0x04);
+    command &= ~(1 << 10);
+    pci_write_word(&p, 0x04, command);
 
 end:
     reply = (IPC_Request_Int_Reply) {
@@ -1177,6 +1375,31 @@ void pci_write_register(struct PCIDevicePtr *s, unsigned _register, uint32_t val
         pthread_mutex_lock(&pci_access_mutex);
         io_out32(s->io_addr.port, (uint32_t)0x80000000 | s->io_addr.data_offset | (_register << 2));
         io_out32(s->io_addr.port + 4, value);
+        pthread_mutex_unlock(&pci_access_mutex);
+        break;
+#endif
+    default:
+        assert(false);
+    }
+}
+
+void pci_write_word(struct PCIDevicePtr *s, unsigned offset, uint16_t value)
+{
+    assert(s);
+
+    switch (s->type) {
+    case PCIGroupECAM: {
+        uint16_t *ptr = (uint16_t *)((char *)s->ecam_window + offset);
+        pci_mmio_writew(ptr, value);
+    } break;
+#ifdef PLATFORM_HAS_IO
+    case PCIGroupLegacy:
+        if (offset >= 256)
+            return;
+
+        pthread_mutex_lock(&pci_access_mutex);
+        io_out32(s->io_addr.port, (uint32_t)0x80000000 | s->io_addr.data_offset | offset);
+        io_out16(s->io_addr.port + 4, value);
         pthread_mutex_unlock(&pci_access_mutex);
         break;
 #endif
@@ -1296,18 +1519,5 @@ void pci_write_byte(struct PCIDevicePtr *s, unsigned offset, uint8_t value)
     uint32_t reg = pci_read_register(s, offset >> 2);
     reg &= ~(0xff << ((offset & 0x3) * 8));
     reg |= (value & 0xff) << ((offset & 0x3) * 8);
-    pci_write_register(s, offset >> 2, reg);
-}
-
-void pci_write_word(struct PCIDevicePtr *s, unsigned offset, uint16_t value)
-{
-    uint32_t reg = pci_read_register(s, offset >> 2);
-    if (offset & 0x02) {
-        reg &= ~(0xffff << 16);
-        reg |= (value & 0xffff) << 16;
-    } else {
-        reg &= ~0xffff;
-        reg |= value & 0xffff;
-    }
     pci_write_register(s, offset >> 2, reg);
 }
