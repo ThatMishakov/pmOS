@@ -202,10 +202,10 @@ void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
                     mask &= PCI_IO_BAR_MASK;
                     d->bars[i].bar_size = mask & (0u - mask);
                     d->bars[i].type = PCI_BAR_IO;
-
+                    d->bars[i].address = value & PCI_IO_BAR_MASK;
                 }
                 pci_write_register(&p, register_offset, value);
-                printf("BAR %i: I/O space, size 0x%" PRIx64 "\n", i, d->bars[i].bar_size);
+                printf("BAR %i: I/O space, address 0x%" PRIx64 ", size 0x%" PRIx64 "\n", i, d->bars[i].address, d->bars[i].bar_size);
             } else {
                 // Memory space
                 auto value = pci_read_register(&p, register_offset);
@@ -213,6 +213,7 @@ void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
                 pci_write_register(&p, register_offset, 0xffffffff);
                 uint32_t size = pci_read_register(&p, register_offset);
                 uint64_t bar_size = {};
+                uint64_t address = value & PCI_MEM_BAR_MASK;
                 bool is_64bit = false;
                 if (size == 0 || size == 0xffffffff) {
                     bar_size = 0;
@@ -226,6 +227,7 @@ void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
                         uint64_t full_size = ((uint64_t)next_size << 32) | (size & PCI_MEM_BAR_MASK);
                         
                         bar_size = (UINT64_MAX - full_size) + 1;
+                        address |= ((uint64_t)next_bar << 32);
                     } else {
                         bar_size = (UINT32_MAX - (size & PCI_MEM_BAR_MASK)) + 1;
                     }
@@ -236,8 +238,9 @@ void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
                     d->bars[i].bar_size = bar_size;
                     d->bars[i].is_64bit = is_64bit;
                     d->bars[i].type = PCI_BAR_MEMORY;
+                    d->bars[i].address = address;
 
-                    printf("BAR %i: Memory space, size 0x%" PRIx64 ", 64 bit: %s\n", i, bar_size, is_64bit ? "true" : "false");
+                    printf("BAR %i: Memory space, address 0x%" PRIx64 ", size 0x%" PRIx64 ", 64 bit: %s\n", i, address, bar_size, is_64bit ? "true" : "false");
                 }
 
                 if (is_64bit)
@@ -1111,6 +1114,99 @@ void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI
 
 void request_pci_interrupt(Message_Descriptor *msg, IPC_Request_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right);
 
+static void handle_get_device_type(Message_Descriptor *desc, void *msg_buff, struct PCIDevice *device, pmos_right_t reply_right)
+{
+    if (desc->size < sizeof(IPC_Get_Device_Type)) {
+        delete_right(reply_right);
+        return;
+    }
+
+    IPC_Get_Device_Type_Reply reply = {
+        .type   = IPC_Get_Device_Type_Reply_NUM,
+        .device_type = IPC_DEVICE_TYPE_PCI,
+    };
+
+    auto result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+    if (result.result)
+        delete_right(reply_right);
+}
+
+static void handle_get_resource(Message_Descriptor *desc, void *msg_buff, struct PCIDevice *device, pmos_right_t *reply_right)
+{
+    IPC_Request_Resource_Reply reply = {
+        .type   = IPC_Request_Resource_Reply_NUM,
+        .flags  = 0,
+        .result = 0,
+    };
+
+    if (desc->size < sizeof(IPC_Request_Resource)) {
+        reply.result = -EINVAL;
+        goto end;
+    }
+
+    IPC_Request_Resource *r = (IPC_Request_Resource *)msg_buff;
+
+    if (r->lookup_type != LOOKUP_TYPE_PCI_BAR) {
+        // TODO
+        reply.result = -ENOSYS;
+        goto end;
+    }
+
+    auto bar = r->resource_index;
+
+    if (bar >= 6) {
+        reply.result = -ENOENT;
+        goto end;
+    }
+
+    struct PCIHostBridge *g = pci_host_bridge_find(device->group);
+    if (!g) {
+        reply.result = -ENOENT;
+        goto end;
+    }
+
+    struct PCIDevicePtr p;
+    reply.result = fill_device(&p, g, device->bus, device->device, device->function);
+    if (reply.result != 0)
+        goto end;
+
+    struct PCIBarInfo info = device->bars[bar];
+    if (info.type == PCI_BAR_NONE) {
+        reply.result = -ENOENT;
+        goto end;
+    }
+
+    unsigned bar_type = 0;
+    switch (r->resource_type) {
+    case IPC_DEVICE_RESOURCE_MMIO:
+        bar_type = PCI_BAR_MEMORY;
+        break;
+    case IPC_DEVICE_RESOURCE_IO_PORT:
+        bar_type = PCI_BAR_IO;
+        break;
+    case IPC_DEVICE_RESOURCE_ANY:
+        bar_type = info.type;
+        break;
+    default:
+        reply.result = -ENOENT;
+        goto end;
+    }
+
+    if (bar_type != info.type) {
+        reply.result = -ENOENT;
+        goto end;
+    }
+
+    reply.resource_type = bar_type == PCI_BAR_IO ? IPC_DEVICE_RESOURCE_IO_PORT : IPC_DEVICE_RESOURCE_MMIO;
+    reply.resource_start = info.address;
+    reply.resource_length = info.bar_size;
+
+end:
+    auto result = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+    if (!result.result)
+        *reply_right = 0;
+}
+
 static int pci_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *reply_right,
                      pmos_right_t *other_rights, void *ctx, struct pmos_msgloop_data *)
 {
@@ -1137,6 +1233,13 @@ static int pci_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *
     case IPC_PCI_Write_NUM:
         handle_pci_write(desc, msg_buff, device, *reply_right);
         *reply_right = 0;
+        break;
+    case IPC_Get_Device_Type_NUM:
+        handle_get_device_type(desc, msg_buff, device, *reply_right);
+        *reply_right = 0;
+        break;
+    case IPC_Request_Resource_NUM:
+        handle_get_resource(desc, msg_buff, device, reply_right);
         break;
     default:
         printf("devicesd: Unknown message type for PCI device: %" PRIu32 "\n", msg->type);

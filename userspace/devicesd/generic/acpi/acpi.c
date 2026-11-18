@@ -835,6 +835,21 @@ end:
         delete_right(reply_right);
 }
 
+static void get_acpi_device_type(pmos_right_t *reply_right)
+{
+    IPC_Get_Device_Type_Reply reply = {
+        .type   = IPC_Get_Device_Type_Reply_NUM,
+        .device_type = IPC_DEVICE_TYPE_ACPI,
+    };
+
+    int result = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT).result;
+    if (result != 0) {
+        fprintf(stderr, "Failed to send device type reply message: %i (%s)\n", result, strerror(-result));
+    } else {
+        *reply_right = 0;
+    }
+}
+
 static int acpi_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *reply_right,
                      pmos_right_t *other_rights, void *ctx, struct pmos_msgloop_data *)
 {
@@ -856,6 +871,16 @@ static int acpi_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t 
         uint16_t index = ((IPC_Request_Interrupt *)msg)->index;
         get_acpi_interrupt(device, index, *reply_right);
         *reply_right = 0;
+    }
+        break;
+    case IPC_Get_Device_Type_NUM: {
+        if (desc->size < sizeof(IPC_Get_Device_Type)) {
+            fprintf(stderr, "Received IPC_Get_Device_Type which is too small for ACPI device %s\n",
+                    device->path);
+            break;
+        }
+        // TODO: There is no reason for the ACPI code to be different from PCI and so on...
+        get_acpi_device_type(reply_right);
     }
         break;
     default:

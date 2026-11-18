@@ -580,9 +580,21 @@ pmos::async::detached_task ahci_handle()
     command |= 0x06;
     co_await ahci_controller->writew(0x4, command);
 
+    auto my_device_type = co_await ahci_controller->get_device_type();
+
     // Get BAR5
-    uint32_t bar5 = co_await ahci_controller->readl(0x24);
-    printf("ACHI BAR5: %#x\n", bar5);
+    uint32_t bar5;
+    uint32_t size = 0;
+    if (my_device_type == PCIDevice::DeviceType::PCI) {
+        auto resource = co_await ahci_controller->get_resource(PCIDevice::PCIBar{}, 5, {}, PCIDevice::ResourceType::Memory);
+        bar5 = resource.base;
+        size = resource.size;
+    } else {
+        auto resource = co_await ahci_controller->get_resource(PCIDevice::GenericResource{}, 0, "ahci", PCIDevice::ResourceType::Memory);
+        bar5 = resource.base;
+        size = resource.size;
+    }
+    printf("ACHI MMIO: %#x, size: %#x\n", bar5, size);
 
     bar5 &= 0xfffffff0;
 

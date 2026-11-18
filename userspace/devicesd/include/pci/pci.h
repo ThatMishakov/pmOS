@@ -88,6 +88,7 @@ struct PCIBarInfo {
     enum PCIBarType type;
     bool is_64bit;
     uint64_t bar_size;
+    uint64_t address;
 };
 
 struct PCIDevice {
