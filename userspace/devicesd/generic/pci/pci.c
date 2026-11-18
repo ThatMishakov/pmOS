@@ -112,6 +112,7 @@ void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
         .prog_if           = pci_prog_if(&p),
         .revision_id       = pci_revision_id(&p),
         .associated_bridge = parent_bridge,
+        .bars              = {},
     };
 
     // Capabilities
@@ -176,53 +177,123 @@ void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
     if (result != 0) {
         fprintf(stderr, "Error: Could not allocate PCIDevice: %i\n", errno);
         free(d);
+        return;
     }
 
     uint8_t header_type = pci_header_type(&p);
-    if (header_type != 1)
-        return;
+    switch (header_type) {
+    case 0: { // PCI device
+        // Discover BAR types and sizes
+        auto command = pci_read_word(&p, 0x4);
+        // Disable memory and I/O space access to avoid side effects
+        pci_write_word(&p, 0x4, command & ~0x3);
 
-    uacpi_namespace_node *bus_node = node;
-    uint8_t secondary_bus = 0;
+        for (int i = 0; i < 6; ++i) {
+            const unsigned register_offset = 4 + i;
 
-    secondary_bus = pci_secondary_bus(&p);
-    printf("PCI bridge, secondary bus %x\n", secondary_bus);
-    
-    d->secondary_bus = secondary_bus;
+            uint32_t bar = pci_read_register(&p, register_offset);
+            if (bar & PCI_IO_BAR) { // I/O space
+                auto value = pci_read_register(&p, register_offset);
+                pci_write_register(&p, register_offset, 0xffffffff);
+                uint32_t mask = pci_read_register(&p, register_offset);
+                if (mask == 0 || mask == 0xffffffff) {
+                    d->bars[i].bar_size = 0;
+                } else {
+                    mask &= PCI_IO_BAR_MASK;
+                    d->bars[i].bar_size = mask & (0u - mask);
+                    d->bars[i].type = PCI_BAR_IO;
 
-    result = 0;
-    VECTOR_PUSH_BACK_CHECKED(g->bridges, d, result);
-    if (result != 0) {
-        fprintf(stderr, "Error: Could not allocate bridge: %i\n", errno);
-        return;
-    }
-    
-    if (secondary_bus == 0) {
-        printf("Unconfigured...\n");
-        return;
-    }
+                }
+                pci_write_register(&p, register_offset, value);
+                printf("BAR %i: I/O space, size 0x%" PRIx64 "\n", i, d->bars[i].bar_size);
+            } else {
+                // Memory space
+                auto value = pci_read_register(&p, register_offset);
 
-    struct DeviceSearchCtx ctx = {
-        .addr     = d->device << 16 | d->function,
-        .out_node = NULL,
-    };
-    uacpi_namespace_for_each_child(node, find_pci_device, UACPI_NULL, UACPI_OBJECT_DEVICE_BIT,
-                                    UACPI_MAX_DEPTH_ANY, &ctx);
+                pci_write_register(&p, register_offset, 0xffffffff);
+                uint32_t size = pci_read_register(&p, register_offset);
+                uint64_t bar_size = {};
+                bool is_64bit = false;
+                if (size == 0 || size == 0xffffffff) {
+                    bar_size = 0;
+                } else {
+                    if ((size & PCI_MEM_BAR_TYPE_MASK) == PCI_MEM_BAR_TYPE_64 && i < 5) {
+                        is_64bit = true;
+                        uint32_t next_bar = pci_read_register(&p, register_offset + 1);
+                        pci_write_register(&p, register_offset + 1, 0xffffffff);
+                        uint32_t next_size = pci_read_register(&p, register_offset + 1);
+                        pci_write_register(&p, register_offset + 1, next_bar);
+                        uint64_t full_size = ((uint64_t)next_size << 32) | (size & PCI_MEM_BAR_MASK);
+                        
+                        bar_size = (UINT64_MAX - full_size) + 1;
+                    } else {
+                        bar_size = (UINT32_MAX - (size & PCI_MEM_BAR_MASK)) + 1;
+                    }
+                }
+                pci_write_register(&p, register_offset, value);
 
-    if (ctx.out_node) {
-        bus_node = ctx.out_node;
-        uacpi_pci_routing_table *pci_routes;
-        uacpi_status ret = uacpi_get_pci_routing_table(ctx.out_node, &pci_routes);
-        if (ret != UACPI_STATUS_OK) {
-            fprintf(stderr, "Warning: Could not get PCI routing for root bridge bus %0x: %i (%s)\n", bus,
-                    ret, uacpi_status_to_string(ret));
-        } else {
-            parse_interrupt_table(g, secondary_bus, pci_routes);
-            uacpi_free_pci_routing_table(pci_routes);
+                if (bar_size) {
+                    d->bars[i].bar_size = bar_size;
+                    d->bars[i].is_64bit = is_64bit;
+                    d->bars[i].type = PCI_BAR_MEMORY;
+
+                    printf("BAR %i: Memory space, size 0x%" PRIx64 ", 64 bit: %s\n", i, bar_size, is_64bit ? "true" : "false");
+                }
+
+                if (is_64bit)
+                    i++; // Skip next BAR
+            }
         }
-    }
 
-    check_bus(g, secondary_bus, d, bus_node);
+        pci_write_word(&p, 0x4, command);
+
+    } break;
+    case 1: { // Bridge
+        uacpi_namespace_node *bus_node = node;
+        uint8_t secondary_bus = 0;
+
+        secondary_bus = pci_secondary_bus(&p);
+        printf("PCI bridge, secondary bus %x\n", secondary_bus);
+        
+        d->secondary_bus = secondary_bus;
+
+        result = 0;
+        VECTOR_PUSH_BACK_CHECKED(g->bridges, d, result);
+        if (result != 0) {
+            fprintf(stderr, "Error: Could not allocate bridge: %i\n", errno);
+            return;
+        }
+        
+        if (secondary_bus == 0) {
+            printf("Unconfigured...\n");
+            return;
+        }
+
+        struct DeviceSearchCtx ctx = {
+            .addr     = d->device << 16 | d->function,
+            .out_node = NULL,
+        };
+        uacpi_namespace_for_each_child(node, find_pci_device, UACPI_NULL, UACPI_OBJECT_DEVICE_BIT,
+                                        UACPI_MAX_DEPTH_ANY, &ctx);
+
+        if (ctx.out_node) {
+            bus_node = ctx.out_node;
+            uacpi_pci_routing_table *pci_routes;
+            uacpi_status ret = uacpi_get_pci_routing_table(ctx.out_node, &pci_routes);
+            if (ret != UACPI_STATUS_OK) {
+                fprintf(stderr, "Warning: Could not get PCI routing for root bridge bus %0x: %i (%s)\n", bus,
+                        ret, uacpi_status_to_string(ret));
+            } else {
+                parse_interrupt_table(g, secondary_bus, pci_routes);
+                uacpi_free_pci_routing_table(pci_routes);
+            }
+        }
+
+        check_bus(g, secondary_bus, d, bus_node);
+    } break;
+    default:
+        break;
+    }
 }
 
 void check_device(struct PCIHostBridge *g, uint8_t bus, uint8_t device,
@@ -1209,6 +1280,31 @@ void pci_write_register(struct PCIDevicePtr *s, unsigned _register, uint32_t val
     }
 }
 
+void pci_write_word(struct PCIDevicePtr *s, unsigned offset, uint16_t value)
+{
+    assert(s);
+
+    switch (s->type) {
+    case PCIGroupECAM: {
+        uint16_t *ptr = (uint16_t *)((char *)s->ecam_window + offset);
+        pci_mmio_writew(ptr, value);
+    } break;
+#ifdef PLATFORM_HAS_IO
+    case PCIGroupLegacy:
+        if (offset >= 256)
+            return;
+
+        pthread_mutex_lock(&pci_access_mutex);
+        io_out32(s->io_addr.port, (uint32_t)0x80000000 | s->io_addr.data_offset | offset);
+        io_out16(s->io_addr.port + 4, value);
+        pthread_mutex_unlock(&pci_access_mutex);
+        break;
+#endif
+    default:
+        assert(false);
+    }
+}
+
 int fill_device(struct PCIDevicePtr *s, struct PCIHostBridge *g, uint8_t bus, uint8_t device,
                 uint8_t function)
 {
@@ -1320,18 +1416,5 @@ void pci_write_byte(struct PCIDevicePtr *s, unsigned offset, uint8_t value)
     uint32_t reg = pci_read_register(s, offset >> 2);
     reg &= ~(0xff << ((offset & 0x3) * 8));
     reg |= (value & 0xff) << ((offset & 0x3) * 8);
-    pci_write_register(s, offset >> 2, reg);
-}
-
-void pci_write_word(struct PCIDevicePtr *s, unsigned offset, uint16_t value)
-{
-    uint32_t reg = pci_read_register(s, offset >> 2);
-    if (offset & 0x02) {
-        reg &= ~(0xffff << 16);
-        reg |= (value & 0xffff) << 16;
-    } else {
-        reg &= ~0xffff;
-        reg |= value & 0xffff;
-    }
     pci_write_register(s, offset >> 2, reg);
 }
