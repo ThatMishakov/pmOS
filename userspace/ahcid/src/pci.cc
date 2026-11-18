@@ -107,18 +107,12 @@ pmos::async::task<uint8_t> PCIDevice::readb(uint16_t offset)
     co_return result >> (offset & 3) * 8;
 }
 
-pmos::async::task<uint8_t> PCIDevice::interrupt_pin() noexcept { return readb(0x3d); }
-
 pmos::async::task<pmos::ReceiveRight> PCIDevice::register_interrupt()
 {
-    auto int_pin = co_await interrupt_pin();
-    if (int_pin < 1 or int_pin > 4)
-        throw std::runtime_error("Device does not have a valid interrupt pin");
-
-    IPC_Request_PCI_Interrupt request = {
-        .type       = IPC_Request_PCI_Interrupt_NUM,
+    IPC_Request_Interrupt request = {
+        .type       = IPC_Request_Interrupt_NUM,
         .flags      = 0,
-        .pin        = (uint8_t)(int_pin - 1),
+        .index      = 0,
     };
 
     auto right = send_devicesd(request, &cmd_port);

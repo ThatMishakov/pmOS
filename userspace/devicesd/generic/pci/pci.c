@@ -1038,7 +1038,7 @@ void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI
         delete_right(reply_right);
 }
 
-void request_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right);
+void request_pci_interrupt(Message_Descriptor *msg, IPC_Request_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right);
 
 static int pci_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *reply_right,
                      pmos_right_t *other_rights, void *ctx, struct pmos_msgloop_data *)
@@ -1051,7 +1051,7 @@ static int pci_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *
 
     IPC_Generic_Msg *msg = msg_buff;
     switch (msg->type) {
-    case IPC_Request_PCI_Interrupt_NUM:
+    case IPC_Request_Interrupt_NUM:
         request_pci_interrupt(desc, msg_buff, device, *reply_right);
         *reply_right = 0;
         break;
@@ -1076,7 +1076,7 @@ static int pci_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *
     return PMOS_MSGLOOP_CONTINUE;
 }
 
-void request_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right)
+void request_pci_interrupt(Message_Descriptor *msg, IPC_Request_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right)
 {
     IPC_Request_Int_Reply reply;
     int result      = 0;
@@ -1087,8 +1087,13 @@ void request_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *
 
     message_extra_t extra = {0};
 
-    if (msg->size != sizeof(IPC_Register_PCI_Interrupt)) {
+    if (msg->size != sizeof(IPC_Request_Interrupt)) {
         result = -EINVAL;
+        goto end;
+    }
+
+    if (desc->index != 0) {
+        result = -ENOENT;
         goto end;
     }
 
@@ -1098,7 +1103,21 @@ void request_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *
         goto end;
     }
 
-    result = resolve_gsi_for(g, device->bus, device->device, device->function, desc->pin, &vector,
+    struct PCIDevicePtr p;
+    result = fill_device(&p, g, device->bus, device->device, device->function);
+    if (result != 0)
+        goto end;
+
+    unsigned pin = pci_read_byte(&p, 0x3d);
+    if (pin > 4 || pin < 1) {
+        printf("devicesd: PCI device %i:%i:%i:%i has invalid interrupt pin %i\n", g->group_number, device->bus,
+            device->device, device->function, pin);
+        result = -ENOENT;
+        goto end;
+    }
+    pin -= 1;
+
+    result = resolve_gsi_for(g, device->bus, device->device, device->function, pin, &vector,
                              &active_low, &level_trig, NULL);
     if (result != 0)
         goto end;

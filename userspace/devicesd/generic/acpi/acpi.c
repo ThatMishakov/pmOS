@@ -846,14 +846,14 @@ static int acpi_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t 
 
     IPC_Generic_Msg *msg = (IPC_Generic_Msg *)msg_buff;
     switch (msg->type) {
-    case IPC_Request_ACPI_Interrupt_NUM: {
-        if (desc->size < sizeof(IPC_Request_ACPI_Interrupt)) {
-            fprintf(stderr, "Received IPC_Request_ACPI_Interrupt which is too small for ACPI device %s\n",
+    case IPC_Request_Interrupt_NUM: {
+        if (desc->size < sizeof(IPC_Request_Interrupt)) {
+            fprintf(stderr, "Received IPC_Request_Interrupt which is too small for ACPI device %s\n",
                     device->path);
             break;
         }
 
-        uint16_t index = ((IPC_Request_ACPI_Interrupt *)msg)->index;
+        uint16_t index = ((IPC_Request_Interrupt *)msg)->index;
         get_acpi_interrupt(device, index, *reply_right);
         *reply_right = 0;
     }
