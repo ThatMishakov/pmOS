@@ -567,13 +567,13 @@ pmos::async::detached_task ahci_handle()
 
     printf("AHCI controller created\n");
 
-    uint16_t vendor_id = co_await ahci_controller->readw(0);
-    uint16_t device_id = co_await ahci_controller->readw(2);
-    uint8_t class_code = co_await ahci_controller->readb(0xb);
-    uint8_t subclass   = co_await ahci_controller->readb(0xa);
-    uint8_t prog_if    = co_await ahci_controller->readb(0x9);
-    printf("AHCI controller: vendor 0x%x device 0x%x class 0x%x subclass 0x%x prog_if 0x%x\n",
-           vendor_id, device_id, class_code, subclass, prog_if);
+    // uint16_t vendor_id = co_await ahci_controller->readw(0);
+    // uint16_t device_id = co_await ahci_controller->readw(2);
+    // uint8_t class_code = co_await ahci_controller->readb(0xb);
+    // uint8_t subclass   = co_await ahci_controller->readb(0xa);
+    // uint8_t prog_if    = co_await ahci_controller->readb(0x9);
+    // printf("AHCI controller: vendor 0x%x device 0x%x class 0x%x subclass 0x%x prog_if 0x%x\n",
+    //        vendor_id, device_id, class_code, subclass, prog_if);
 
     // Enable DMA and memory space access
     uint32_t command = co_await ahci_controller->readw(0x4);
@@ -689,10 +689,10 @@ pmos::async::detached_task ahci_handle()
 
     {
     // Clear 'interrupt disable' bit
-    auto command = co_await ahci_controller->readw(0x4);
-    command &= ~(1 << 10);
-    printf("Command: %#x\n", command);
-    co_await ahci_controller->writew(0x4, command);
+    // auto command = co_await ahci_controller->readw(0x4);
+    // command &= ~(1 << 10);
+    // printf("Command: %#x\n", command);
+    // co_await ahci_controller->writew(0x4, command);
 
     // Clear interrupt status
     ahci_virt_base[2] = 0xffffffff;

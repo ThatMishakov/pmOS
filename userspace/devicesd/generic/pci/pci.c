@@ -1137,6 +1137,11 @@ void request_pci_interrupt(Message_Descriptor *msg, IPC_Request_Interrupt *desc,
     }
     extra.extra_rights[0] = irq_right.right;
 
+    // Enable interrupt since there is a handler for it (TODO...)
+    auto command = pci_read_word(&p, 0x04);
+    command &= ~(1 << 10);
+    pci_write_word(&p, 0x04, command);
+
 end:
     reply = (IPC_Request_Int_Reply) {
         .type   = IPC_Request_Int_Reply_NUM,
