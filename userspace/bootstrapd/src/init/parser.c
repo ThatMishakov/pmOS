@@ -2,6 +2,7 @@
 #include "init.h"
 
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include <yaml.h>
@@ -161,6 +162,7 @@ const char *SERVICE_PROPERTIES  = "pmbus_properties";
 const char *MATCH_PNP = "pnp";
 const char *MATCH_PCI = "pci";
 const char *MATCH_DEVICES = "devices";
+const char *MATCH_CLASS = "class";
 
 const char *FILTER_PCI_CLASS    = "class";
 const char *FILTER_PCI_SUBCLASS = "subclass";
@@ -289,6 +291,76 @@ end:
     free(f.pci_filter.subclass);
     yaml_event_delete(&filter_event); 
     return cont;
+}
+
+static bool parse_class(yaml_parser_t *state, struct Service *service)
+{
+    yaml_event_t event;
+    if (!yaml_parser_parse(state, &event))
+        return false;
+
+    bool mapping = event.type == YAML_MAPPING_START_EVENT;
+    yaml_event_delete(&event);
+    if (!mapping)
+        goto invalid;
+
+    struct MatchFilter filter = {};
+    const char *fields[] = {FILTER_PCI_CLASS, FILTER_PCI_SUBCLASS, FILTER_PCI_PROG_IF};
+    u8 *values[] = {&filter.class_filter.class, &filter.class_filter.subclass,
+                    &filter.class_filter.prog_if};
+    unsigned seen = 0;
+
+    while (yaml_parser_parse(state, &event)) {
+        if (event.type == YAML_MAPPING_END_EVENT) {
+            yaml_event_delete(&event);
+            if (seen != 0x7)
+                goto invalid;
+
+            filter.key = strdup("class");
+            if (!filter.key)
+                return false;
+
+            int result = 0;
+            VECTOR_PUSH_BACK_CHECKED(service->match_filters, filter, result);
+            if (result != 0)
+                free(filter.key);
+            return result == 0;
+        }
+
+        unsigned field = 0;
+        if (event.type == YAML_SCALAR_EVENT) {
+            while (field < 3 && strcmp((char *)event.data.scalar.value, fields[field]))
+                ++field;
+        } else {
+            field = 3;
+        }
+        yaml_event_delete(&event);
+        if (field == 3 || (seen & (1u << field)))
+            goto invalid;
+
+        if (!yaml_parser_parse(state, &event))
+            return false;
+        bool valid = false;
+        if (event.type == YAML_SCALAR_EVENT) {
+            const char *value = (char *)event.data.scalar.value;
+            char *end;
+            unsigned long number = strtoul(value, &end, 0);
+            if (*value >= '0' && *value <= '9' &&
+                end == value + event.data.scalar.length && number <= UINT8_MAX) {
+                *values[field] = (u8)number;
+                valid = true;
+            }
+        }
+        yaml_event_delete(&event);
+        if (!valid)
+            goto invalid;
+        seen |= 1u << field;
+    }
+    return false;
+
+invalid:
+    print_str("Class match requires class, subclass, and interface bytes exactly once\n");
+    return false;
 }
 
 void release_strings_array(char **strings, size_t count)
@@ -695,8 +767,15 @@ static bool parse_match_filter(yaml_parser_t *state, yaml_event_t *event, struct
                 cont = parse_pnp(state, service);
             } else if (!strcmp((char *)new_event.data.scalar.value, MATCH_PCI)) {
                 cont = parse_pci(state, service);
+            } else if (!strcmp((char *)new_event.data.scalar.value, "class")) {
+                if (!parse_class(state, service)) {
+                    yaml_event_delete(&new_event);
+                    return false;
+                }
             } else if (!strcmp((char *)new_event.data.scalar.value, MATCH_DEVICES)) {
                 cont = parse_devices(state, service);
+            } else if (!strcmp((char *)new_event.data.scalar.value, MATCH_CLASS)) {
+                cont = parse_class(state, service);
             } else {
                 print_str("Unknown match filter key: ");
                 print_str((char *)new_event.data.scalar.value);

@@ -575,12 +575,14 @@ pmos::async::detached_task ahci_handle()
     // printf("AHCI controller: vendor 0x%x device 0x%x class 0x%x subclass 0x%x prog_if 0x%x\n",
     //        vendor_id, device_id, class_code, subclass, prog_if);
 
-    // Enable DMA and memory space access
-    uint32_t command = co_await ahci_controller->readw(0x4);
-    command |= 0x06;
-    co_await ahci_controller->writew(0x4, command);
-
     auto my_device_type = co_await ahci_controller->get_device_type();
+
+    if (my_device_type == PCIDevice::DeviceType::PCI) {
+        // Enable DMA and memory space access
+        uint32_t command = co_await ahci_controller->readw(0x4);
+        command |= 0x06;
+        co_await ahci_controller->writew(0x4, command);
+    }
 
     // Get BAR5
     uint32_t bar5;

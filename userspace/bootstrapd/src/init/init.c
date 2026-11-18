@@ -28,8 +28,11 @@ static void free_match_filters(match_filter_vector filters)
 {
     struct MatchFilter f;
     VECTOR_FOREACH(filters, f) {
-        free(f.key);
-        if (f.strings) {
+        if (!strcmp(f.key, "pci")) {
+            free(f.pci_filter.class);
+            free(f.pci_filter.subclass);
+            free(f.pci_filter.prog_if);
+        } else if (strcmp(f.key, "class") && f.strings) {
             char **s = f.strings;
             while (*s) {
                 free(*s);
@@ -37,6 +40,7 @@ static void free_match_filters(match_filter_vector filters)
             }
             free(f.strings);
         }
+        free(f.key);
     }
     VECTOR_FREE(filters);
 }
@@ -134,6 +138,33 @@ error:
     return NULL;
 }
 
+static int add_class_filters(pmos_bus_filter_disjunction *filter, struct ClassFilter f)
+{
+    char class_code[5], subclass[5], interface[5], acpi_class[7];
+    snprintf(class_code, sizeof(class_code), "0x%02X", (unsigned)f.class);
+    snprintf(subclass, sizeof(subclass), "0x%02X", (unsigned)f.subclass);
+    snprintf(interface, sizeof(interface), "0x%02X", (unsigned)f.prog_if);
+    snprintf(acpi_class, sizeof(acpi_class), "%02X%02X%02X",
+             (unsigned)f.class, (unsigned)f.subclass, (unsigned)f.prog_if);
+
+    void *pci = construct_pci_filter((struct PCIFilter){class_code, subclass, interface});
+    if (!pci)
+        return -1;
+    if (pmos_bus_filter_disjunction_add(filter, pci) != 0) {
+        pmos_bus_filter_free(pci);
+        return -1;
+    }
+
+    pmos_bus_filter_equals *acpi = pmos_bus_filter_equals_create("acpi_cls", acpi_class);
+    if (!acpi)
+        return -1;
+    if (pmos_bus_filter_disjunction_add(filter, acpi) != 0) {
+        pmos_bus_filter_free(acpi);
+        return -1;
+    }
+    return 0;
+}
+
 void *construct_acpi_filter(char **strings)
 {
     if (!strings || !strings[0])
@@ -228,7 +259,8 @@ void *construct_filter(struct Service *service)
             print_str("\n");
             continue;
         }
-        if (!f->strings || !f->strings[0]) {
+        if ((!strcmp(f->key, "pnp") || !strcmp(f->key, "devices")) &&
+            (!f->strings || !f->strings[0])) {
             print_str("Match filter with no strings in service ");
             print_str(service->name);
             print_str("\n");
@@ -259,7 +291,7 @@ void *construct_filter(struct Service *service)
             }
 
             if (pmos_bus_filter_disjunction_add(d, a) < 0) {
-                print_str("Failed to add ACPI filter to disjunction\n");
+                print_str("Failed to add PCI/ACPI filter to disjunction\n");
                 pmos_bus_filter_free(a);
                 goto error;
             }
@@ -275,6 +307,11 @@ void *construct_filter(struct Service *service)
             if (pmos_bus_filter_disjunction_add(d, a) < 0) {
                 print_str("Failed to add ACPI filter to disjunction\n");
                 pmos_bus_filter_free(a);
+                goto error;
+            }
+        } else if (!strcmp(f->key, "class")) {
+            if (add_class_filters(d, f->class_filter) != 0) {
+                print_str("Failed to add class filter to disjunction\n");
                 goto error;
             }
         } else {
