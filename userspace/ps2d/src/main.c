@@ -134,6 +134,8 @@ int port_msg_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_
         fprintf(stderr, "[PS2d] Warning: Received message of unknown type %" PRIu32 " from the port...\n", IPC_TYPE(buff));
         break;
     }
+
+    return PMOS_MSGLOOP_CONTINUE;
 }
 
 pmos_right_t port_receive_right = INVALID_RIGHT;

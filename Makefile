@@ -155,7 +155,7 @@ qemu-aarch64: $(aarch64-HYPER-IMG)
 		-bios "$(AARCH64_UEFI)" \
 		-device ramfb -device qemu-xhci -device usb-kbd \
 		-drive if=none,id=bootdisk,format=raw,file="$(aarch64-HYPER-IMG)" \
-		-device virtio-blk-device,drive=bootdisk,bootindex=0 \
+		-device nvme,drive=bootdisk,serial=pmos-nvme0,bootindex=0 \
 		-serial stdio -smp 4
 
 qemu-aarch64-limine: $(aarch64-IMG)
@@ -164,7 +164,7 @@ qemu-aarch64-limine: $(aarch64-IMG)
 		-bios "$(AARCH64_UEFI)" \
 		-device ramfb -device qemu-xhci -device usb-kbd \
 		-drive if=none,id=bootdisk,format=raw,file="$(aarch64-IMG)" \
-		-device virtio-blk-device,drive=bootdisk,bootindex=0 \
+		-device nvme,drive=bootdisk,serial=pmos-nvme0,bootindex=0 \
 		-serial stdio -smp 4
 
 qemu-single: $(riscv64-IMG) ovmf-riscv64
