@@ -217,8 +217,6 @@ void init_smp_acpi()
 }
 
 extern "C" void ap_bringup_trampoline();
-extern phys_addr_t kernel_phys_base;
-extern u8 _kernel_start;
 
 static void mailbox_send(u32 cpu_phys, unsigned idx, u32 data)
 {
@@ -241,7 +239,7 @@ void ipi_send(u32 cpu, u32 vector);
 
 void start_aps()
 {
-    phys_addr_t phys_addr = kernel_phys_base + ((u8 *)&ap_bringup_trampoline - &_kernel_start);
+    phys_addr_t phys_addr = kernel::paging::kernel_phys_base + ((u8 *)&ap_bringup_trampoline - (u8 *)&_kernel_start);
 
     for (size_t i = 1; i < cpus.size(); ++i) {
         auto cpu = cpus[i];

@@ -92,7 +92,7 @@ void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
     fill_device(&p, g, bus, device, function);
     printf("!! PCI group %i bus %i device %i function %i vendor %x device %x", g->group_number, bus,
            device, function, pci_vendor_id(&p), pci_device_id(&p));
-    printf("  -> class %x subclass %x\n", pci_class_code(&p), pci_subclass(&p));
+    printf("  -> class %x subclass %x function %x\n", pci_class_code(&p), pci_subclass(&p), pci_prog_if(&p));
 
     struct PCIDevice *d = malloc(sizeof(*d));
     if (!d) {

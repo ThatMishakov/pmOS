@@ -13,9 +13,7 @@
 
 using namespace kernel;
 
-extern u8 _kernel_start;
 extern u8 tlb_refill;
-extern u64 kernel_phys_base;
 
 using namespace kernel::paging;
 
@@ -55,7 +53,7 @@ u64 tlb_refill_addr = 0;
 
 static void set_tlbrentry()
 {
-    tlb_refill_addr = kernel_phys_base + (&tlb_refill - &_kernel_start);
+    tlb_refill_addr = kernel_phys_base + (&tlb_refill - (u8 *)&_kernel_start);
     csrwr<CSR_TLBRENTRY>(tlb_refill_addr);
 }
 
