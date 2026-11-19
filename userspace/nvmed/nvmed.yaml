@@ -1,0 +1,10 @@
+services:
+- name: nvmed
+  path: /nvmed.elf
+  description: NVMe disk driver
+  run_type: FOR_EACH_MATCH
+  match:
+    pci:
+      class: 0x1
+      subclass: 0x8
+      interface: 0x2

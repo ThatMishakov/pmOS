@@ -11,6 +11,12 @@ return {
             Local("userspace/ahcid"),
         }
     end,
+    ["userspace/nvmed"] = function()
+        return Source {
+            name = "nvmed",
+            Local("userspace/nvmed"),
+        }
+    end,
     ["bash"] = function()
         return Source {
             name = "bash",

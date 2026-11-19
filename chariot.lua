@@ -23,7 +23,7 @@ local common = chariot.read_file("scripts/chariot-common.sh")
     :gsub("@MESON_CROSS_FILE@", function() return chariot.read_file("scripts/meson.cross-file") end)
     :gsub("@CMAKE_TOOLCHAIN@", function() return chariot.read_file("scripts/CMakeToolchain.txt") end)
 local services = {"ahcid", "devicesd", "logd", "processd", "terminald", "blockd",
-                  "ps2d", "tests", "ns16550", "pmbus", "ext4"}
+                  "ps2d", "tests", "ns16550", "pmbus", "ext4", "nvmed"}
 if arch == "x86_64" or arch == "i686" then table.insert(services, "i8042") end
 
 -- Helpers only assemble native references and script text. Chariot owns the graph,

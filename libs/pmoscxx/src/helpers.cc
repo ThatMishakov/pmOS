@@ -4,6 +4,9 @@
 #include <pmos/ports.h>
 #include <pmos/interrupts.h>
 #include <pmos/ipc.h>
+#include <time.h>
+#include <pmos/system.h>
+#include <cassert>
 
 namespace pmos
 {
@@ -403,4 +406,80 @@ std::expected<uint64_t, int> Right::process_id() const noexcept
     return result.value;
 }
 
+void PortDispatcher::start_timer_waiter()
+{
+    timer_waiter_right = create_timer_right(port);
+ 
+    [this]() -> pmos::async::detached_task {
+        while (true) {
+            auto msg = co_await get_message(timer_waiter_right);
+            if (!msg) {
+                throw std::system_error(msg.error(), std::system_category(),
+                                        "Failed to get timer message");
+            }
+
+            auto request = (IPC_Generic_Msg *)msg->data.data();
+            switch (request->type) {
+            case IPC_Timer_Expired_NUM: {
+                auto result = pmos_get_time(CLOCK_MONOTONIC);
+                assert(result.result == 0);
+                auto time = result.value;
+
+                next_timer_time = TIMER_NEVER;
+
+                TimerTree::RBTreeIterator it;
+                while (!timer_tree.empty() and ((it = timer_tree.begin())->deadline < time)) {
+                    timer_tree.erase(it);
+                    it->h.resume();
+                }
+
+                if (!timer_tree.empty()) {
+                    auto next_time = timer_tree.begin()->deadline;
+                    if (next_time < next_timer_time) {
+                        next_timer_time = next_time;
+                        set_deadline(timer_waiter_right, next_time);
+                    }
+                }
+            } break;
+            case IPC_Kernel_Receive_Right_Destroyed_NUM:
+                break;
+            default:
+                printf("PortDispatcher unknown message type: %i in timer handler!\n", request->type);
+                break;
+            }
+        }
+
+        co_return;
+    }();
 }
+
+PortDispatcher::TimerWaiter PortDispatcher::wait_for(uint64_t duration_ns)
+{
+    if (!timer_waiter_right)
+        start_timer_waiter();
+
+    auto time = pmos_get_time(CLOCK_MONOTONIC).value;
+    return TimerWaiter(*this, time + duration_ns);
+}
+
+PortDispatcher::TimerWaiter PortDispatcher::wait_until(uint64_t deadline_ns)
+{
+    if (!timer_waiter_right)
+        start_timer_waiter();
+
+    return TimerWaiter(*this, deadline_ns);
+}
+
+void PortDispatcher::TimerWaiter::await_suspend(std::coroutine_handle<> h)
+{
+    this->h = h;
+    dispatcher.timer_tree.insert(this);
+
+    if (dispatcher.next_timer_time < deadline)
+        set_deadline(dispatcher.timer_waiter_right, deadline);
+}
+
+PortDispatcher::TimerWaiter::TimerWaiter(PortDispatcher &dispatcher, uint64_t deadline_ns) noexcept:
+    deadline(deadline_ns), dispatcher(dispatcher) {}
+
+} // namespace pmos

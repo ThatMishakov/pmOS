@@ -235,11 +235,15 @@ protected:
 
     class TimerWaiter {
     public:
-        bool await_ready() noexcept;
+        inline bool await_ready() noexcept
+        {
+            return false;
+        }
         void await_suspend(std::coroutine_handle<> h);
-        void await_resume() noexcept;
+        inline void await_resume() noexcept
+        {}
     private:
-        TimerWaiter(PortDispatcher &dispatcher, uint64_t deadline) noexcept;
+        TimerWaiter(PortDispatcher &dispatcher, uint64_t deadline_ns) noexcept;
 
         uint64_t deadline;
         std::coroutine_handle<> h;
@@ -254,8 +258,11 @@ protected:
         detail::TreeCmp<TimerWaiter, uint64_t, &TimerWaiter::deadline>>;
 
     TimerTree::RBTreeHead timer_tree;
-    uint64_t next_timer_time = 0;
+    constexpr static uint64_t TIMER_NEVER = (uint64_t)-1;
+    uint64_t next_timer_time = TIMER_NEVER;
     ReceiveRight timer_waiter_right;
+
+    void start_timer_waiter();
 public:
 
     constexpr PortDispatcher(Port &) noexcept;
