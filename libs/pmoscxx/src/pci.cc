@@ -1,4 +1,4 @@
-#include "pci.hh"
+#include <pmos/device_handler.hh>
 
 #include <errno.h>
 #include <pmos/helpers.hh>
@@ -11,13 +11,9 @@
 #include <system_error>
 #include <inttypes.h>
 
-extern pmos::Right device_right;
-extern pmos::Port cmd_port;
-extern pmos::PortDispatcher dispatcher;
+namespace {
 
-// TODO: pthread stuff
-
-pmos::ReceiveRight send_devicesd(auto &request, pmos::Port *reply_port)
+pmos::ReceiveRight send_devicesd(auto &request, pmos::Port *reply_port, pmos::Right &device_right)
 {
     auto r =
         send_message_right_one(device_right, request, {reply_port, pmos::RightType::SendOnce});
@@ -31,7 +27,7 @@ pmos::ReceiveRight send_devicesd(auto &request, pmos::Port *reply_port)
     return std::move(*r);
 }
 
-pmos::ReceiveRight send_devicesd(std::span<const uint8_t> data, pmos::Port *reply_port)
+pmos::ReceiveRight send_devicesd(std::span<const uint8_t> data, pmos::Port *reply_port, pmos::Right &device_right)
 {
     auto r = send_message_right(device_right, data, {reply_port, pmos::RightType::SendOnce});
     if (!r) {
@@ -43,13 +39,15 @@ pmos::ReceiveRight send_devicesd(std::span<const uint8_t> data, pmos::Port *repl
     return std::move(*r);
 }
 
-pmos::async::task<std::unique_ptr<PCIDevice>> get_pci_device()
-{
-    co_return std::make_unique<PCIDevice>();
-}
+} // namespace
 
-pmos::async::task<void> PCIDevice::writew(uint16_t offset, uint16_t val)
+namespace pmos
 {
+
+pmos::async::task<void> DeviceHandler::pci_writew(uint16_t offset, uint16_t val)
+{
+    auto &cmd_port = dispatcher.get_port();
+
     if (offset & 1)
         throw std::system_error(EINVAL, std::system_category(), "Misaligned access");
 
@@ -60,15 +58,15 @@ pmos::async::task<void> PCIDevice::writew(uint16_t offset, uint16_t val)
         .data = val,
     };
 
-    auto right = send_devicesd(req, &cmd_port);
+    auto right = send_devicesd(req, &cmd_port, device_right);
     auto msg = co_await dispatcher.get_message(right);
 
     if (msg->data.size() < sizeof(IPC_PCI_Write_Result))
-        throw std::system_error(EPROTO, std::system_category(), "Unexpected message size in PCIDevice::writew");
+        throw std::system_error(EPROTO, std::system_category(), "Unexpected message size in DeviceHandler::writew");
 
     auto *reply = reinterpret_cast<IPC_PCI_Write_Result *>(msg->data.data());
     if (reply->type != IPC_PCI_Write_Result_NUM)
-        throw std::system_error(EPROTO, std::system_category(), "Unexpected message type in PCIDevice::writew");
+        throw std::system_error(EPROTO, std::system_category(), "Unexpected message type in DeviceHandler::writew");
 
     if (reply->result)
         throw std::system_error(-reply->result, std::system_category());
@@ -76,7 +74,7 @@ pmos::async::task<void> PCIDevice::writew(uint16_t offset, uint16_t val)
     co_return;
 }
 
-pmos::async::task<uint32_t> PCIDevice::readl(uint16_t offset) {
+pmos::async::task<uint32_t> DeviceHandler::pci_readl(uint16_t offset) {
     if (offset & 3)
         throw std::system_error(EINVAL, std::system_category(), "Misaligned access");
 
@@ -86,15 +84,17 @@ pmos::async::task<uint32_t> PCIDevice::readl(uint16_t offset) {
         .access_width = 4,
     };
 
-    auto right = send_devicesd(req, &cmd_port);
+    auto &cmd_port = dispatcher.get_port();
+
+    auto right = send_devicesd(req, &cmd_port, device_right);
     auto msg = co_await dispatcher.get_message(right);
 
     if (msg->data.size() < sizeof(IPC_PCI_Read_Result))
-        throw std::system_error(EPROTO, std::system_category(), "Unexpected message size in PCIDevice::readl");
+        throw std::system_error(EPROTO, std::system_category(), "Unexpected message size in DeviceHandler::readl");
 
     auto *reply = reinterpret_cast<IPC_PCI_Read_Result *>(msg->data.data());
     if (reply->type != IPC_PCI_Read_Result_NUM)
-        throw std::system_error(EPROTO, std::system_category(), "Unexpected message type in PCIDevice::readl");
+        throw std::system_error(EPROTO, std::system_category(), "Unexpected message type in DeviceHandler::readl");
 
     if (reply->result)
         throw std::system_error(-reply->result, std::system_category());
@@ -102,24 +102,24 @@ pmos::async::task<uint32_t> PCIDevice::readl(uint16_t offset) {
     co_return reply->data;
 }
 
-pmos::async::task<uint16_t> PCIDevice::readw(uint16_t offset)
+pmos::async::task<uint16_t> DeviceHandler::pci_readw(uint16_t offset)
 {
     if (offset & 1)
         throw std::system_error(EINVAL, std::system_category(), "Misaligned access");
 
-    auto result = co_await readl(offset & ~3);
+    auto result = co_await pci_readl(offset & ~3);
     if (offset & 2)
         co_return result >> 16;
     else
         co_return result;
 }
-pmos::async::task<uint8_t> PCIDevice::readb(uint16_t offset)
+pmos::async::task<uint8_t> DeviceHandler::pci_readb(uint16_t offset)
 {
-    auto result = co_await readl(offset & ~3);
+    auto result = co_await pci_readl(offset & ~3);
     co_return result >> (offset & 3) * 8;
 }
 
-pmos::async::task<pmos::ReceiveRight> PCIDevice::register_interrupt()
+pmos::async::task<pmos::ReceiveRight> DeviceHandler::register_interrupt()
 {
     IPC_Request_Interrupt request = {
         .type       = IPC_Request_Interrupt_NUM,
@@ -127,7 +127,8 @@ pmos::async::task<pmos::ReceiveRight> PCIDevice::register_interrupt()
         .index      = 0,
     };
 
-    auto right = send_devicesd(request, &cmd_port);
+    auto &cmd_port = dispatcher.get_port();
+    auto right = send_devicesd(request, &cmd_port, device_right);
     auto msg = co_await dispatcher.get_message(right);
 
     if (msg->data.size() < sizeof(IPC_Request_Int_Reply))
@@ -150,14 +151,15 @@ pmos::async::task<pmos::ReceiveRight> PCIDevice::register_interrupt()
     co_return pmos::register_interrupt(int_right, cmd_port);
 }
 
-pmos::async::task<PCIDevice::DeviceType> PCIDevice::get_device_type()
+pmos::async::task<DeviceHandler::DeviceType> DeviceHandler::get_device_type()
 {
     IPC_Get_Device_Type request = {
         .type  = IPC_Get_Device_Type_NUM,
         .flags = 0,
     };
 
-    auto right = send_devicesd(request, &cmd_port);
+    auto &cmd_port = dispatcher.get_port();
+    auto right = send_devicesd(request, &cmd_port, device_right);
     auto msg = co_await dispatcher.get_message(right);
 
     if (msg->data.size() < sizeof(IPC_Get_Device_Type_Reply))
@@ -177,7 +179,7 @@ pmos::async::task<PCIDevice::DeviceType> PCIDevice::get_device_type()
     };
 }
 
-pmos::async::task<PCIDevice::Resource> PCIDevice::get_resource(RequestType request_type, uint32_t index, std::string_view name, ResourceType type)
+pmos::async::task<DeviceHandler::Resource> DeviceHandler::get_resource(RequestType request_type, uint32_t index, std::string_view name, ResourceType type)
 {
     std::unique_ptr<uint8_t[]> msg = std::make_unique<uint8_t[]>(sizeof(IPC_Request_Resource) + name.size());
     IPC_Request_Resource *request = (IPC_Request_Resource *)msg.get();
@@ -209,7 +211,8 @@ pmos::async::task<PCIDevice::Resource> PCIDevice::get_resource(RequestType reque
     memcpy(request->resource_name, name.data(), name.size());
     request->resource_index = index;
 
-    auto right = send_devicesd(std::span<const uint8_t>(msg.get(), sizeof(IPC_Request_Resource) + name.size()), &cmd_port);
+    auto &cmd_port = dispatcher.get_port();
+    auto right = send_devicesd(std::span<const uint8_t>(msg.get(), sizeof(IPC_Request_Resource) + name.size()), &cmd_port, device_right);
     auto msg_reply = co_await dispatcher.get_message(right);
 
     if (msg_reply->data.size() < sizeof(IPC_Request_Resource_Reply))
@@ -222,7 +225,7 @@ pmos::async::task<PCIDevice::Resource> PCIDevice::get_resource(RequestType reque
     if (reply->result < 0)
         throw std::system_error(-reply->result, std::generic_category(), "Failed to get resource");
 
-    PCIDevice::Resource resource{};
+    Resource resource{};
     switch (reply->resource_type) {
     case IPC_DEVICE_RESOURCE_MMIO:
         resource.type = ResourceType::Memory;
@@ -238,3 +241,5 @@ pmos::async::task<PCIDevice::Resource> PCIDevice::get_resource(RequestType reque
     resource.size = reply->resource_length;
     co_return resource;
 }
+
+} // namespace pmos
