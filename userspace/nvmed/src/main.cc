@@ -1,3 +1,6 @@
+#include "queue.hh"
+#include "spec.hh"
+
 #include <pmos/device_handler.hh>
 
 #include <algorithm>
@@ -23,6 +26,8 @@
 #include <algorithm>
 #include <iostream>
 #include <pmos/io.h>
+#include <pmos/utility/scope_guard.hh>
+#include <pmos/containers/intrusive_list.hh>
 
 using namespace pmos;
 
@@ -34,63 +39,11 @@ auto pmbus_helper = pmos::PMBUSHelper(dispatcher);
 
 std::unique_ptr<pmos::DeviceHandler> nvme_controller = nullptr;
 
-uint32_t *nvme_virt_base          = nullptr;
-
-// TimerTree::RBTreeHead timer_tree;
-uint64_t next_timer_time = 0;
-
-pmos::ReceiveRight timer_right;
-
-pmos::async::detached_task handle_interrupts(pmos::ReceiveRight int_right)
-{
-    while (1) {
-        auto msg = co_await dispatcher.get_message(int_right);
-        if (!msg) {
-            fprintf(stderr, "ahcid: Failed to get message: %i\n", msg.error());
-            exit(1);
-        }
-
-        auto request = (IPC_Generic_Msg *)msg->data.data();
-        switch (request->type) {
-        case IPC_Kernel_Interrupt_NUM: {
-            // auto kmsg = (IPC_Kernel_Interrupt *)request;
-            // printf("Kernel interrupt: %i\n", kmsg->intno);
-            // react_interrupt();
-            pmos::complete_interrupt(int_right);
-        } break;
-        default:
-            printf("NVMe: unknown message type: %i in interrupt handler!\n", request->type);
-            exit(1);
-            break;
-        }
-    }
-}
-
-constexpr uint32_t NVME_REG_CAP = 0x0;
-constexpr uint32_t NVME_REG_VS  = 0x8;
-constexpr uint32_t NVME_REG_INTMS = 0xC;
-constexpr uint32_t NVME_REG_INTMC = 0x10;
-constexpr uint32_t NVME_REG_CC = 0x14;
-constexpr uint32_t NVME_REG_CSTS = 0x1C;
+uint32_t *nvme_virt_base = nullptr;
 
 uint32_t doorbell_stride = 0; // register * (1 << doorbell_stride)
 uint32_t timeout = 0; // 500 milliseconds units
 uint32_t maximum_queue_entries = 0;
-
-uint32_t nvme_read32(uint32_t offset)
-{
-    return mmio_readl(nvme_virt_base + offset / 4);
-}
-uint64_t nvme_read64(uint32_t offset)
-{
-    auto low = mmio_readl(nvme_virt_base + offset / 4);
-    auto high = mmio_readl(nvme_virt_base + offset / 4 + 1);
-    return (uint64_t)high << 32 | low;
-}
-void nvme_write32(uint32_t offset, uint32_t value)
-{
-    mmio_writel(nvme_virt_base + offset / 4, value);
-}
 
 pmos::async::task<void> kinda_busy_wait(uint64_t duration_ms, auto func)
 {
@@ -119,6 +72,134 @@ pmos::async::task<void> wait_for_status(bool status)
     }
 
     co_return;
+}  
+
+std::shared_ptr<NVMeCompletionQueue> admin_completion_queue;
+std::shared_ptr<NVMeSubmissionQueue> admin_submission_queue;
+
+void init_admin_queue()
+{
+    auto page_size = getpagesize();
+    auto request = create_normal_region(0, nullptr, page_size, PROT_READ | PROT_WRITE | CREATE_FLAG_DMA);
+    if ((long)request.result < 0) {
+        std::cout << "Failed to allocate memory for NVMe admin completion queue: " << (int)request.result << " (" << strerror(-request.result) << ")\n";
+        exit(1);
+    }
+    admin_completion_queue = std::make_shared<NVMeCompletionQueue>();
+    admin_completion_queue->dma_virt_base = request.virt_addr;
+
+    request = create_normal_region(0, nullptr, page_size, PROT_READ | PROT_WRITE | CREATE_FLAG_DMA);
+    if ((long)request.result < 0) {
+        std::cout << "Failed to allocate memory for NVMe admin submission queue: " << (int)request.result << " (" << strerror(-request.result) << ")\n";
+        exit(1);
+    }
+    admin_submission_queue = std::make_shared<NVMeSubmissionQueue>();
+    admin_submission_queue->dma_virt_base = request.virt_addr;
+    admin_submission_queue->completion_queue = admin_completion_queue;
+    admin_completion_queue->submission_queue = admin_submission_queue.get();
+
+    constexpr uint32_t maximum_admin_queue_entries = 4096;
+
+    admin_completion_queue->size = std::min<uint32_t>(maximum_admin_queue_entries, page_size / COMPLETION_QUEUE_ENTRY_SIZE);
+    admin_submission_queue->size = std::min<uint32_t>(maximum_admin_queue_entries, page_size / SUBMISSION_QUEUE_ENTRY_SIZE);
+
+    auto phys_addr = get_page_phys_address(0, admin_completion_queue->dma_virt_base, 0);
+    if ((long)phys_addr.result < 0) {
+        std::cout << "Could not get physical address for NVMe admin completion queue: " << (int)phys_addr.result << " (" << strerror(-phys_addr.result) << ")\n";
+        exit(1);
+    }
+    nvme_write64(NVME_REG_ACQ, phys_addr.phys_addr);
+    phys_addr = get_page_phys_address(0, admin_submission_queue->dma_virt_base, 0);
+    if ((long)phys_addr.result < 0) {
+        std::cout << "Could not get physical address for NVMe admin submission queue: "<< (int)phys_addr.result << " (" << strerror(-phys_addr.result) << ")\n";
+        exit(1);
+    }
+    nvme_write64(NVME_REG_ASQ, phys_addr.phys_addr);
+
+    uint32_t aqa = ((admin_completion_queue->size - 1) << 16) | (admin_submission_queue->size - 1);
+    nvme_write32(NVME_REG_AQA, aqa);
+
+    // Enable the interrupt
+    nvme_write32(NVME_REG_INTMC, 1);
+}
+
+pmos::async::task<void> identify_controller()
+{
+    auto page_size = getpagesize();
+    auto region = create_normal_region(0, nullptr, page_size, PROT_READ | PROT_WRITE | CREATE_FLAG_DMA);
+    if ((long)region.result < 0) {
+        std::cout << "Failed to allocate memory for NVMe identify controller data: " << (int)region.result << " (" << strerror(-region.result) << ")\n";
+        exit(1);
+    }
+    pmos::utility::scope_guard cleanup_region([region, page_size]() {
+        munmap(region.virt_addr, page_size);
+    });
+
+    auto phys_addr = get_page_phys_address(0, region.virt_addr, 0);
+    if ((long)phys_addr.result < 0) {
+        std::cout << "Could not get physical address for NVMe identify controller data: "
+                    << (int)phys_addr.result << " (" << strerror(-phys_addr.result) << ")\n";
+        exit(1);
+    }
+
+    NVMeCommand cmd = {};
+    cmd.opcode = 0x06; // Identify
+    cmd.command_id = 1;
+    cmd.prp1 = phys_addr.phys_addr;
+    cmd.cdw10 = 1; // Identify controller
+
+    pmos::dma_wmb();
+
+    auto completion_entry = co_await admin_submission_queue->submit_command(cmd);
+    if (!completion_entry.success()) {
+        std::cout << "Identify controller command failed with status: " << completion_entry.status << "\n";
+        exit(1);
+    }
+
+    pmos::dma_rmb();
+
+    auto *controller = reinterpret_cast<IdentifyController *>(region.virt_addr);
+    std::cout << "Controller ID: " << controller->cntlid << "\n";
+    std::cout << "Vendor ID: " << controller->vid << "\n";
+    std::cout << "Subsystem Vendor ID: " << controller->ssvid << "\n";
+    std::cout << "Serial Number: " << controller->sn << "\n";
+    std::cout << "Model Number: " << controller->mn << "\n";
+    std::cout << "Firmware Revision: " << controller->fr << "\n";
+
+    std::cout << "Identify controller command completed successfully.\n";
+}
+
+void check_nvme_interrupts()
+{
+    // TODO: Do this for other queues...
+    assert(admin_completion_queue);
+    admin_completion_queue->check_for_completions();
+}
+
+pmos::async::detached_task handle_interrupts(pmos::ReceiveRight int_right)
+{
+    while (1) {
+        auto msg = co_await dispatcher.get_message(int_right);
+        if (!msg) {
+            fprintf(stderr, "ahcid: Failed to get message: %i\n", msg.error());
+            exit(1);
+        }
+
+        auto request = (IPC_Generic_Msg *)msg->data.data();
+        switch (request->type) {
+        case IPC_Kernel_Interrupt_NUM: {
+            // Mask all interrupts, then complete them, then handle them
+            nvme_write32(NVME_REG_INTMS, 0xffffffff);
+            pmos::complete_interrupt(int_right);
+
+            check_nvme_interrupts();
+        } break;
+        default:
+            printf("NVMe: unknown message type: %i in interrupt handler!\n", request->type);
+            exit(1);
+            break;
+        }
+    }
 }
 
 pmos::async::detached_task nvme_handle()
@@ -182,12 +263,19 @@ pmos::async::detached_task nvme_handle()
     nvme_write32(NVME_REG_CC, 0);
     co_await wait_for_status(false);
 
+    // Mask interrupts
+    nvme_write32(NVME_REG_INTMS, 0xffffffff);
+
+    init_admin_queue();
+
     // Enable the controller
     uint32_t cc = (page_order_normal << 7) | 1;
     nvme_write32(NVME_REG_CC, cc);
     co_await wait_for_status(true);
 
     std::cout << "Enabled NVMe controller..." << std::endl;
+
+    co_await identify_controller();
 }
 
 void usage(char *name)
