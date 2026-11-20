@@ -288,6 +288,9 @@ ReturnStr<Page_Info> Mem_Object_Reference::get_page(void *ptr_addr, unsigned acc
     uintptr_t offset = (uintptr_t)ptr_addr - (uintptr_t)start_addr;
     bool is_writing = writing(access);
 
+    assert(references);
+    auto cache_policy = references->is_dma() ? Memory_Type::MemoryNoCache : Memory_Type::Normal; 
+
     if (cow) {
         auto it = amap.find(offset + object_offset_bytes);
         if (it != amap.end()) {
@@ -308,7 +311,7 @@ ReturnStr<Page_Info> Mem_Object_Reference::get_page(void *ptr_addr, unsigned acc
                     .writeable = writeable,
                     .executable = !!(access_type & Executable),
                     .readable = !!(access_type & Readable),
-                    .cache_policy = Memory_Type::Normal,
+                    .cache_policy = cache_policy,
                     .page_addr = page.get_phys_addr(),
                 };
             }
@@ -329,7 +332,7 @@ ReturnStr<Page_Info> Mem_Object_Reference::get_page(void *ptr_addr, unsigned acc
                 .writeable = static_cast<bool>(access_type & Writeable),
                 .executable = static_cast<bool>(access_type & Executable),
                 .readable = static_cast<bool>(access_type & Readable),
-                .cache_policy = Memory_Type::Normal,
+                .cache_policy = cache_policy,
                 .page_addr = phys_addr,
             };
         }
@@ -351,7 +354,7 @@ ReturnStr<Page_Info> Mem_Object_Reference::get_page(void *ptr_addr, unsigned acc
                 .writeable = false,
                 .executable = static_cast<bool>(access_type & Executable),
                 .readable = static_cast<bool>(access_type & Readable),
-                .cache_policy = Memory_Type::Normal,
+                .cache_policy = cache_policy,
                 .page_addr = page.val.get_phys_addr(),
             };
         }
@@ -391,7 +394,7 @@ ReturnStr<Page_Info> Mem_Object_Reference::get_page(void *ptr_addr, unsigned acc
             .writeable = static_cast<bool>(access_type & Writeable),
             .executable = static_cast<bool>(access_type & Executable),
             .readable = static_cast<bool>(access_type & Readable),
-            .cache_policy = Memory_Type::Normal,
+            .cache_policy = cache_policy,
             .page_addr = phys_addr,
         };
     }
@@ -413,7 +416,7 @@ ReturnStr<Page_Info> Mem_Object_Reference::get_page(void *ptr_addr, unsigned acc
         .writeable = static_cast<bool>(access_type & Writeable) && is_writing,
         .executable = static_cast<bool>(access_type & Executable),
         .readable = static_cast<bool>(access_type & Readable),
-        .cache_policy = Memory_Type::Normal,
+        .cache_policy = cache_policy,
         .page_addr = phys_addr,
     };
 }
