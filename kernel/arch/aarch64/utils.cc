@@ -26,7 +26,8 @@ void arch_specific_park_pre_offline()
 
 void arch_specific_park_stop()
 {
-    halt();
+    while (true)
+        halt();
 }
 
 void printc(int)
