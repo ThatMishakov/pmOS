@@ -409,10 +409,11 @@ std::expected<uint64_t, int> Right::process_id() const noexcept
 void PortDispatcher::start_timer_waiter()
 {
     timer_waiter_right = create_timer_right(port);
- 
-    [this]() -> pmos::async::detached_task {
+
+    // Pass the dispatcher into the coroutine frame instead of capturing a temporary closure.
+    [](PortDispatcher *self) -> pmos::async::detached_task {
         while (true) {
-            auto msg = co_await get_message(timer_waiter_right);
+            auto msg = co_await self->get_message(self->timer_waiter_right);
             if (!msg) {
                 throw std::system_error(msg.error(), std::system_category(),
                                         "Failed to get timer message");
@@ -425,19 +426,19 @@ void PortDispatcher::start_timer_waiter()
                 assert(result.result == 0);
                 auto time = result.value;
 
-                next_timer_time = TIMER_NEVER;
+                self->next_timer_time = TIMER_NEVER;
 
                 TimerTree::RBTreeIterator it;
-                while (!timer_tree.empty() and ((it = timer_tree.begin())->deadline < time)) {
-                    timer_tree.erase(it);
+                while (!self->timer_tree.empty() and ((it = self->timer_tree.begin())->deadline <= time)) {
+                    self->timer_tree.erase(it);
                     it->h.resume();
                 }
 
-                if (!timer_tree.empty()) {
-                    auto next_time = timer_tree.begin()->deadline;
-                    if (next_time < next_timer_time) {
-                        next_timer_time = next_time;
-                        set_deadline(timer_waiter_right, next_time);
+                if (!self->timer_tree.empty()) {
+                    auto next_time = self->timer_tree.begin()->deadline;
+                    if (next_time < self->next_timer_time) {
+                        self->next_timer_time = next_time;
+                        set_deadline(self->timer_waiter_right, next_time);
                     }
                 }
             } break;
@@ -450,7 +451,7 @@ void PortDispatcher::start_timer_waiter()
         }
 
         co_return;
-    }();
+    }(this);
 }
 
 PortDispatcher::TimerWaiter PortDispatcher::wait_for(uint64_t duration_ns)
@@ -475,8 +476,10 @@ void PortDispatcher::TimerWaiter::await_suspend(std::coroutine_handle<> h)
     this->h = h;
     dispatcher.timer_tree.insert(this);
 
-    if (dispatcher.next_timer_time < deadline)
+    if (deadline < dispatcher.next_timer_time) {
+        dispatcher.next_timer_time = deadline;
         set_deadline(dispatcher.timer_waiter_right, deadline);
+    }
 }
 
 PortDispatcher::TimerWaiter::TimerWaiter(PortDispatcher &dispatcher, uint64_t deadline_ns) noexcept:

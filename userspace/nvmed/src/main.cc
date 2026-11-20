@@ -72,7 +72,7 @@ pmos::async::task<void> wait_for_status(bool status)
     }
 
     co_return;
-}  
+}
 
 std::shared_ptr<NVMeCompletionQueue> admin_completion_queue;
 std::shared_ptr<NVMeSubmissionQueue> admin_submission_queue;
@@ -229,12 +229,6 @@ pmos::async::detached_task nvme_handle()
     }
     nvme_virt_base = reinterpret_cast<uint32_t *>(mem_req.virt_addr);
 
-    // Attach PCI interrupt
-    auto r = co_await nvme_controller->register_interrupt();
-    handle_interrupts(std::move(r));
-
-    printf("Interrupt registered...\n");
-
     auto cap = nvme_read64(NVME_REG_CAP);
     auto vs = nvme_read32(NVME_REG_VS);
     printf("NVMe version: %x.%x\n", (vs >> 16) & 0xffff, vs & 0xffff);
@@ -269,11 +263,20 @@ pmos::async::detached_task nvme_handle()
     init_admin_queue();
 
     // Enable the controller
-    uint32_t cc = (page_order_normal << 7) | 1;
+    uint32_t cc = (6u << 16) | (4u << 20) | (page_order_normal << 7) | 1u;
     nvme_write32(NVME_REG_CC, cc);
     co_await wait_for_status(true);
 
     std::cout << "Enabled NVMe controller..." << std::endl;
+
+    // Attach PCI interrupt
+    auto r = co_await nvme_controller->register_interrupt();
+
+    std::cout << "Registered interrupt !!" << std::endl;
+
+    handle_interrupts(std::move(r));
+
+    printf("Interrupt registered...\n");
 
     co_await identify_controller();
 }

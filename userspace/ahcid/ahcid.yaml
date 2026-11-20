@@ -4,7 +4,7 @@ services:
   description: AHCI disk driver
   run_type: FOR_EACH_MATCH
   match:
-    class:
+    pci:
       class: 0x1
       subclass: 0x6
       interface: 0x1
