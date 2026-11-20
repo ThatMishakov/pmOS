@@ -1,5 +1,6 @@
 #include "queue.hh"
 #include "spec.hh"
+#include "namespace.hh"
 
 #include <pmos/device_handler.hh>
 
@@ -45,6 +46,12 @@ uint32_t doorbell_stride = 0; // register * (1 << doorbell_stride)
 uint32_t timeout = 0; // 500 milliseconds units
 uint32_t maximum_queue_entries = 0;
 
+unsigned rab = 0;
+unsigned mdts = 0;
+unsigned nn = 0;
+
+uint32_t vs = 0;
+
 pmos::async::task<void> kinda_busy_wait(uint64_t duration_ms, auto func)
 {
     uint64_t waited_time = 0;
@@ -76,6 +83,9 @@ pmos::async::task<void> wait_for_status(bool status)
 
 std::shared_ptr<NVMeCompletionQueue> admin_completion_queue;
 std::shared_ptr<NVMeSubmissionQueue> admin_submission_queue;
+
+std::shared_ptr<NVMeCompletionQueue> data_completion_queue;
+std::shared_ptr<NVMeSubmissionQueue> data_submission_queue;
 
 void init_admin_queue()
 {
@@ -123,6 +133,77 @@ void init_admin_queue()
     nvme_write32(NVME_REG_INTMC, 1);
 }
 
+pmos::async::task<void> create_data_queues()
+{
+    auto page_size = getpagesize();
+    auto request = create_normal_region(0, nullptr, page_size, PROT_READ | PROT_WRITE | CREATE_FLAG_DMA);
+    if ((long)request.result < 0) {
+        std::cout << "Failed to allocate memory for NVMe data completion queue: " << (int)request.result << " (" << strerror(-request.result) << ")\n";
+        exit(1);
+    }
+    data_completion_queue = std::make_shared<NVMeCompletionQueue>();
+    data_completion_queue->dma_virt_base = request.virt_addr;
+
+    request = create_normal_region(0, nullptr, page_size, PROT_READ | PROT_WRITE | CREATE_FLAG_DMA);
+    if ((long)request.result < 0) {
+        std::cout << "Failed to allocate memory for NVMe data submission queue: " << (int)request.result << " (" << strerror(-request.result) << ")\n";
+        exit(1);
+    }
+    data_submission_queue = std::make_shared<NVMeSubmissionQueue>();
+    data_submission_queue->dma_virt_base = request.virt_addr;
+    data_submission_queue->completion_queue = data_completion_queue;
+    data_completion_queue->submission_queue = data_submission_queue.get();
+
+    constexpr uint32_t maximum_data_queue_entries = 4096;
+
+    data_completion_queue->size = std::min<uint32_t>(maximum_data_queue_entries, page_size / COMPLETION_QUEUE_ENTRY_SIZE);
+    data_submission_queue->size = std::min<uint32_t>(maximum_data_queue_entries, page_size / SUBMISSION_QUEUE_ENTRY_SIZE);
+
+    uint32_t queue_id = 1;
+
+    auto phys_addr = get_page_phys_address(0, data_completion_queue->dma_virt_base, 0);
+    if ((long)phys_addr.result < 0) {
+        std::cout << "Could not get physical address for NVMe data completion queue: " << (int)phys_addr.result << " (" << strerror(-phys_addr.result) << ")\n";
+        exit(1);
+    }
+
+    NVMeCommand cmd = {};
+    cmd.opcode = 0x05; // Create I/O Completion Queue
+    cmd.command_id = 2;
+    cmd.prp1 = phys_addr.phys_addr;
+    cmd.cdw10 = queue_id | ((data_completion_queue->size - 1) << 16);
+    cmd.cdw11 = (1 << 0) | (1 << 1);
+
+    pmos::dma_wmb();
+
+    auto completion_entry = co_await admin_submission_queue->submit_command(cmd);
+    if (!completion_entry.success()) {
+        std::cout << "Create I/O Completion Queue command failed with status: " << completion_entry.status << "\n";
+        exit(1);
+    }
+
+    phys_addr = get_page_phys_address(0, data_submission_queue->dma_virt_base, 0);
+    if ((long)phys_addr.result < 0) {
+        std::cout << "Could not get physical address for NVMe data submission queue: " << (int)phys_addr.result << " (" << strerror(-phys_addr.result) << ")\n";
+        exit(1);
+    }
+
+    cmd = {};
+    cmd.opcode = 0x01; // Create I/O Submission Queue
+    cmd.command_id = 3;
+    cmd.prp1 = phys_addr.phys_addr;
+    cmd.cdw10 = queue_id | ((data_submission_queue->size - 1) << 16);
+    cmd.cdw11 = (queue_id << 16) | (1 << 0);
+
+    pmos::dma_wmb();
+
+    completion_entry = co_await admin_submission_queue->submit_command(cmd);
+    if (!completion_entry.success()) {
+        std::cout << "Create I/O Submission Queue command failed with status: " << completion_entry.status << "\n";
+        exit(1);
+    }
+}
+
 pmos::async::task<void> identify_controller()
 {
     auto page_size = getpagesize();
@@ -162,11 +243,65 @@ pmos::async::task<void> identify_controller()
     std::cout << "Controller ID: " << controller->cntlid << "\n";
     std::cout << "Vendor ID: " << controller->vid << "\n";
     std::cout << "Subsystem Vendor ID: " << controller->ssvid << "\n";
-    std::cout << "Serial Number: " << controller->sn << "\n";
-    std::cout << "Model Number: " << controller->mn << "\n";
-    std::cout << "Firmware Revision: " << controller->fr << "\n";
+    std::cout << "Serial Number: " << std::string(controller->sn, sizeof(controller->sn)) << "\n";
+    std::cout << "Model Number: " << std::string(controller->mn, sizeof(controller->mn)) << "\n";
+    std::cout << "Firmware Revision: " << std::string(controller->fr, sizeof(controller->fr)) << "\n";
 
-    std::cout << "Identify controller command completed successfully.\n";
+    rab = controller->rab;
+    mdts = controller->mdts;
+    nn = controller->nn;
+}
+
+pmos::async::detached_task identify_namespaces()
+{
+    std::cout << "Identifying namespaces...\n";
+    
+    if (vs >= 0x00010100U) {
+        auto page_size = getpagesize();
+        auto region = create_normal_region(0, nullptr, page_size, PROT_READ | PROT_WRITE | CREATE_FLAG_DMA);
+        if ((long)region.result < 0) {
+            std::cout << "Failed to allocate memory for NVMe identify controller data: " << (int)region.result << " (" << strerror(-region.result) << ")\n";
+            exit(1);
+        }
+        pmos::utility::scope_guard cleanup_region([region, page_size]() {
+            munmap(region.virt_addr, page_size);
+        });
+
+        auto phys_addr = get_page_phys_address(0, region.virt_addr, 0);
+        if ((long)phys_addr.result < 0) {
+            std::cout << "Could not get physical address for NVMe identify controller data: "
+                        << (int)phys_addr.result << " (" << strerror(-phys_addr.result) << ")\n";
+            exit(1);
+        }
+
+        NVMeCommand cmd = {};
+        cmd.opcode = 0x06; // Identify
+        cmd.command_id = 1;
+        cmd.prp1 = phys_addr.phys_addr;
+        cmd.cdw10 = 2; // Identify namespaces
+
+        pmos::dma_wmb();
+
+        auto completion_entry = co_await admin_submission_queue->submit_command(cmd);
+        if (!completion_entry.success()) {
+            std::cout << "Identify namespaces command failed with status: " << completion_entry.status << "\n";
+            exit(1);
+        }
+
+        pmos::dma_rmb();
+
+        auto *namespaces = reinterpret_cast<uint32_t *>(region.virt_addr);
+        for (unsigned i = 0; i < nn; ++i) {
+            if (namespaces[i] == 0)
+                break;
+
+            handle_namespace(namespaces[i]);
+        }
+    } else {
+        for (unsigned i = 1; i <= nn; ++i) {
+            handle_namespace(i);
+        }
+    }
 }
 
 void check_nvme_interrupts()
@@ -230,7 +365,7 @@ pmos::async::detached_task nvme_handle()
     nvme_virt_base = reinterpret_cast<uint32_t *>(mem_req.virt_addr);
 
     auto cap = nvme_read64(NVME_REG_CAP);
-    auto vs = nvme_read32(NVME_REG_VS);
+    vs = nvme_read32(NVME_REG_VS);
     printf("NVMe version: %x.%x\n", (vs >> 16) & 0xffff, vs & 0xffff);
     printf("NVMe CAP: %#" PRIx64 "\n", cap);
 
@@ -271,14 +406,14 @@ pmos::async::detached_task nvme_handle()
 
     // Attach PCI interrupt
     auto r = co_await nvme_controller->register_interrupt();
-
-    std::cout << "Registered interrupt !!" << std::endl;
-
     handle_interrupts(std::move(r));
 
     printf("Interrupt registered...\n");
 
     co_await identify_controller();
+    co_await create_data_queues();
+
+    identify_namespaces();
 }
 
 void usage(char *name)

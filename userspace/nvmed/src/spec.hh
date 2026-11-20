@@ -105,3 +105,51 @@ struct IdentifyController {
 	uint8_t vs[1024];
 };
 static_assert(sizeof(IdentifyController) == 0x1000);
+
+struct LbaFormat {
+	uint16_t ms;
+	uint8_t ds;
+	uint8_t rp;
+};
+static_assert(sizeof(LbaFormat) == 4);
+
+struct IdentifyNamespace {
+	uint64_t nsze;
+	uint64_t ncap;
+	uint64_t nuse;
+	uint8_t nsfeat;
+	uint8_t nlbaf;
+	uint8_t flbas;
+	uint8_t mc;
+	uint8_t dpc;
+	uint8_t dps;
+	uint8_t nmic;
+	uint8_t rescap;
+	uint8_t fpi;
+	uint8_t dlfeat;
+	uint16_t nawun;
+	uint16_t nawupf;
+	uint16_t nacwu;
+	uint16_t nabsn;
+	uint16_t nabo;
+	uint16_t nabspf;
+	uint16_t noiob;
+	uint8_t nvmcap[16];
+	uint16_t npwg;
+	uint16_t npwa;
+	uint16_t npdg;
+	uint16_t npda;
+	uint16_t nows;
+	uint8_t __reserved74[18];
+	uint32_t anagrpid;
+	uint8_t __reserved96[3];
+	uint8_t nsattr;
+	uint16_t nvmsetid;
+	uint16_t endgid;
+	uint8_t nguid[16];
+	uint8_t eui64[8];
+	LbaFormat lbaf[16];
+	uint8_t __reserved192[192];
+	uint8_t vs[3712];
+};
+static_assert(sizeof(IdentifyNamespace) == 0x1000);

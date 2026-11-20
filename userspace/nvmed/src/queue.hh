@@ -152,3 +152,6 @@ struct NVMeSubmissionQueue {
 
     void wake_waiters();
 };
+
+extern std::shared_ptr<NVMeCompletionQueue> admin_completion_queue;
+extern std::shared_ptr<NVMeSubmissionQueue> admin_submission_queue;
