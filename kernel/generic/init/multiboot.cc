@@ -634,7 +634,7 @@ void init_acpi(multiboot_info *info)
 
     assert(size_pages/ PAGE_SIZE == 1);
 
-    rsdp_object = Mem_Object::create(12, size_pages);
+    rsdp_object = Mem_Object::create(1, size_pages);
     if (!rsdp_object)
         panic("Failed to create memory object for RSDP\n");
 

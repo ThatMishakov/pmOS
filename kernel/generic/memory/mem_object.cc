@@ -70,7 +70,7 @@ klib::shared_ptr<Mem_Object> Mem_Object::create(u64 size_pages, int flags)
     if (flags & FLAG_DMA) {
         bool continuous = !(flags & FLAG_ALLOW_DISCONTINUOUS);
         auto count      = size_pages;
-        pmm::Page *page = pmm::alloc_pages(count, continuous);
+        pmm::Page *page = pmm::alloc_pages_zeroed(count, continuous);
         if (page == nullptr)
             return nullptr;
 
