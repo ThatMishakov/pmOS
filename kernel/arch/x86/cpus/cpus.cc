@@ -644,3 +644,6 @@ extern "C" void x86_syscall_handler()
     syscalls::syscall_handler();
     kernel::sched::handle_scheduling();
 }
+
+void dma_flush(void *, size_t)
+{}

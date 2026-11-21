@@ -164,3 +164,19 @@ struct AtomicCounter {
 
     u64 atomic_next() noexcept;
 };
+
+inline void dma_wmb()
+{
+    #ifdef __aarch64__
+    asm volatile("dmb ishst" ::: "memory");
+    #endif
+}
+
+inline void dma_rmb()
+{
+    #ifdef __aarch64__
+    asm volatile("dmb ishld" ::: "memory");
+    #endif
+}
+
+void dma_flush(void *ptr, size_t size);
