@@ -395,7 +395,13 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
 {
     auto &disk  = disks[disk_idx];
     // Read partition table
-    auto object_right = co_await read_disk(disk, 0, 2);
+    pmos::Right object_right;
+    try {
+        object_right = co_await read_disk(disk, 0, 2);
+    } catch (const std::system_error &e) {
+        printf("Failed to read partition table off disk %s: %s\n", disk.name.c_str(), e.what());
+        co_return;
+    }
     printf("Mem object right: %" PRIu64 "\n", object_right.get());
 
     if (!object_right) {
@@ -467,7 +473,13 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
 
         auto number_of_sectors = alignup(gpt_partition_array_size, disk.logical_sector_size) /
                                  disk.logical_sector_size;
-        auto gpt_object_right = co_await read_disk(disk, gpt->partition_entry_lba, number_of_sectors);
+        pmos::Right gpt_object_right;
+        try {
+            gpt_object_right = co_await read_disk(disk, gpt->partition_entry_lba, number_of_sectors);
+        } catch (const std::system_error &e) {
+            printf("Failed to read GPT partition array from disk %s: %s\n", disk.name.c_str(), e.what());
+            co_return;
+        }
         if (!gpt_object_right) {
             printf("Failed to read GPT partition array\n");
             co_return;

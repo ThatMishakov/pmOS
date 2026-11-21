@@ -52,6 +52,8 @@ unsigned nn = 0;
 
 uint32_t vs = 0;
 
+std::string serial_number;
+
 pmos::async::task<void> kinda_busy_wait(uint64_t duration_ms, auto func)
 {
     uint64_t waited_time = 0;
@@ -239,11 +241,15 @@ pmos::async::task<void> identify_controller()
 
     pmos::dma_rmb();
 
+
     auto *controller = reinterpret_cast<IdentifyController *>(region.virt_addr);
+
+    serial_number = std::string(controller->sn, sizeof(controller->sn));
+
     std::cout << "Controller ID: " << controller->cntlid << "\n";
     std::cout << "Vendor ID: " << controller->vid << "\n";
     std::cout << "Subsystem Vendor ID: " << controller->ssvid << "\n";
-    std::cout << "Serial Number: " << std::string(controller->sn, sizeof(controller->sn)) << "\n";
+    std::cout << "Serial Number: " << serial_number << "\n";
     std::cout << "Model Number: " << std::string(controller->mn, sizeof(controller->mn)) << "\n";
     std::cout << "Firmware Revision: " << std::string(controller->fr, sizeof(controller->fr)) << "\n";
 

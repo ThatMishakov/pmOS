@@ -55,14 +55,14 @@ void NVMeCompletionQueue::check_for_completions()
         pmos::dma_rmb();
 
         assert(!waiters.empty());
-        auto &waiter = waiters.front();
-        waiters.erase(&waiter);
-        memcpy(&waiter.result, entry, sizeof(NVMeCompletionEntry));
+        auto *waiter = &waiters.front();
+        waiters.erase(waiter);
+        memcpy(&waiter->result, entry, sizeof(NVMeCompletionEntry));
         submission_queue_head = entry->sq_head_pointer;
 
-        assert(waiter.command == waiter.result.command_id);
+        assert(waiter->command == waiter->result.command_id);
 
-        waiter.h.resume();
+        waiter->h.resume();
 
         queue_head = (queue_head + 1) & mask;
         if (queue_head == 0)
