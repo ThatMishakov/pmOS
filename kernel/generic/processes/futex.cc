@@ -56,7 +56,7 @@ void TaskDescriptor::futex_push()
     futex_hash_map.insert(this);
 }
 
-void TaskDescriptor::futex_try_remove()
+bool TaskDescriptor::futex_try_remove()
 {
     Auto_Lock_Scope scope_lock(futex_hash_lock);
 
@@ -64,6 +64,8 @@ void TaskDescriptor::futex_try_remove()
         futex_pushed = false;
         futex_hash_map.remove(this);
     }
+
+    return !(__atomic_load_n(&wake_reason_mask, __ATOMIC_RELAXED) & SCHED_WAKE_FUTEX);
 }
 
 void TaskDescriptor::futex_wake(ulong futex_addr, bool wake_all)
