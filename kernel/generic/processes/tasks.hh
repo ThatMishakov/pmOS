@@ -404,13 +404,15 @@ namespace proc
 
         // Interrupts the blocked task (setting SCHED_FLAG_INTERRUPT, etc.)
         void interrupt_blocked(i64 error_code = -EINTR);
+        void atomic_interrupt_blocked(i64 error_code = -EINTR);
 
         // Unblocks the task if it is not already blocked
         void atomic_try_unblock();
 
         // Pushes and removes (if not already inserted) the task from the futex hash table.
         void futex_push();
-        void futex_try_remove();
+        // Returns true if futex has been removed/not being removed from the futex hash table by a waker...
+        bool futex_try_remove();
 
         void futex_wake(ulong futex_addr, bool wake_all);
 

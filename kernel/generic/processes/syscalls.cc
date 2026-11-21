@@ -2908,10 +2908,15 @@ void syscall_debug_log(TaskDescriptor *task)
 
 static void cancel_futex_wait(TaskDescriptor *task, i64 reason)
 {
-    task->futex_try_remove();
+    auto removed = task->futex_try_remove();
     task->timer_try_remove();
 
-    syscall_error(task) = reason;
+    if (removed)
+        syscall_error(task) = reason;
+    else
+        // Somebody has woken the futex up before the cancelation, so the futex wait has succeeded even though it's
+        // been canceled now for whatever reason.
+        syscall_success(task);
 }
 
 static void futex_wakeup(TaskDescriptor *task)
@@ -2931,9 +2936,7 @@ static void futex_wakeup(TaskDescriptor *task)
     }
 
     if (mask & TaskDescriptor::SCHED_WAKE_TIMER) {
-        task->futex_try_remove();
-        task->timer_try_remove();
-        syscall_error(task) = -ETIMEDOUT;
+        cancel_futex_wait(task, -ETIMEDOUT);
         return;
     }
 
@@ -2944,9 +2947,7 @@ static void futex_wakeup(TaskDescriptor *task)
 
     auto result = atomic_read_from_user(&user_value, (u32 *)task->futex_addr);
     if (!result) {
-        task->futex_try_remove();
-        task->timer_try_remove();
-        syscall_error(task) = result.result;
+        cancel_futex_wait(task, result.result);
         return;
     }
 
@@ -2956,9 +2957,7 @@ static void futex_wakeup(TaskDescriptor *task)
 
 
     if (user_value != expected_value) {
-        task->futex_try_remove();
-        task->timer_try_remove();
-        syscall_error(task) = -EAGAIN;
+        cancel_futex_wait(task, -EAGAIN);
         return;
     }
 
@@ -2971,9 +2970,14 @@ void syscall_futex_wait(TaskDescriptor *task)
     ulong ptr = syscall_arg(task, 1, 1);
     u32 expected_value = syscall_arg(task, 2, 1);
 
-    uint64_t deadline = timeout_ns == (u64)-1 ? -1 : get_ns_since_bootup() + timeout_ns;
+    uint64_t deadline;
+    if (task->continuation_func == nullptr) {
+        deadline = timeout_ns == (u64)-1 ? -1 : get_ns_since_bootup() + timeout_ns;
+    } else {
+        deadline = task->timer_deadline;
+    }
 
-    task->set_continuation(futex_wakeup, cancel_futex_wait);
+    task->set_continuation(syscall_futex_wait);
     task->timer_deadline = deadline;
     task->futex_addr = ptr;
 
@@ -2992,6 +2996,8 @@ void syscall_futex_wait(TaskDescriptor *task)
         return;
     }
 
+    task->set_continuation(futex_wakeup, cancel_futex_wait);
+
     task->futex_push();
     if (deadline != (u64)-1 && !task->timer_push())
         return;
@@ -2999,15 +3005,14 @@ void syscall_futex_wait(TaskDescriptor *task)
     // Do a second take so wakeups are not missed
     result = atomic_read_from_user(&user_value, (u32 *)ptr);
     if (!result) {
-        task->interrupt_blocked(result.result);
+        cancel_futex_wait(task, result.result);
         return;
     }
-
     if (!result.val)
         return;
-        
+
     if (user_value != expected_value) {
-        task->interrupt_blocked(-EAGAIN);
+        cancel_futex_wait(task, -EAGAIN);
         return;
     }
 

@@ -902,7 +902,7 @@ TaskDescriptor::TaskID TaskDescriptor::get_new_task_id()
 
 TaskDescriptor::~TaskDescriptor() noexcept
 {
-    assert(status == TaskStatus::TASK_UNINIT or (sched_pending_mask == SCHED_FLAG_TERMINATE and cleaned_up));
+    assert(status == TaskStatus::TASK_UNINIT or ((sched_pending_mask & SCHED_FLAG_TERMINATE) and cleaned_up));
 
     if (status == TaskStatus::TASK_UNINIT) {
         Auto_Lock_Scope scope_lock(tasks_map_lock);
@@ -1002,6 +1002,7 @@ void TaskDescriptor::cancel_syscall(TaskDescriptor *task, i64 error_code)
 
 void TaskDescriptor::interrupt_blocked(i64 error_code)
 {
+    assert(sched_lock.is_locked());
     if (status == TaskStatus::TASK_BLOCKED) {
         assert(cancel_callback);
         cancel_callback(this, error_code);
@@ -1010,6 +1011,12 @@ void TaskDescriptor::interrupt_blocked(i64 error_code)
         pending_cancel_reason = error_code;
         sched_pending_mask |= SCHED_FLAG_INTERRUPT;
     }
+}
+
+void TaskDescriptor::atomic_interrupt_blocked(i64 error_code)
+{
+    Auto_Lock_Scope scope_lock(sched_lock);
+    interrupt_blocked(error_code);
 }
 
 bool TaskDescriptor::message_matches_filter(const ipc::GenericMessage *msg, const port_blocked_by_variant &filter)
