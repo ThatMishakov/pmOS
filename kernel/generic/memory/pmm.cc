@@ -590,6 +590,31 @@ Page *kernel::pmm::alloc_pages(size_t count, bool /* contiguous */, AllocPolicy 
     return nullptr;
 }
 
+Page *kernel::pmm::alloc_pages_zeroed(size_t count, bool contiguous, AllocPolicy policy) noexcept
+{
+    auto p = alloc_pages(count, contiguous, policy);
+    if (!p)
+        return nullptr;
+
+    Temp_Mapper_Obj<char> mapping(request_temp_mapper());
+    size_t pages_left = count;
+    auto current = p;
+    while (pages_left > 0) {
+        auto count = current->pending_alloc_head.size_pages;
+        assert(count <= pages_left);
+        auto start = current->get_phys_addr();
+        for (size_t i = 0; i < count; i++) {
+            mapping.map(start + i * PAGE_SIZE);
+            memset(mapping.ptr, 0, PAGE_SIZE);
+        }
+
+        pages_left -= count;
+        current = current->pending_alloc_head.next;
+    }
+
+    return p;
+}
+
 PMMRegion *PMMRegion::get(Page::page_addr_t start_addr)
 {
     if (start_addr < region_isa.end())

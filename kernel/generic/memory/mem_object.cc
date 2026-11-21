@@ -78,6 +78,25 @@ klib::shared_ptr<Mem_Object> Mem_Object::create(u64 size_pages, int flags)
         assert(page->pending_alloc_head.size_pages == count);
         assert(!(page->flags & pmm::Page::FLAG_NO_PAGE));
 
+        Temp_Mapper_Obj<char> mapping(request_temp_mapper());
+        size_t pages_left = count;
+        auto current = page;
+        while (pages_left > 0) {
+            auto count = current->pending_alloc_head.size_pages;
+            assert(count <= pages_left);
+            auto start = current->get_phys_addr();
+            for (size_t i = 0; i < count; i++) {
+                mapping.map(start + i * PAGE_SIZE);
+                memset(mapping.ptr, 0, PAGE_SIZE);
+                dma_flush(mapping.ptr, PAGE_SIZE);
+            }
+
+            pages_left -= count;
+            current = current->pending_alloc_head.next;
+        }
+
+        dma_wmb();
+
         for (u64 i = 0; i < count; ++i) {
             auto current = page;
             if (page->pending_alloc_head.size_pages > 1) {

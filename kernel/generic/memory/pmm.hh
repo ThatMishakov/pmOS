@@ -154,6 +154,8 @@ namespace pmm
      */
     Page *alloc_pages(size_t count, bool contiguous = true,
                       AllocPolicy policy = AllocPolicy::Normal) noexcept;
+    Page *alloc_pages_zeroed(size_t count, bool contiguous = true,
+                             AllocPolicy policy = AllocPolicy::Normal) noexcept;
 
     /**
      * @brief Gets the physical address of a page structure

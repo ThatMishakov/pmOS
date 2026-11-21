@@ -260,3 +260,6 @@ void init_smp()
 
     start_aps();
 }
+
+void dma_flush(void *, size_t)
+{}

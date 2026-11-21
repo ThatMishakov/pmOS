@@ -41,6 +41,8 @@ constexpr u32 USER_INSTRUCTION_ABORT_EC = 0x20;
 constexpr u32 USER_DATA_ABORT_EC = 0x24;
 constexpr u32 KERNEL_DATA_ABORT_EC = 0x25;
 constexpr u32 SP_ALIGNMENT_FAULT_EC = 0x26;
+constexpr u32 USER_BREAKPOINT_AA32_EC = 0x3b;
+constexpr u32 USER_BREAKPOINT_EC = 0x3c;
 
 u32 ec_from_esr(u64 esr)
 {
@@ -135,7 +137,13 @@ extern "C" void handle_user_sync()
     case SVC_EC:
         proc::syscalls::syscall_handler();
         break;
-
+    case USER_BREAKPOINT_AA32_EC:
+    case USER_BREAKPOINT_EC:
+        log::serial_logger.printf("Warning: User breakpoint, killing process...\n");
+        log::global_logger.printf("Warning: User breakpoint, killing process...\n");
+        print_registers(&sched::get_cpu_struct()->current_task->regs, log::global_logger);
+        sched::get_cpu_struct()->current_task->exception(SIGTRAP);
+        break;
     default:
         panic("Unhandled synchronous user exception class 0x%x, ESR_EL1 0x%lx", ec, esr);
         break;

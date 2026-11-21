@@ -1674,8 +1674,14 @@ void syscall_create_mem_object(TaskDescriptor *current_task)
         return;
     }
 
+    unsigned object_flags = 0;
+    if (flags & CREATE_FLAG_DMA)
+        object_flags |= Mem_Object::FLAG_DMA;
+    if (flags & CREATE_FLAG_ALLOW_DISCONTINUOUS)
+        object_flags |= Mem_Object::FLAG_ALLOW_DISCONTINUOUS;   
+
     const auto size_pages    = size_bytes / PAGE_SIZE;
-    const auto ptr = Mem_Object::create(size_pages, flags);
+    const auto ptr = Mem_Object::create(size_pages, object_flags);
     if (!ptr) {
         syscall_error(current_task) = -ENOMEM;
         return;

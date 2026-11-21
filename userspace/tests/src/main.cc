@@ -126,14 +126,14 @@ extern "C" void timer_free_test();
 
 int main()
 {
-    sleep(1);
-    printf("Starting tests...\n");
-    test_delete_ipc();
-    // tick();
-    // timer_free_test();
-    test_containers();
-    test_exception();
-    read_test_file();
+    // sleep(1);
+    // printf("Starting tests...\n");
+    // test_delete_ipc();
+    // // tick();
+    // // timer_free_test();
+    // test_containers();
+    // test_exception();
+    // read_test_file();
 
     //test_tlb_shootdown();
     //test_threads();

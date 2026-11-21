@@ -2,7 +2,7 @@
 #include "blockd.hh"
 #include "device.hh"
 #include "disk_handler.hh"
-#include "pci.hh"
+#include <pmos/device_handler.hh>
 #include "port.hh"
 
 #include <algorithm>
@@ -27,13 +27,15 @@
 #include <cstdlib>
 #include <time.h>
 
+using namespace pmos;
+
 pmos::Right device_right;
 
 pmos::Port cmd_port = pmos::Port::create().value();
 auto dispatcher = pmos::PortDispatcher(cmd_port);
 auto pmbus_helper = pmos::PMBUSHelper(dispatcher);
 
-std::unique_ptr<PCIDevice> ahci_controller = nullptr;
+std::unique_ptr<pmos::DeviceHandler> ahci_controller = nullptr;
 volatile uint32_t *ahci_virt_base          = nullptr;
 uint32_t ahci_int_vec                      = 0;
 
@@ -130,8 +132,8 @@ pmos::async::task<void> dump_controller()
     printf(" CAP2: %#x\n", ahci_virt_base[9]);
     printf(" BOHC: %#x\n", ahci_virt_base[10]);
 
-    printf(" --- PCI config space ---\n");
-    printf(" Status+Command: %#x\n", co_await ahci_controller->readl(0x4));
+    // printf(" --- PCI config space ---\n");
+    // printf(" Status+Command: %#x\n", co_await ahci_controller->pci_readl(0x4));
 }
 
 uint64_t AHCIPort::get_command_table_phys(int index)
@@ -563,7 +565,7 @@ pmos::async::detached_task handle_interrupts(pmos::ReceiveRight int_right)
 pmos::async::detached_task ahci_handle()
 {
     // pci_string = "pci_" + std::to_string(d.group) + "_" + std::to_string(d.bus) + "_" + std::to_string(d.device) + "_" + std::to_string(d.function);
-    ahci_controller = co_await get_pci_device();
+    ahci_controller = std::make_unique<pmos::DeviceHandler>(dispatcher, device_right);
 
     printf("AHCI controller created\n");
 
@@ -577,22 +579,22 @@ pmos::async::detached_task ahci_handle()
 
     auto my_device_type = co_await ahci_controller->get_device_type();
 
-    if (my_device_type == PCIDevice::DeviceType::PCI) {
+    if (my_device_type == DeviceHandler::DeviceType::PCI) {
         // Enable DMA and memory space access
-        uint32_t command = co_await ahci_controller->readw(0x4);
+        uint32_t command = co_await ahci_controller->pci_readw(0x4);
         command |= 0x06;
-        co_await ahci_controller->writew(0x4, command);
+        co_await ahci_controller->pci_writew(0x4, command);
     }
 
     // Get BAR5
     uint32_t bar5;
     uint32_t size = 0;
-    if (my_device_type == PCIDevice::DeviceType::PCI) {
-        auto resource = co_await ahci_controller->get_resource(PCIDevice::PCIBar{}, 5, {}, PCIDevice::ResourceType::Memory);
+    if (my_device_type == DeviceHandler::DeviceType::PCI) {
+        auto resource = co_await ahci_controller->get_resource(DeviceHandler::PCIBar{}, 5, {}, DeviceHandler::ResourceType::Memory);
         bar5 = resource.base;
         size = resource.size;
     } else {
-        auto resource = co_await ahci_controller->get_resource(PCIDevice::GenericResource{}, 0, "ahci", PCIDevice::ResourceType::Memory);
+        auto resource = co_await ahci_controller->get_resource(DeviceHandler::GenericResource{}, 0, "ahci", DeviceHandler::ResourceType::Memory);
         bar5 = resource.base;
         size = resource.size;
     }

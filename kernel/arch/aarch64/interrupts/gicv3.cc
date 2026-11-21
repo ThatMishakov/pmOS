@@ -389,18 +389,18 @@ void kernel::arm::interrupts::gicv3_do_cpu_interrupts_init()
         
         while (mmio_readl(r.virt_base + GICR_WAKER_IDX) & GICR_WAKER_CA)
             __yield();
-
-        // Enable SPIs
-        u32 mask = 0xffff;
-        mmio_writel(r.virt_base + GICR_ISENABLER0_IDX, mask);
-
-        // Group 1 for everything...
-        auto group_reg = mmio_readl(r.virt_base + GICR_IGROUPR0_IDX);
-        group_reg |= mask;
-        mmio_writel(r.virt_base + GICR_IGROUPR0_IDX, group_reg);
-
-        gicr_wait_uwp(r.virt_base);
     }
+
+    // Enable SPIs
+    u32 mask = 0xffff;
+    mmio_writel(r.virt_base + GICR_ISENABLER0_IDX, mask);
+
+    // Group 1 for everything...
+    auto group_reg = mmio_readl(r.virt_base + GICR_IGROUPR0_IDX);
+    group_reg |= mask;
+    mmio_writel(r.virt_base + GICR_IGROUPR0_IDX, group_reg);
+
+    gicr_wait_uwp(r.virt_base);
 
     auto sre = mrs<icc_sre_el1>();
     if (!(sre & 0x1)) {
@@ -580,6 +580,8 @@ void kernel::arm::interrupts::gicv3_spi_send(u64 cpu_id, u32 interrupt)
     target_mask |= aff2 << 32; // Aff2
     target_mask |= aff3 << 48; // Aff3
     target_mask |= interrupt << 24; // INTID
+
+    dsb<Barrier::ISHST>();
     msr<icc_sgi1r_el1>(target_mask);
     isb();
 }

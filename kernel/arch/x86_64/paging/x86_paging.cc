@@ -1052,11 +1052,11 @@ bool kernel::x86_64::paging::detect_nx()
 void x86_PAE_Entry::set_cache_bits(Memory_Type memory_type)
 {
     switch (memory_type) {
+    case Memory_Type::MemoryNoCache:
     case Memory_Type::Normal:
         write_through = 0;
         cache_disabled = 0;
         break;
-    case Memory_Type::MemoryNoCache:
     case Memory_Type::IONoCache:
         write_through = 0;
         cache_disabled = 1;

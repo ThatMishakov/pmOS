@@ -791,6 +791,19 @@ static void start_aps()
     }
 }
 
+void dma_flush(void *ptr, size_t size)
+{
+    const auto line_size = (mrs<ctr_el0>() >> 16) & 0xf;
+    const auto cache_line = 4 << line_size;
+    const auto line_mask = cache_line - 1;
+
+    const auto first = reinterpret_cast<ulong>(ptr);
+    const auto end = first + size;
+
+    for (auto addr = first & ~line_mask; addr < end; addr += cache_line)
+        dc_cvac(reinterpret_cast<void *>(addr));
+}
+
 void init_smp()
 {
     init_smp_acpi();

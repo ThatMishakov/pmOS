@@ -1129,6 +1129,7 @@ bool page_mapped(void *pagefault_cr2, ulong err)
 u32 memory_type_to_bits(kernel::paging::Memory_Type type)
 {
     switch (type) {
+    case kernel::paging::Memory_Type::MemoryNoCache:
     case kernel::paging::Memory_Type::Normal:
         return 0;
     case kernel::paging::Memory_Type::Framebuffer:
