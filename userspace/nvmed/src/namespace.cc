@@ -233,11 +233,15 @@ pmos::async::task<void> read_namespace(std::shared_ptr<NVMeNamespace> ns, uint64
         }
     }
 
+    pmos::dma_wmb();
+
     auto result = co_await data_submission_queue->submit_command(cmd);
     if (!result.success()) {
         handle_disk_read_error(-EIO, reply_right);
         co_return;
     }
+
+    pmos::dma_rmb();
 
     handle_disk_read(std::move(object), 0, reply_right);
 }
