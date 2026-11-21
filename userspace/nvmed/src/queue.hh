@@ -155,3 +155,6 @@ struct NVMeSubmissionQueue {
 
 extern std::shared_ptr<NVMeCompletionQueue> admin_completion_queue;
 extern std::shared_ptr<NVMeSubmissionQueue> admin_submission_queue;
+
+extern std::shared_ptr<NVMeCompletionQueue> data_completion_queue;
+extern std::shared_ptr<NVMeSubmissionQueue> data_submission_queue;

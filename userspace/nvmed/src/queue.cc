@@ -77,5 +77,5 @@ void NVMeCompletionQueue::check_for_completions()
         submission_queue->wake_waiters();
     }
 
-    nvme_write32(NVME_REG_INTMC, 1);
+    nvme_write32(NVME_REG_INTMC, 1 << index);
 }

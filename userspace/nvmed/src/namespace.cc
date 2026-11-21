@@ -102,6 +102,184 @@ void handle_disk_describe(std::shared_ptr<NVMeNamespace> ns, uint64_t to_sector_
     }
 }
 
+uint64_t align_to_page(uint64_t size) { 
+    uint64_t page_size = getpagesize();
+    return (size + page_size - 1) & ~(page_size - 1);
+}
+
+void handle_disk_read(pmos::Right memory_object, int result, pmos::Right &reply_right)
+{
+    // TODO: Memory object handling
+    IPC_Disk_Read_Reply reply = {
+        .type        = IPC_Disk_Read_Reply_NUM,
+        .flags       = 0,
+        .result_code = static_cast<int16_t>(result),
+    };
+
+    // printf("Sending reply to disk read status %i\n", result);
+    auto r = send_message_right_one(reply_right, reply, {}, true, std::move(memory_object));
+    if (!r) {
+        printf("Failed to send disk read reply: %i (%s)\n", (int)r.error().first, strerror(r.error().first));
+    }
+}
+
+void handle_disk_read_error(int result, pmos::Right &reply_right)
+{
+    handle_disk_read({}, -result, reply_right);
+}
+
+pmos::async::task<void> read_namespace(std::shared_ptr<NVMeNamespace> ns, uint64_t sector_start, uint64_t sector_count, pmos::Right reply_right)
+{
+    const uint64_t page_size = getpagesize();
+    const uint64_t page_mask = page_size - 1;
+    const uint64_t total_bytes = sector_count * ns->block_size;
+    const uint64_t size_aligned = (total_bytes + page_mask) & ~page_mask;
+    const uint64_t pages_count = size_aligned / getpagesize();
+
+    uint64_t list_pages = 0;
+    const uint64_t data_pages = pages_count;
+    if (data_pages > 2) {
+        const uint64_t entries_per_page = page_size / sizeof(uint64_t);
+        const uint64_t data_entries = data_pages - 1;
+
+        // k list pages hold k * (entries_per_page - 1) + 1 data entries.
+        list_pages = 1 + (data_entries - 2) / (entries_per_page - 1);
+    }
+
+    void *region_addr = nullptr;
+    if (list_pages > 0) {
+        auto region = create_normal_region(0, nullptr, list_pages * page_size, PROT_READ | PROT_WRITE | CREATE_FLAG_DMA | CREATE_FLAG_ALLOW_DISCONTINUOUS);
+        if ((long)region.result < 0) {
+            handle_disk_read_error(-ENOMEM, reply_right);
+            co_return;
+        }
+        region_addr = region.virt_addr;
+    }
+    pmos::utility::scope_guard cleanup_region([region_addr, list_pages, page_size]() {
+        if (region_addr) {
+            munmap(region_addr, list_pages * page_size);
+        }
+    });
+
+    auto res = pmos::create_mem_object_noexcept(size_aligned, CREATE_FLAG_DMA | CREATE_FLAG_ALLOW_DISCONTINUOUS);
+    if (!res) {
+        handle_disk_read_error(res.error(), reply_right);
+        co_return;
+    }
+    auto object = std::move(res.value());
+
+    NVMeCommand cmd = {};
+    cmd.opcode = 0x02; // Read
+    cmd.command_id = 1;
+    cmd.nsid = ns->id;
+    cmd.cdw10 = sector_start & 0xFFFFFFFF;
+    cmd.cdw11 = (sector_start >> 32) & 0xFFFFFFFF;
+    cmd.cdw12 = sector_count - 1;
+
+    auto first = get_page_phys_address_from_object(
+        object.get(), 0, 0);
+    if (first.result != SUCCESS) {
+        handle_disk_read_error(first.result, reply_right);
+        co_return;
+    }
+    cmd.prp1 = first.phys_addr;
+
+    if (pages_count == 2) {
+        // PRP2 points directly to the second data page.
+        auto second = get_page_phys_address_from_object(
+            object.get(), page_size, 0);
+        if (second.result != SUCCESS) {
+            handle_disk_read_error(second.result, reply_right);
+            co_return;
+        }
+        cmd.prp2 = second.phys_addr;
+    } else if (pages_count > 2) {
+        auto *entries = static_cast<uint64_t *>(region_addr);
+        const uint64_t entries_per_page = page_size / sizeof(uint64_t);
+
+        auto first_list = get_page_phys_address(0, region_addr, 0);
+        if (first_list.result != SUCCESS) {
+            handle_disk_read_error(first_list.result, reply_right);
+            co_return;
+        }
+        cmd.prp2 = first_list.phys_addr;
+
+        uint64_t data_page = 1; // Page 0 is already covered by PRP1.
+
+        for (uint64_t list_page = 0; list_page < list_pages; ++list_page) {
+            auto *list = entries + list_page * entries_per_page;
+            const bool has_next = list_page + 1 < list_pages;
+            const uint64_t slots = entries_per_page - (has_next ? 1 : 0);
+
+            for (uint64_t slot = 0; slot < slots && data_page < pages_count; ++slot, ++data_page) {
+                auto page = get_page_phys_address_from_object(
+                    object.get(), data_page * page_size, 0);
+                if (page.result != SUCCESS) {
+                    handle_disk_read_error(page.result, reply_right);
+                    co_return;
+                }
+                list[slot] = page.phys_addr;
+            }
+
+            if (has_next) {
+                auto *next_list = entries + (list_page + 1) * entries_per_page;
+                auto next = get_page_phys_address(0, next_list, 0);
+                if (next.result != SUCCESS) {
+                    handle_disk_read_error(next.result, reply_right);
+                    co_return;
+                }
+                list[entries_per_page - 1] = next.phys_addr;
+            }
+        }
+    }
+
+    auto result = co_await data_submission_queue->submit_command(cmd);
+    if (!result.success()) {
+        handle_disk_read_error(-EIO, reply_right);
+        co_return;
+    }
+
+    handle_disk_read(std::move(object), 0, reply_right);
+}
+
+pmos::async::detached_task handle_disk_read(std::shared_ptr<NVMeNamespace> ns, IPC_Disk_Read request, uint64_t from_sector, uint64_t to_sector_count, pmos::Right reply_right)
+{
+    if (request.sector_count == 0) {
+        handle_disk_read_error(-EINVAL, reply_right);
+        co_return;
+    }
+
+    auto req_start = request.start_sector;
+    auto req_count = request.sector_count;
+
+    if (req_start > UINT64_MAX - req_count || req_start + req_count > to_sector_count) {
+        handle_disk_read_error(-E2BIG, reply_right);
+        co_return;
+    }
+
+    if (from_sector > UINT64_MAX - req_start) {
+        handle_disk_read_error(-E2BIG, reply_right);
+        co_return;
+    }
+
+    auto sector_start = req_start + from_sector;
+    auto sector_count = req_count;
+
+    if (from_sector > UINT64_MAX - to_sector_count) {
+        handle_disk_read_error(-E2BIG, reply_right);
+        co_return;
+    }
+
+    auto constraint_end = from_sector + to_sector_count;
+
+    if (sector_start > UINT64_MAX - sector_count || sector_start + sector_count > constraint_end) {
+        handle_disk_read_error(-E2BIG, reply_right);
+        co_return;
+    }
+
+    co_await read_namespace(ns, sector_start, sector_count, std::move(reply_right));
+}
+
 pmos::async::detached_task handle_ipc(std::shared_ptr<NVMeNamespace> ns, pmos::ReceiveRight receive_right, uint64_t from_sector, uint64_t to_sector_count)
 {
     while (true) {
@@ -137,6 +315,16 @@ pmos::async::detached_task handle_ipc(std::shared_ptr<NVMeNamespace> ns, pmos::R
             }
 
             handle_disk_describe(ns, to_sector_count, std::move(msg->reply_right));
+        } break;
+        case IPC_Disk_Read_NUM: {
+            if (msg->data.size() < sizeof(IPC_Disk_Read)) {
+                fprintf(stderr, "ahcid: Received message IPC_Disk_Read with too small of size\n");
+                break;
+            }
+
+            auto rmsg = (IPC_Disk_Read *)msg->data.data();
+
+            handle_disk_read(ns, *rmsg, from_sector, to_sector_count, std::move(msg->reply_right));
         } break;
         default:
             fprintf(stderr, "NVMe: Received message with unknown type %u! Ignoring.\n", header->type);

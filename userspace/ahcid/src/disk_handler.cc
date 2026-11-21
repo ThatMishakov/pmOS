@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <cstring>
 #include <cstdlib>
+#include <unistd.h>
 
 extern pmos::PortDispatcher dispatcher;
 extern pmos::Port cmd_port;
@@ -29,7 +30,10 @@ struct DiskConstraint
     uint64_t sector_count;
 };
 
-uint64_t align_to_page(uint64_t size) { return (size + 0xfff) & ~(uint64_t)0xfff; }
+uint64_t align_to_page(uint64_t size) { 
+    uint64_t page_size = getpagesize();
+    return (size + page_size - 1) & ~(page_size - 1);
+}
 
 void handle_disk_read(pmos::Right memory_object, int result, pmos::Right &reply_right)
 {

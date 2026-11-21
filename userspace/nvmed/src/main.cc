@@ -315,6 +315,9 @@ void check_nvme_interrupts()
     // TODO: Do this for other queues...
     assert(admin_completion_queue);
     admin_completion_queue->check_for_completions();
+
+    if (data_completion_queue)
+        data_completion_queue->check_for_completions();
 }
 
 pmos::async::detached_task handle_interrupts(pmos::ReceiveRight int_right)
