@@ -137,6 +137,8 @@ void init_admin_queue()
 
 pmos::async::task<void> create_data_queues()
 {
+    uint32_t queue_id = 1;
+
     auto page_size = getpagesize();
     auto request = create_normal_region(0, nullptr, page_size, PROT_READ | PROT_WRITE | CREATE_FLAG_DMA);
     if ((long)request.result < 0) {
@@ -145,6 +147,7 @@ pmos::async::task<void> create_data_queues()
     }
     data_completion_queue = std::make_shared<NVMeCompletionQueue>();
     data_completion_queue->dma_virt_base = request.virt_addr;
+    data_completion_queue->index = queue_id;
 
     request = create_normal_region(0, nullptr, page_size, PROT_READ | PROT_WRITE | CREATE_FLAG_DMA);
     if ((long)request.result < 0) {
@@ -153,6 +156,7 @@ pmos::async::task<void> create_data_queues()
     }
     data_submission_queue = std::make_shared<NVMeSubmissionQueue>();
     data_submission_queue->dma_virt_base = request.virt_addr;
+    data_submission_queue->index = queue_id;
     data_submission_queue->completion_queue = data_completion_queue;
     data_completion_queue->submission_queue = data_submission_queue.get();
 
@@ -160,8 +164,6 @@ pmos::async::task<void> create_data_queues()
 
     data_completion_queue->size = std::min<uint32_t>(maximum_data_queue_entries, page_size / COMPLETION_QUEUE_ENTRY_SIZE);
     data_submission_queue->size = std::min<uint32_t>(maximum_data_queue_entries, page_size / SUBMISSION_QUEUE_ENTRY_SIZE);
-
-    uint32_t queue_id = 1;
 
     auto phys_addr = get_page_phys_address(0, data_completion_queue->dma_virt_base, 0);
     if ((long)phys_addr.result < 0) {
