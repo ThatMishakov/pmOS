@@ -233,7 +233,7 @@ pmos::async::task<void> read_namespace(std::shared_ptr<NVMeNamespace> ns, uint64
         }
     }
 
-    pmos::dma_wmb();
+    dma_wmb();
 
     auto result = co_await data_submission_queue->submit_command(cmd);
     if (!result.success()) {
@@ -241,7 +241,7 @@ pmos::async::task<void> read_namespace(std::shared_ptr<NVMeNamespace> ns, uint64
         co_return;
     }
 
-    pmos::dma_rmb();
+    dma_rmb();
 
     handle_disk_read(std::move(object), 0, reply_right);
 }
@@ -381,7 +381,7 @@ pmos::async::detached_task handle_namespace(uint32_t namespace_id)
     cmd.prp1 = phys_addr.phys_addr;
     cmd.cdw10 = 0; // Identify namespace
 
-    pmos::dma_wmb();
+    dma_wmb();
 
     auto completion_entry = co_await admin_submission_queue->submit_command(cmd);
     if (!completion_entry.success()) {
@@ -389,7 +389,7 @@ pmos::async::detached_task handle_namespace(uint32_t namespace_id)
         exit(1);
     }
 
-    pmos::dma_rmb();
+    dma_rmb();
 
     auto *ns = reinterpret_cast<IdentifyNamespace *>(region.virt_addr);
     auto flbas = ns->flbas & 0xf;

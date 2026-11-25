@@ -69,18 +69,4 @@ private:
     pmos::PortDispatcher &dispatcher;
 };
 
-inline void dma_wmb()
-{
-    #ifdef __aarch64__
-    asm volatile("dmb ishst" ::: "memory");
-    #endif
-}
-
-inline void dma_rmb()
-{
-    #ifdef __aarch64__
-    asm volatile("dmb ishld" ::: "memory");
-    #endif
-}
-
 } // namespace pmos

@@ -178,7 +178,7 @@ pmos::async::task<void> create_data_queues()
     cmd.cdw10 = queue_id | ((data_completion_queue->size - 1) << 16);
     cmd.cdw11 = (1 << 0) | (1 << 1);
 
-    pmos::dma_wmb();
+    dma_wmb();
 
     auto completion_entry = co_await admin_submission_queue->submit_command(cmd);
     if (!completion_entry.success()) {
@@ -199,7 +199,7 @@ pmos::async::task<void> create_data_queues()
     cmd.cdw10 = queue_id | ((data_submission_queue->size - 1) << 16);
     cmd.cdw11 = (queue_id << 16) | (1 << 0);
 
-    pmos::dma_wmb();
+    dma_wmb();
 
     completion_entry = co_await admin_submission_queue->submit_command(cmd);
     if (!completion_entry.success()) {
@@ -233,7 +233,7 @@ pmos::async::task<void> identify_controller()
     cmd.prp1 = phys_addr.phys_addr;
     cmd.cdw10 = 1; // Identify controller
 
-    pmos::dma_wmb();
+    dma_wmb();
 
     auto completion_entry = co_await admin_submission_queue->submit_command(cmd);
     if (!completion_entry.success()) {
@@ -241,7 +241,7 @@ pmos::async::task<void> identify_controller()
         exit(1);
     }
 
-    pmos::dma_rmb();
+    dma_rmb();
 
 
     auto *controller = reinterpret_cast<IdentifyController *>(region.virt_addr);
@@ -288,7 +288,7 @@ pmos::async::detached_task identify_namespaces()
         cmd.prp1 = phys_addr.phys_addr;
         cmd.cdw10 = 2; // Identify namespaces
 
-        pmos::dma_wmb();
+        dma_wmb();
 
         auto completion_entry = co_await admin_submission_queue->submit_command(cmd);
         if (!completion_entry.success()) {
@@ -296,7 +296,7 @@ pmos::async::detached_task identify_namespaces()
             exit(1);
         }
 
-        pmos::dma_rmb();
+        dma_rmb();
 
         auto *namespaces = reinterpret_cast<uint32_t *>(region.virt_addr);
         for (unsigned i = 0; i < nn; ++i) {

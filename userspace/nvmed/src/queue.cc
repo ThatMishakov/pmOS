@@ -30,7 +30,7 @@ pmos::async::task<NVMeCompletionEntry> NVMeSubmissionQueue::submit_command(NVMeC
     }
 
     memcpy((uint8_t *)dma_virt_base + tail * sizeof(NVMeCommand), &cmd, sizeof(NVMeCommand));
-    pmos::dma_wmb();
+    dma_wmb();
 
     queue_tail = next;
     tail_doorbell_write(next);
@@ -43,7 +43,7 @@ void NVMeCompletionQueue::check_for_completions()
     const auto mask = size - 1;
     std::optional<uint32_t> submission_queue_head;
 
-    pmos::dma_rmb();
+    dma_rmb();
 
     while (true) {
         auto entry = (NVMeCompletionEntry *)((uint8_t *)dma_virt_base + queue_head * sizeof(NVMeCompletionEntry));
@@ -52,7 +52,7 @@ void NVMeCompletionQueue::check_for_completions()
         if ((status & 1) != phase)
             break;
 
-        pmos::dma_rmb();
+        dma_rmb();
 
         assert(!waiters.empty());
         auto *waiter = &waiters.front();

@@ -38,6 +38,7 @@
 #include <messaging/messaging.hh>
 #include <pmos/ipc.h>
 #include <pmos/utility/scope_guard.hh>
+#include <pmos/io.h>
 
 using namespace kernel;
 using namespace kernel::paging;
